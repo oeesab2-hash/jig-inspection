@@ -718,27 +718,36 @@
       // หัวข้อกรอกค่าตัวเลข: กรอกค่าแล้วระบบตัดสิน ผ่าน/ไม่ผ่าน อัตโนมัติจากช่วงเกณฑ์ที่ตั้งไว้
       // (ยังสามารถกดปุ่ม 🔧 "แก้ไขแล้ว" ทับได้ภายหลัง ถ้าแก้ไขปัญหาแล้วแต่ค่าที่วัดยังไม่อยู่ในช่วง)
       if (isNumeric) {
-        $(`numval-${idx}`).addEventListener('input', e => {
-          const raw = e.target.value;
-          if (raw === '') {
-            checkState[idx].value = null;
-            checkState[idx].status = '';
-            div.querySelectorAll('.rbtn').forEach(b => b.classList.remove('active'));
-            $(`ng-zone-${idx}`).classList.remove('show');
-            updateSvgPoint(item.id, '');
-            updateStats();
-            return;
-          }
-          const val = parseFloat(raw);
-          if (isNaN(val)) return;
-          checkState[idx].value = val;
-          const inRange = (item.min == null || val >= item.min) && (item.max == null || val <= item.max);
-          setStatus(inRange ? 'ok' : 'ng');
-        });
+        const numInput = div.querySelector('.check-numeric-input');
+        if (numInput) {
+          numInput.addEventListener('input', e => {
+            const raw = e.target.value;
+            if (raw === '') {
+              checkState[idx].value = null;
+              checkState[idx].status = '';
+              div.querySelectorAll('.rbtn').forEach(b => b.classList.remove('active'));
+              $(`ng-zone-${idx}`).classList.remove('show');
+              updateSvgPoint(item.id, '');
+              updateStats();
+              return;
+            }
+            const val = parseFloat(raw);
+            if (isNaN(val)) return;
+            checkState[idx].value = val;
+            const inRange = (item.min == null || val >= item.min) && (item.max == null || val <= item.max);
+            setStatus(inRange ? 'ok' : 'ng');
+          });
+        }
       }
 
-      $(`ng-note-${idx}`).addEventListener('input', e => { checkState[idx].note = e.target.value; });
-      div.querySelector('.file-input').addEventListener('change', e => handlePhoto(e, idx));
+      const noteInput = div.querySelector('.ng-note-input');
+      if (noteInput) {
+        noteInput.addEventListener('input', e => { checkState[idx].note = e.target.value; });
+      }
+      const fileInput = div.querySelector('.file-input');
+      if (fileInput) {
+        fileInput.addEventListener('change', e => handlePhoto(e, idx));
+      }
     });
   }
 
