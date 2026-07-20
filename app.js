@@ -930,6 +930,25 @@
   ══════════════════════════════════════ */
   let admLoggedIn = false;
 
+  // แยก checkpoint dropdown binding ออกมา เพื่อให้ re-bind ได้หลายครั้ง
+  // (renderAdminLists อาจ rebuild dropdown หลายครั้ง เมื่อ realtime sync เกิดขึ้น)
+  function bindCpJigDropdown() {
+    $('adm-cp-jig').addEventListener('change', () => {
+      const jid = $('adm-cp-jig').value;
+      cpEditJigId = jid || null;
+      if (!jid) { $('adm-cp-editor').classList.add('hidden'); return; }
+      const jig = catalog.jigs.find(j => j.id === jid);
+      if (!jig.checkpoints) jig.checkpoints = [];
+      $('adm-cp-editor').classList.remove('hidden');
+      renderCpBgControls(jid);
+      renderAdmCpMap(jid);
+      renderCpList(jid);
+      renderTplSelect();
+      renderTplPreview();
+      renderTplList();
+    });
+  }
+
   function bindAdminPanel() {
     $('adm-jig-search').addEventListener('input', filterJigList);
 
@@ -1024,21 +1043,8 @@
         lines.map(l => `<option value="${escHtml(l.id)}">${escHtml(l.name)}</option>`).join('');
     });
 
-    /* Checkpoint Management */
-    $('adm-cp-jig').addEventListener('change', () => {
-      const jid = $('adm-cp-jig').value;
-      cpEditJigId = jid || null;
-      if (!jid) { $('adm-cp-editor').classList.add('hidden'); return; }
-      const jig = catalog.jigs.find(j => j.id === jid);
-      if (!jig.checkpoints) jig.checkpoints = [];
-      $('adm-cp-editor').classList.remove('hidden');
-      renderCpBgControls(jid);
-      renderAdmCpMap(jid);
-      renderCpList(jid);
-      renderTplSelect();
-      renderTplPreview();
-      renderTplList();
-    });
+    /* Checkpoint Management — extracted to bindCpJigDropdown() so it can be re-called */
+    bindCpJigDropdown();
     $('btn-adm-cp').addEventListener('click', () => {
       const jid = $('adm-cp-jig').value;
       if (!jid) return;
@@ -1594,6 +1600,10 @@
     const prevCpJig = cpJigSel.value;
     cpJigSel.innerHTML = '<option value="">เลือก JIG เพื่อแก้ไขจุดตรวจ...</option>' + 
       catalog.jigs.map(j => `<option value="${escHtml(j.id)}">${escHtml(j.id)} - ${escHtml(j.name)}</option>`).join('');
+    
+    // re-bind dropdown event listener หลังจากเปลี่ยน innerHTML
+    // (innerHTML ใหม่ = element ใหม่ = event listener หลัง bind ก่อนหน้าหายไป)
+    bindCpJigDropdown();
     
     // ใส่ค่ากลับและ trigger change event เพื่อให้แพนเนลแก้ไข (cp-editor) render จุดตรวจใหม่
     // โดยเฉพาะกรณีที่ realtime sync เกิดขึ้นขณะ user กำลังแก้ไข checkpoint อยู่ ต้องให้ list update
