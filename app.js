@@ -1053,7 +1053,16 @@
       const x = 300 + Math.round(Math.random() * 60 - 30);
       const y = 170 + Math.round(Math.random() * 60 - 30);
       jig.checkpoints.push({ id: newId, label, sub, method, x, y });
+      
+      // ตั้ง _syncing = true ระหว่างเพิ่มจุด เพื่อไม่ให้ realtime event echo มาแทรก
+      // (ถ้าปล่อยให้ realtime event มา จะเรียก renderAdminLists() แล้ว dropdown รีเซ็ต 
+      //  ทำให้ user ต้องเลือก JIG ใหม่อีกครั้ง)
+      _syncing = true;
       saveCatalog();
+      // ปกติ saveCatalog ส่งขึ้น Supabase เป็น debounce 500ms ผลจะมาบ้านประมาณ 1-2 วินาที
+      // ตั้ง _syncing = false หลังจากนั้นพอ ให้เวลาเพียงพอให้ realtime event ถูกเพิกเฉย
+      setTimeout(() => { _syncing = false; }, 2000);
+      
       $('adm-cp-label').value = ''; $('adm-cp-sub').value = ''; $('adm-cp-method').value = '';
       renderAdmCpMap(jid);
       renderCpList(jid);
@@ -1580,14 +1589,17 @@
     
     // Checkpoints editor dropdown — เก็บค่าที่เลือกอยู่ไว้ก่อน แล้วใส่กลับหลัง re-render
     // (ป้องกันปัญหา: realtime sync เรียก renderAdminLists() แทรกกลางคันตอนแก้ไขจุดตรวจ
-    //  แล้ว dropdown รีเซ็ตเป็นค่าว่าง ทำให้ปุ่ม "+ เพิ่มจุดตรวจ" เงียบไม่ทำอะไร
-    //  จนกว่าจะรีเฟรชหน้าแล้วเลือก JIG ใหม่)
+    //  แล้ว dropdown รีเซ็ตเป็นค่าว่าง ทำให้ user ต้องเลือก JIG ใหม่)
     const cpJigSel = $('adm-cp-jig');
     const prevCpJig = cpJigSel.value;
     cpJigSel.innerHTML = '<option value="">เลือก JIG เพื่อแก้ไขจุดตรวจ...</option>' + 
       catalog.jigs.map(j => `<option value="${escHtml(j.id)}">${escHtml(j.id)} - ${escHtml(j.name)}</option>`).join('');
+    
+    // ใส่ค่ากลับและ trigger change event เพื่อให้แพนเนลแก้ไข (cp-editor) render จุดตรวจใหม่
+    // โดยเฉพาะกรณีที่ realtime sync เกิดขึ้นขณะ user กำลังแก้ไข checkpoint อยู่ ต้องให้ list update
     if (prevCpJig && catalog.jigs.some(j => j.id === prevCpJig)) {
-      cpJigSel.value = prevCpJig; // ใส่ค่ากลับโดยไม่ trigger 'change' event เพื่อไม่ให้แผงแก้ไขที่เปิดอยู่ถูกรีเซ็ต
+      cpJigSel.value = prevCpJig;
+      cpJigSel.dispatchEvent(new Event('change', { bubbles: true }));
     }
   }
 
