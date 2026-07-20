@@ -81,7 +81,10 @@
     } catch (e) {
       console.error('pushCatalogToSupabase error:', e);
     } finally {
-      setTimeout(() => { _syncing = false; }, 300);
+      // 1500ms กันชน: เผื่อเวลาให้ realtime event ของ "การเขียนของเราเอง" มาถึงและถูกเพิกเฉย
+      // ก่อนหน้านี้ใช้ 300ms ซึ่งสั้นเกินไปเมื่อ catalog มีหลายตาราง/หลายแถว ทำให้บางครั้ง
+      // refreshCatalog() ทำงานแทรกกลางคันตอนผู้ใช้กำลังแก้ไข Admin Panel อยู่
+      setTimeout(() => { _syncing = false; }, 1500);
     }
   }
 
@@ -144,7 +147,7 @@
     } catch (e) {
       console.error('pushHistoryToSupabase error:', e);
     } finally {
-      setTimeout(() => { _syncing = false; }, 300);
+      setTimeout(() => { _syncing = false; }, 1500);
     }
   }
 
@@ -1575,9 +1578,17 @@
       catalog.depts.map(d => `<option value="${escHtml(d.id)}">${escHtml(d.name)}</option>`).join('');
     $('adm-jig-line').innerHTML = '<option value="">Line</option>';
     
-    // Checkpoints editor dropdown
-    $('adm-cp-jig').innerHTML = '<option value="">เลือก JIG เพื่อแก้ไขจุดตรวจ...</option>' + 
+    // Checkpoints editor dropdown — เก็บค่าที่เลือกอยู่ไว้ก่อน แล้วใส่กลับหลัง re-render
+    // (ป้องกันปัญหา: realtime sync เรียก renderAdminLists() แทรกกลางคันตอนแก้ไขจุดตรวจ
+    //  แล้ว dropdown รีเซ็ตเป็นค่าว่าง ทำให้ปุ่ม "+ เพิ่มจุดตรวจ" เงียบไม่ทำอะไร
+    //  จนกว่าจะรีเฟรชหน้าแล้วเลือก JIG ใหม่)
+    const cpJigSel = $('adm-cp-jig');
+    const prevCpJig = cpJigSel.value;
+    cpJigSel.innerHTML = '<option value="">เลือก JIG เพื่อแก้ไขจุดตรวจ...</option>' + 
       catalog.jigs.map(j => `<option value="${escHtml(j.id)}">${escHtml(j.id)} - ${escHtml(j.name)}</option>`).join('');
+    if (prevCpJig && catalog.jigs.some(j => j.id === prevCpJig)) {
+      cpJigSel.value = prevCpJig; // ใส่ค่ากลับโดยไม่ trigger 'change' event เพื่อไม่ให้แผงแก้ไขที่เปิดอยู่ถูกรีเซ็ต
+    }
   }
 
   /* ══════════════════════════════════════
