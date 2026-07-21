@@ -342,6 +342,14 @@
       reader.readAsDataURL(file);
     });
   }
+  
+  function formatFileSize(bytes) {
+    if (bytes === 0) return '0 B';
+    const k = 1024;
+    const sizes = ['B', 'KB', 'MB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return Math.round(bytes / Math.pow(k, i) * 10) / 10 + ' ' + sizes[i];
+  }
   function loadHistory() {
     try { return JSON.parse(localStorage.getItem(SK.history)) || []; } catch { return []; }
   }
@@ -718,36 +726,27 @@
       // หัวข้อกรอกค่าตัวเลข: กรอกค่าแล้วระบบตัดสิน ผ่าน/ไม่ผ่าน อัตโนมัติจากช่วงเกณฑ์ที่ตั้งไว้
       // (ยังสามารถกดปุ่ม 🔧 "แก้ไขแล้ว" ทับได้ภายหลัง ถ้าแก้ไขปัญหาแล้วแต่ค่าที่วัดยังไม่อยู่ในช่วง)
       if (isNumeric) {
-        const numInput = div.querySelector('.check-numeric-input');
-        if (numInput) {
-          numInput.addEventListener('input', e => {
-            const raw = e.target.value;
-            if (raw === '') {
-              checkState[idx].value = null;
-              checkState[idx].status = '';
-              div.querySelectorAll('.rbtn').forEach(b => b.classList.remove('active'));
-              $(`ng-zone-${idx}`).classList.remove('show');
-              updateSvgPoint(item.id, '');
-              updateStats();
-              return;
-            }
-            const val = parseFloat(raw);
-            if (isNaN(val)) return;
-            checkState[idx].value = val;
-            const inRange = (item.min == null || val >= item.min) && (item.max == null || val <= item.max);
-            setStatus(inRange ? 'ok' : 'ng');
-          });
-        }
+        $(`numval-${idx}`).addEventListener('input', e => {
+          const raw = e.target.value;
+          if (raw === '') {
+            checkState[idx].value = null;
+            checkState[idx].status = '';
+            div.querySelectorAll('.rbtn').forEach(b => b.classList.remove('active'));
+            $(`ng-zone-${idx}`).classList.remove('show');
+            updateSvgPoint(item.id, '');
+            updateStats();
+            return;
+          }
+          const val = parseFloat(raw);
+          if (isNaN(val)) return;
+          checkState[idx].value = val;
+          const inRange = (item.min == null || val >= item.min) && (item.max == null || val <= item.max);
+          setStatus(inRange ? 'ok' : 'ng');
+        });
       }
 
-      const noteInput = div.querySelector('.ng-note-input');
-      if (noteInput) {
-        noteInput.addEventListener('input', e => { checkState[idx].note = e.target.value; });
-      }
-      const fileInput = div.querySelector('.file-input');
-      if (fileInput) {
-        fileInput.addEventListener('change', e => handlePhoto(e, idx));
-      }
+      $(`ng-note-${idx}`).addEventListener('input', e => { checkState[idx].note = e.target.value; });
+      div.querySelector('.file-input').addEventListener('change', e => handlePhoto(e, idx));
     });
   }
 
@@ -794,9 +793,11 @@
     if (!file) return;
     if (!file.type.startsWith('image/')) { toast('กรุณาเลือกไฟล์รูปภาพ', 'ng'); e.target.value = ''; return; }
     try {
-      // ย่อขนาดรูปก่อนเก็บ (เหมือนรูปพื้นหลัง JIG) — ป้องกัน localStorage เต็มเร็ว
+      // ย่อขนาดรูปก่อนเก็บ (เหมือนรูปพื้นหลัง JIG) — ป้องกัน Supabase storage เต็มเร็ว
       // เพราะรูปหลักฐาน NG อาจมีได้หลายรูปต่อ 1 การตรวจ และตรวจหลายรายการ/วัน
-      const dataUrl = await resizeImageToDataURL(file, 1000, 0.75);
+      // ลด maxDim 1000→600px, quality 0.75→0.60 เพื่อประหยัด storage ~70% ของเดิม
+      // (ยังคงชัดพอให้เห็นรายละเอียดบนมือถือ)
+      const dataUrl = await resizeImageToDataURL(file, 600, 0.60);
       checkState[idx].photos.push(dataUrl);
       renderPhotos(idx);
     } catch (err) {
@@ -1148,7 +1149,9 @@
       if (!cpEditJigId) { toast('กรุณาเลือก JIG ก่อน', 'ng'); return; }
       if (!file.type.startsWith('image/')) { toast('กรุณาเลือกไฟล์รูปภาพ', 'ng'); e.target.value=''; return; }
       try {
-        const dataUrl = await resizeImageToDataURL(file, 1000, 0.82);
+        // ลด maxDim 1000→700px, quality 0.82→0.65 เพื่อประหยัด storage
+        // (พื้นหลัง JIG ดูบ่อย จึงเก็บคุณภาพที่ดีกว่ารูปหลักฐาน)
+        const dataUrl = await resizeImageToDataURL(file, 700, 0.65);
         const jig = catalog.jigs.find(j => j.id === cpEditJigId);
         jig.bgImage = dataUrl;
         saveCatalog();
@@ -1224,15 +1227,28 @@
       refreshDashboard();
     });
 
-    /* Clear all */
+    /* Clear all — require checkbox confirmation first */
+    $('chk-clear-confirm').addEventListener('change', (e) => {
+      if (e.target.checked) {
+        $('btn-clear-all').style.display = 'block';
+      } else {
+        $('btn-clear-all').style.display = 'none';
+      }
+    });
+    
     $('btn-clear-all').addEventListener('click', () => {
-      if (!confirm('ลบข้อมูลทั้งหมด (catalog + history)?')) return;
+      if (!confirm('ลบข้อมูลทั้งหมด (catalog + history)? การกระทำนี้ไม่สามารถยกเลิกได้')) return;
       catalog = { depts: [], lines: [], jigs: [], templates: [] };
       saveCatalog(); saveHistory([]);
       selection = { deptId: null, lineId: null, jigId: null };
       hideInspectionCards(); renderAdminLists(); renderFilter();
       refreshDashboard();
-      toast('ล้างข้อมูลทั้งหมดแล้ว', 'ng');
+      _syncing = true;
+      setTimeout(() => { _syncing = false; }, 2000);
+      $('chk-clear-confirm').checked = false; // Uncheck checkbox
+      $('btn-clear-all').style.display = 'none'; // Hide delete button
+      toast('ล้างข้อมูลทั้งหมดแล้ว ระบบจะรีเฟรช...', 'ng');
+      setTimeout(() => location.reload(), 1500);
     });
 
     renderAdminLists();
