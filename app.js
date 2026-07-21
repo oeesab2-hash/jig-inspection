@@ -233,56 +233,8 @@
   ];
 
   /* ══════════════════════════════════════
-     SEED DATA — โครงสร้างจริงจากโรงงาน
-     แผนก BODY  : 5 Lines, 43 JIG
-     แผนก Exhaust: 5 Lines, 140 JIG
-     รวม 183 JIG (ชื่อ placeholder — rename ได้ใน Admin)
+     STATE
   ══════════════════════════════════════ */
-
-  // Helper: สร้าง JIG array จำนวน n ตัว ตาม lineId และ prefix
-  function makeJigs(lineId, prefix, count) {
-    return Array.from({ length: count }, (_, i) => {
-      const num = String(i + 1).padStart(2, '0');
-      const id  = `${prefix}-${num}`;
-      return { id, lineId, name: `JIG ${prefix.replace('-','')}-${num}`, docNo: id };
-    });
-  }
-
-  const DEMO_CATALOG = (function () {
-    const depts = [
-      { id: 'BODY',    name: 'แผนก BODY' },
-      { id: 'EXHAUST', name: 'แผนก Exhaust' },
-    ];
-    const lines = [
-      // BODY (43 JIG รวม)
-      { id: 'SILL',     deptId: 'BODY',    name: 'LINE : SILL' },         // 4
-      { id: 'BEAM',     deptId: 'BODY',    name: 'LINE : BEAM' },         // 8
-      { id: 'FRAM',     deptId: 'BODY',    name: 'LINE : FRAM ASM' },     // 11
-      { id: 'SIDEUPR',  deptId: 'BODY',    name: 'LINE : SIDE UPR' },     // 4
-      { id: 'SIDESTEP', deptId: 'BODY',    name: 'LINE : SIDE STEP' },    // 16
-      // Exhaust (140 JIG รวม)
-      { id: 'EXH-RG01', deptId: 'EXHAUST', name: 'LINE : Exhaust RG01' },         // 30
-      { id: 'EXH-BEND', deptId: 'EXHAUST', name: 'LINE : BENDING EXHAUST' },      // 20
-      { id: 'EXH-SIL',  deptId: 'EXHAUST', name: 'LINE : SILENCER Exhaust' },     // 50
-      { id: 'EXH-RJ01', deptId: 'EXHAUST', name: 'LINE : Exhaust Pipe RJ01' },    // 20
-      { id: 'EXH-VD00', deptId: 'EXHAUST', name: 'LINE : VD00' },                 // 20
-    ];
-    const jigs = [
-      // BODY
-      ...makeJigs('SILL',     'SILL',     4),
-      ...makeJigs('BEAM',     'BEAM',     8),
-      ...makeJigs('FRAM',     'FRAM',    11),
-      ...makeJigs('SIDEUPR',  'SUPR',     4),
-      ...makeJigs('SIDESTEP', 'SSTEP',   16),
-      // Exhaust
-      ...makeJigs('EXH-RG01', 'RG01',   30),
-      ...makeJigs('EXH-BEND', 'BEND',   20),
-      ...makeJigs('EXH-SIL',  'SIL',    50),
-      ...makeJigs('EXH-RJ01', 'RJ01',   20),
-      ...makeJigs('EXH-VD00', 'VD00',   20),
-    ];
-    return { depts, lines, jigs };
-  })();
 
   /* ══════════════════════════════════════
      STATE
@@ -1212,21 +1164,6 @@
     });
 
     /* Seed demo */
-    $('btn-seed-demo').addEventListener('click', () => {
-      const keepTemplates = catalog.templates || [];
-      catalog = JSON.parse(JSON.stringify(DEMO_CATALOG));
-      catalog.templates = keepTemplates; // เทมเพลตหัวข้อตรวจสอบไม่ผูกกับชุดข้อมูลสาธิต เก็บไว้ข้ามการโหลดใหม่
-      saveCatalog(); renderAdminLists(); renderFilter();
-      toast('โหลดข้อมูล JIG ทั้งหมดสำเร็จ', 'ok');
-    });
-    
-    $('btn-seed-history').addEventListener('click', () => {
-      if (!catalog.jigs.length) { toast('ต้องมี JIG ในระบบก่อนสร้างประวัติ', 'ng'); return; }
-      generateMockHistory();
-      toast('สร้าง Mock History 100 รายการสำเร็จ!', 'ok');
-      refreshDashboard();
-    });
-
     renderAdminLists();
   }
 
@@ -1816,55 +1753,6 @@
   /* ══════════════════════════════════════
      MOCK DATA GENERATOR
   ══════════════════════════════════════ */
-  function generateMockHistory() {
-    let hist = [];
-    const now = new Date();
-    const jigs = catalog.jigs;
-    const inspectors = ['สมชาย', 'วิรัตน์', 'ณัฐพล', 'สุรชัย'];
-    const shifts = ['เช้า (08:00-17:00)', 'ดึก (20:00-05:00)'];
-    
-    for (let i = 0; i < 100; i++) {
-      const j = jigs[Math.floor(Math.random() * jigs.length)];
-      if (!j) continue;
-      const d = new Date(now.getTime() - Math.random() * 30 * 24 * 60 * 60 * 1000);
-      const isNg = Math.random() < 0.15; // 15% NG rate
-      
-      const pts = j.checkpoints && j.checkpoints.length ? j.checkpoints : DEFAULT_ITEMS;
-      const items = pts.map(pt => {
-        let st = 'ok';
-        if (isNg && Math.random() < 0.1) st = 'ng';
-        return { id: pt.id, label: pt.label, status: st, note: st==='ng' ? 'พบความผิดปกติ' : '', photos: [] };
-      });
-      
-      const l = catalog.lines.find(x => x.id === j.lineId);
-      const dp = l ? catalog.depts.find(x => x.id === l.deptId) : null;
-      
-      hist.push({
-        id: genId(),
-        timestamp: d.toISOString(),
-        deptId: dp ? dp.id : '',
-        deptName: dp ? dp.name : '',
-        lineId: l ? l.id : '',
-        lineName: l ? l.name : '',
-        jigId: j.id,
-        jigName: j.name,
-        jigDocNo: j.docNo || j.id,
-        date: d.toISOString().slice(0, 10),
-        shift: shifts[Math.floor(Math.random() * shifts.length)],
-        month: d.toISOString().slice(0, 7),
-        inspector: inspectors[Math.floor(Math.random() * inspectors.length)],
-        notes: isNg ? 'พบ NG แจ้งซ่อมบำรุงแล้ว' : 'ปกติทุกจุด',
-        items: items,
-        sigInspector: 'ลายเซ็นจำลอง',
-        sigSupervisor: ''
-      });
-    }
-    
-    // Sort by date desc
-    hist.sort((a,b) => b.timestamp.localeCompare(a.timestamp));
-    saveHistory(hist);
-  }
-
   /* ══════════════════════════════════════
      PANEL HELPERS
   ══════════════════════════════════════ */
