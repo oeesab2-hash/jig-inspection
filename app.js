@@ -819,18 +819,45 @@
 
   /* ══════════════════════════════════════
      BACKUP — EXPORT / IMPORT
-     ส่งออก/นำเข้าข้อมูลทั้งหมด (catalog + history) เป็นไฟล์ .json
-     ใช้สำรองข้อมูลระหว่างที่ยังเก็บบน localStorage อยู่ (ยังไม่ได้ขึ้น Supabase)
+     ดึงข้อมูลตรงจาก Supabase ทุกครั้ง เพื่อให้ได้ข้อมูลล่าสุดเสมอ
+     ไม่ใช้ localStorage เพราะอาจค้างหรือไม่ตรงกับ Supabase
   ══════════════════════════════════════ */
-  function exportAllData() {
+  async function exportAllData() {
+    if (!sb) { toast('ไม่ได้เชื่อมต่อ Supabase', 'ng'); return; }
+    toast('กำลังดึงข้อมูลจาก Supabase...', 'ok');
     try {
+      // ดึง catalog ทุกตาราง
+      const [depts, lines, jigs, checkpoints, templates, histRows] = await Promise.all([
+        sb.from('departments').select('*'),
+        sb.from('lines').select('*'),
+        sb.from('jigs').select('*'),
+        sb.from('checkpoints').select('*'),
+        sb.from('templates').select('*'),
+        sb.from('history').select('*').order('ts', { ascending: false }),
+      ]);
+
+      // ประกอบ checkpoints กลับเข้า jigs (เหมือนโครงสร้างใน memory)
+      const jigsWithCp = (jigs.data || []).map(j => ({
+        ...j,
+        checkpoints: (checkpoints.data || [])
+          .filter(cp => cp.jig_id === j.id)
+          .sort((a, b) => a.item_id - b.item_id)
+          .map(cp => ({ id: cp.item_id, label: cp.label, sub: cp.sub, method: cp.method, x: cp.x, y: cp.y }))
+      }));
+
       const payload = {
         app: 'jig-inspection-dashboard',
-        version: 2,
+        version: 3,
         exportedAt: new Date().toISOString(),
-        catalog: catalog,
-        history: loadHistory(),
+        catalog: {
+          depts: depts.data || [],
+          lines: lines.data || [],
+          jigs: jigsWithCp,
+          templates: (templates.data || []).map(t => ({ id: t.id, name: t.name, items: t.items || [] })),
+        },
+        history: histRows.data || [],
       };
+
       const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -841,10 +868,13 @@
       a.click();
       a.remove();
       URL.revokeObjectURL(url);
-      toast('✅ Export ข้อมูลสำเร็จ', 'ok');
+
+      const jigCount = jigsWithCp.length;
+      const histCount = (histRows.data || []).length;
+      toast(`✅ Export สำเร็จ — ${jigCount} JIG, ${histCount} ประวัติ`, 'ok');
     } catch (err) {
       console.error('exportAllData error:', err);
-      toast('Export ไม่สำเร็จ', 'ng');
+      toast('Export ไม่สำเร็จ: ' + (err.message || err), 'ng');
     }
   }
 
@@ -854,7 +884,7 @@
       return;
     }
     const reader = new FileReader();
-    reader.onload = ev => {
+    reader.onload = async ev => {
       let data;
       try {
         data = JSON.parse(ev.target.result);
@@ -869,19 +899,83 @@
         toast('รูปแบบไฟล์ไม่ถูกต้อง — ต้อง export มาจากระบบนี้เท่านั้น', 'ng');
         return;
       }
-      if (!confirm(`นำเข้าข้อมูลนี้จะ "แทนที่" ข้อมูลปัจจุบันทั้งหมด (${cat.jigs.length} JIG, ${hist.length} ประวัติ)\nแนะนำให้ Export ข้อมูลปัจจุบันเก็บไว้ก่อน ต้องการดำเนินการต่อหรือไม่?`)) {
-        return;
+      if (!confirm(`นำเข้าข้อมูลนี้จะ "แทนที่" ข้อมูลปัจจุบันทั้งหมด\n(${cat.jigs.length} JIG, ${hist.length} ประวัติ)\nแนะนำให้ Export สำรองไว้ก่อน — ต้องการดำเนินการต่อหรือไม่?`)) return;
+
+      if (!sb) { toast('ไม่ได้เชื่อมต่อ Supabase', 'ng'); return; }
+      toast('กำลังนำเข้าข้อมูลขึ้น Supabase...', 'ok');
+
+      try {
+        _syncing = true;
+
+        // ลบข้อมูลเก่าออกก่อน (cascade จะลบ lines → jigs → checkpoints อัตโนมัติ)
+        await sb.from('history').delete().neq('id', '___none___');
+        await sb.from('templates').delete().neq('id', '___none___');
+        await sb.from('departments').delete().neq('id', '___none___');
+
+        // Insert departments
+        if (cat.depts.length) {
+          const { error } = await sb.from('departments').insert(cat.depts.map(d => ({ id: d.id, name: d.name })));
+          if (error) throw error;
+        }
+
+        // Insert lines
+        if (cat.lines.length) {
+          const { error } = await sb.from('lines').insert(cat.lines.map(l => ({ id: l.id, dept_id: l.deptId, name: l.name })));
+          if (error) throw error;
+        }
+
+        // Insert jigs (ไม่รวม checkpoints)
+        if (cat.jigs.length) {
+          const { error } = await sb.from('jigs').insert(cat.jigs.map(j => ({ id: j.id, line_id: j.lineId, name: j.name, doc_no: j.docNo || j.doc_no || '', bg_image: j.bgImage || j.bg_image || null })));
+          if (error) throw error;
+        }
+
+        // Insert checkpoints แยก
+        const allCps = cat.jigs.flatMap(j =>
+          (j.checkpoints || []).map(cp => ({ jig_id: j.id, item_id: cp.id, label: cp.label || '', sub: cp.sub || '', method: cp.method || '', x: cp.x || 0, y: cp.y || 0 }))
+        );
+        for (let i = 0; i < allCps.length; i += 200) {
+          const { error } = await sb.from('checkpoints').insert(allCps.slice(i, i + 200));
+          if (error) throw error;
+        }
+
+        // Insert templates
+        if ((cat.templates || []).length) {
+          const { error } = await sb.from('templates').insert(cat.templates.map(t => ({ id: t.id, name: t.name, items: t.items || [] })));
+          if (error) throw error;
+        }
+
+        // Insert history (แบ่ง batch 40 แถวต่อครั้ง เพราะ history มีรูป base64 ใหญ่)
+        for (let i = 0; i < hist.length; i += 40) {
+          const batch = hist.slice(i, i + 40).map(h => ({
+            id: h.id, ts: h.timestamp || h.ts,
+            dept_id: h.deptId || h.dept_id || '', dept_name: h.deptName || h.dept_name || '',
+            line_id: h.lineId || h.line_id || '', line_name: h.lineName || h.line_name || '',
+            jig_id: h.jigId || h.jig_id || '', jig_name: h.jigName || h.jig_name || '',
+            jig_doc_no: h.jigDocNo || h.jig_doc_no || '',
+            insp_date: h.date || h.insp_date || '', shift: h.shift || '',
+            month: h.month || '', inspector: h.inspector || '', notes: h.notes || '',
+            items: h.items || [],
+            sig_inspector: h.sigInspector || h.sig_inspector || '',
+            sig_supervisor: h.sigSupervisor || h.sig_supervisor || '',
+          }));
+          const { error } = await sb.from('history').insert(batch);
+          if (error) throw error;
+        }
+
+        setTimeout(() => { _syncing = false; }, 2000);
+
+        // รีโหลดข้อมูลเข้า memory และ re-render
+        await refreshCatalog();
+        await refreshHistory();
+        selection = { deptId: null, lineId: null, jigId: null };
+        hideInspectionCards(); renderAdminLists(); renderFilter(); refreshDashboard();
+        toast(`✅ Import สำเร็จ — ${cat.jigs.length} JIG, ${hist.length} ประวัติ`, 'ok');
+      } catch (err) {
+        _syncing = false;
+        console.error('importAllData error:', err);
+        toast('Import ไม่สำเร็จ: ' + (err.message || err), 'ng');
       }
-      catalog = cat;
-      if (!Array.isArray(catalog.templates)) catalog.templates = []; // เผื่อไฟล์สำรองเก่าที่ยังไม่มีเทมเพลต
-      saveCatalog();
-      const histOk = saveHistory(hist);
-      selection = { deptId: null, lineId: null, jigId: null };
-      hideInspectionCards();
-      renderAdminLists();
-      renderFilter();
-      refreshDashboard();
-      if (histOk) toast('✅ Import ข้อมูลสำเร็จ', 'ok');
     };
     reader.onerror = () => toast('อ่านไฟล์ไม่สำเร็จ', 'ng');
     reader.readAsText(file);
