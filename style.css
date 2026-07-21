@@ -494,6 +494,45 @@ h1, h2, h3, h4, label, button, input, select, textarea, p, span, div {
 .badge.ng    { background: var(--ng-bg);    color: var(--ng);    border: 1px solid var(--ng-border); }
 .badge.fixed { background: var(--fixed-bg); color: var(--fixed); border: 1px solid var(--fixed-border); }
 
+/* ─── GPS Badge Styles ─── */
+.gps-badge {
+  display: inline-block; font-size: 10px; padding: 3px 8px; border-radius: 6px;
+  font-weight: 600; white-space: nowrap; vertical-align: middle;
+  cursor: help; transition: all 0.2s;
+}
+.gps-badge.success {
+  background: hsla(210, 80%, 58%, 0.15); color: hsl(210, 75%, 48%);
+  border: 1px solid hsla(210, 80%, 58%, 0.4);
+}
+[data-theme="dark"] .gps-badge.success {
+  background: hsla(210, 80%, 58%, 0.12); color: hsl(210, 80%, 58%);
+  border: 1px solid hsla(210, 80%, 58%, 0.4);
+}
+.gps-badge.denied {
+  background: hsla(0, 68%, 50%, 0.12); color: hsl(0, 68%, 50%);
+  border: 1px solid hsla(0, 68%, 50%, 0.3);
+}
+[data-theme="dark"] .gps-badge.denied {
+  background: hsla(0, 72%, 58%, 0.12); color: hsl(0, 72%, 58%);
+  border: 1px solid hsla(0, 72%, 58%, 0.4);
+}
+.gps-badge.timeout, .gps-badge.error {
+  background: hsla(45, 75%, 42%, 0.12); color: hsl(45, 75%, 42%);
+  border: 1px solid hsla(45, 75%, 42%, 0.3);
+}
+[data-theme="dark"] .gps-badge.timeout, [data-theme="dark"] .gps-badge.error {
+  background: hsla(45, 80%, 50%, 0.12); color: hsl(45, 80%, 50%);
+  border: 1px solid hsla(45, 80%, 50%, 0.4);
+}
+.gps-badge.unsupported {
+  background: hsla(220, 10%, 60%, 0.12); color: hsl(220, 10%, 60%);
+  border: 1px solid hsla(220, 10%, 60%, 0.3);
+}
+[data-theme="dark"] .gps-badge.unsupported {
+  background: hsla(220, 10%, 45%, 0.12); color: hsl(220, 10%, 65%);
+  border: 1px solid hsla(220, 10%, 45%, 0.4);
+}
+
 .check-item {
   display: flex; flex-direction: column;
   padding: 10px 0;

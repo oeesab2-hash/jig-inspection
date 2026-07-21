@@ -138,6 +138,12 @@
         insp_date: h.date, shift: h.shift, month: h.month,
         inspector: h.inspector, notes: h.notes, items: h.items || [],
         sig_inspector: h.sigInspector, sig_supervisor: h.sigSupervisor,
+        // ─── GPS Data ───
+        gps_latitude: h.gps?.latitude || null,
+        gps_longitude: h.gps?.longitude || null,
+        gps_accuracy: h.gps?.accuracy || null,
+        gps_timestamp: h.gps?.timestamp || null,
+        gps_status: h.gps?.status || 'unknown',
       }));
       // แบ่งส่งเป็นชุดๆ (มีรูปถ่าย base64 อยู่ในนั้น ก้อนใหญ่ได้) กันพัง request เดียวโตเกินไป
       for (let i = 0; i < rows.length; i += 40) {
@@ -166,6 +172,14 @@
         date: row.insp_date, shift: row.shift, month: row.month,
         inspector: row.inspector, notes: row.notes, items: row.items || [],
         sigInspector: row.sig_inspector, sigSupervisor: row.sig_supervisor,
+        // ─── GPS Data ───
+        gps: row.gps_latitude ? {
+          latitude: row.gps_latitude,
+          longitude: row.gps_longitude,
+          accuracy: row.gps_accuracy,
+          timestamp: row.gps_timestamp,
+          status: row.gps_status || 'unknown'
+        } : undefined,
       }));
     } catch (e) {
       console.warn('pullHistoryFromSupabase error (ใช้ข้อมูล local แทน):', e);
@@ -777,13 +791,57 @@
   /* ══════════════════════════════════════
      SUBMIT
   ══════════════════════════════════════ */
-  function submitReport() {
+  // ─── ขอ GPS Coordinates ─── (เก็บ "แต่ไม่บังคับ")
+  async function getGPSCoordinates() {
+    return new Promise((resolve) => {
+      if (!navigator.geolocation) {
+        console.warn('Geolocation ไม่รองรับในอุปกรณ์นี้');
+        resolve({ latitude: null, longitude: null, accuracy: null, timestamp: null, status: 'unsupported' });
+        return;
+      }
+      
+      const timeoutId = setTimeout(() => {
+        resolve({ latitude: null, longitude: null, accuracy: null, timestamp: null, status: 'timeout' });
+      }, 10000); // รอ 10 วินาที ถ้าหา GPS ไม่ได้ให้ถือว่า timeout
+      
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          clearTimeout(timeoutId);
+          resolve({
+            latitude: position.coords.latitude,
+            longitude: position.coords.longitude,
+            accuracy: position.coords.accuracy,
+            timestamp: new Date().toISOString(),
+            status: 'success'
+          });
+        },
+        (error) => {
+          clearTimeout(timeoutId);
+          console.warn('GPS Error:', error);
+          resolve({
+            latitude: null,
+            longitude: null,
+            accuracy: null,
+            timestamp: new Date().toISOString(),
+            status: error.code === 1 ? 'denied' : 'error' // 1 = PERMISSION_DENIED
+          });
+        },
+        { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+      );
+    });
+  }
+
+  async function submitReport() {
     if (!selection.jigId) { toast('กรุณาเลือก JIG ก่อนบันทึก', 'ng'); return; }
     if (!$('inp-inspector').value.trim()) { toast('กรุณาระบุชื่อผู้ตรวจสอบ', 'ng'); $('inp-inspector').focus(); return; }
     if (!$('inp-date').value) { toast('กรุณาเลือกวันที่', 'ng'); return; }
     if (!$('inp-shift').value) { toast('กรุณาเลือกกะ', 'ng'); return; }
     const unchecked = checkState.filter(i => !i.status);
     if (unchecked.length) { toast(`ยังมี ${unchecked.length} รายการที่ยังไม่ตรวจ`, 'ng'); return; }
+
+    // ─── ขอ GPS พอดีกดบันทึก ─── 
+    toast('🔄 กำลังเก็บค่า GPS...', 'ok');
+    const gpsData = await getGPSCoordinates();
 
     const jig  = catalog.jigs.find(j => j.id === selection.jigId);
     const line = catalog.lines.find(l => l.id === selection.lineId);
@@ -807,13 +865,24 @@
       items:      checkState.map(i => ({ id: i.id, label: i.label, status: i.status, note: i.note, photos: i.photos, value: i.value ?? null, unit: i.unit || '' })),
       sigInspector:  $('sig-inspector').value.trim(),
       sigSupervisor: $('sig-supervisor').value.trim(),
+      // ─── GPS Data ─── (บันทึกพิกัด ถ้าได้)
+      gps: {
+        latitude:   gpsData.latitude,
+        longitude:  gpsData.longitude,
+        accuracy:   gpsData.accuracy,
+        timestamp:  gpsData.timestamp,
+        status:     gpsData.status // 'success', 'denied', 'timeout', 'error', 'unsupported'
+      }
     };
 
     let hist = loadHistory();
     hist.unshift(record);
     if (hist.length > 100) hist = hist.slice(0, 100);
     if (saveHistory(hist)) {
-      toast('✅ บันทึกผลการตรวจสอบสำเร็จ!', 'ok');
+      const gpsMsg = gpsData.status === 'success' 
+        ? `✅ บันทึกสำเร็จ! (GPS: ${gpsData.latitude.toFixed(6)}, ${gpsData.longitude.toFixed(6)})`
+        : `✅ บันทึกสำเร็จ! (ไม่มีพิกัด GPS)`;
+      toast(gpsMsg, 'ok');
     }
   }
 
@@ -1692,6 +1761,23 @@
       const ngItems = h.items.filter(i => i.status === 'ng');
       const okCount = h.items.filter(i => i.status === 'ok' || i.status === 'fixed').length;
       const photos  = h.items.flatMap(i => i.photos || []);
+      
+      // ─── GPS Status ─── 
+      let gpsDisplay = '';
+      if (h.gps) {
+        if (h.gps.status === 'success') {
+          gpsDisplay = `<span class="gps-badge success" title="GPS: ${h.gps.latitude}, ${h.gps.longitude} (accuracy: ±${Math.round(h.gps.accuracy)}m)">📍 ${h.gps.latitude.toFixed(6)}, ${h.gps.longitude.toFixed(6)}</span>`;
+        } else if (h.gps.status === 'denied') {
+          gpsDisplay = `<span class="gps-badge denied" title="ผู้ใช้ปฏิเสธการใช้ GPS">❌ ปฏิเสธ GPS</span>`;
+        } else if (h.gps.status === 'timeout') {
+          gpsDisplay = `<span class="gps-badge timeout" title="GPS หาพิกัดไม่ได้ (หมดเวลา)">⏱ หมดเวลา GPS</span>`;
+        } else if (h.gps.status === 'error') {
+          gpsDisplay = `<span class="gps-badge error" title="GPS ผิดพลาด">⚠️ GPS Error</span>`;
+        } else if (h.gps.status === 'unsupported') {
+          gpsDisplay = `<span class="gps-badge unsupported" title="อุปกรณ์ไม่รองรับ GPS">❓ GPS ไม่รองรับ</span>`;
+        }
+      }
+      
       return `<div class="history-item">
         <div class="hi-path">${escHtml(h.deptName || '')}  ›  ${escHtml(h.lineName || '')}  ›  ${escHtml(h.jigName || '')}</div>
         <div class="hi-head">
@@ -1699,6 +1785,7 @@
           <div class="hi-badges">
             <span class="badge ok">OK ${okCount}</span>
             ${ngItems.length ? `<span class="badge ng">NG ${ngItems.length}</span>` : ''}
+            ${gpsDisplay}
           </div>
         </div>
         ${ngItems.length ? `<div class="hi-details">NG: ${ngItems.map(i=>`ข้อ ${i.id}`).join(', ')}</div>` : ''}
