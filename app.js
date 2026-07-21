@@ -1105,32 +1105,121 @@
       }
     });
     
-    // Login flow
+    // Login flow — ตรวจสอบจาก Supabase admin_users table
     $('btn-close-login').addEventListener('click', () => $('admin-login-modal').classList.add('hidden'));
     $('admin-login-modal').addEventListener('click', e => { if (e.target === $('admin-login-modal')) $('admin-login-modal').classList.add('hidden'); });
-    $('btn-login-submit').addEventListener('click', () => {
+    $('btn-login-submit').addEventListener('click', async () => {
+      const username = ($('inp-admin-user')?.value?.trim()) || 'admin';
       const pass = $('inp-admin-pass').value;
-      const expected = localStorage.getItem('jig_admin_pass') || 'admin1234';
-      if (pass === expected) {
-        admLoggedIn = true;
-        $('admin-login-modal').classList.add('hidden');
-        openPanel('admin-panel');
-        toast('เข้าสู่ระบบสำเร็จ', 'ok');
-      } else {
-        toast('รหัสผ่านไม่ถูกต้อง', 'ng');
+      
+      if (!pass) {
+        toast('กรุณากรอกรหัสผ่าน', 'ng');
+        return;
+      }
+
+      // Fallback ถ้า Supabase ไม่พร้อม (เพื่อความสะดวกใน dev)
+      if (!sb) {
+        const localPass = localStorage.getItem('jig_admin_pass');
+        if (pass === localPass) {
+          admLoggedIn = true;
+          $('admin-login-modal').classList.add('hidden');
+          openPanel('admin-panel');
+          toast('เข้าสู่ระบบสำเร็จ (local mode)', 'ok');
+        } else {
+          toast('รหัสผ่านไม่ถูกต้อง', 'ng');
+        }
+        return;
+      }
+
+      // ตรวจสอบจาก Supabase admin_users
+      try {
+        $('btn-login-submit').disabled = true;
+        const btnText = $('btn-login-submit').textContent;
+        $('btn-login-submit').textContent = '🔄 กำลังตรวจสอบ...';
+
+        const { data, error } = await sb
+          .from('admin_users')
+          .select('id, username, password_hash, is_active')
+          .eq('username', username)
+          .single();
+
+        if (error || !data) {
+          toast('ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง', 'ng');
+          $('btn-login-submit').disabled = false;
+          $('btn-login-submit').textContent = btnText;
+          return;
+        }
+
+        if (!data.is_active) {
+          toast('บัญชีนี้ถูกปิดการใช้งาน', 'ng');
+          $('btn-login-submit').disabled = false;
+          $('btn-login-submit').textContent = btnText;
+          return;
+        }
+
+        // ตรวจสอบรหัสผ่าน (Plain text — แนะนำให้ hash ใน production)
+        if (pass === data.password_hash) {
+          admLoggedIn = true;
+          localStorage.setItem('jig_admin_user', username);
+          $('admin-login-modal').classList.add('hidden');
+          openPanel('admin-panel');
+          toast(`เข้าสู่ระบบสำเร็จ (${username})`, 'ok');
+        } else {
+          toast('ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง', 'ng');
+        }
+      } catch (e) {
+        console.error('Login error:', e);
+        toast('เกิดข้อผิดพลาดในการตรวจสอบ', 'ng');
+      } finally {
+        $('btn-login-submit').disabled = false;
+        $('btn-login-submit').textContent = 'เข้าสู่ระบบ';
       }
     });
 
     $('btn-close-admin').addEventListener('click', () => closePanel('admin-panel'));
 
-    /* Change Pass */
-    $('btn-adm-pass').addEventListener('click', () => {
+    /* Change Pass — ตรวจสอบ admin account + อัปเดต Supabase */
+    $('btn-adm-pass').addEventListener('click', async () => {
       const newPass = $('adm-new-pass').value.trim();
-      if (!newPass || newPass.length < 4) { toast('รหัสผ่านใหม่ต้องยาว 4 ตัวขึ้นไป', 'ng'); return; }
-      localStorage.setItem('jig_admin_pass', newPass);
-      $('adm-new-pass').value = '';
-      $('hint-default-pass').classList.add('hidden');
-      toast('เปลี่ยนรหัสผ่าน Admin แล้ว', 'ok');
+      if (!newPass || newPass.length < 4) { 
+        toast('รหัสผ่านใหม่ต้องยาว 4 ตัวขึ้นไป', 'ng'); 
+        return; 
+      }
+      
+      // ถ้า Supabase ไม่พร้อม ให้บันทึกใน localStorage (fallback)
+      if (!sb) {
+        localStorage.setItem('jig_admin_pass', newPass);
+        $('adm-new-pass').value = '';
+        $('hint-default-pass').classList.add('hidden');
+        toast('เปลี่ยนรหัสผ่าน Admin แล้ว (local mode)', 'ok');
+        return;
+      }
+
+      try {
+        $('btn-adm-pass').disabled = true;
+        const btnText = $('btn-adm-pass').textContent;
+        $('btn-adm-pass').textContent = '🔄 กำลังบันทึก...';
+
+        const adminUser = localStorage.getItem('jig_admin_user') || 'admin';
+        
+        // อัปเดตรหัสผ่านใน Supabase
+        const { error } = await sb
+          .from('admin_users')
+          .update({ password_hash: newPass })
+          .eq('username', adminUser);
+
+        if (error) throw error;
+
+        $('adm-new-pass').value = '';
+        $('hint-default-pass').classList.add('hidden');
+        toast('เปลี่ยนรหัสผ่าน Admin แล้ว', 'ok');
+      } catch (e) {
+        console.error('Change password error:', e);
+        toast('เกิดข้อผิดพลาดในการเปลี่ยนรหัสผ่าน', 'ng');
+      } finally {
+        $('btn-adm-pass').disabled = false;
+        $('btn-adm-pass').textContent = 'เปลี่ยนรหัสผ่าน';
+      }
     });
 
     /* Add Dept */
