@@ -839,10 +839,30 @@
     const unchecked = checkState.filter(i => !i.status);
     if (unchecked.length) { toast(`ยังมี ${unchecked.length} รายการที่ยังไม่ตรวจ`, 'ng'); return; }
 
-    // ─── ขอ GPS พอดีกดบันทึก ─── 
-    toast('🔄 กำลังเก็บค่า GPS...', 'ok');
+    // ─── ขอ GPS พอดีกดบันทึก (บังคับต้องได้) ─── 
+    toast('🔄 กำลังเก็บค่า GPS... (ต้องได้พิกัดก่อนบันทึกได้)', 'ok');
     const gpsData = await getGPSCoordinates();
 
+    // ─── ตรวจสอบว่าได้พิกัด GPS สำเร็จหรือไม่ ───
+    if (gpsData.status !== 'success' || gpsData.latitude === null || gpsData.longitude === null) {
+      // ไม่ได้พิกัด → ไม่ให้บันทึก
+      let errMsg = '';
+      if (gpsData.status === 'denied') {
+        errMsg = '❌ คุณปฏิเสธการใช้ GPS — ต้องเปิดให้ browser ใช้ GPS ก่อนจึงจะบันทึกได้ (ไปที่ Settings หรือลองใหม่)';
+      } else if (gpsData.status === 'timeout') {
+        errMsg = '⏱️ GPS หาพิกัดไม่ได้ (หมดเวลา) — เลื่อนไปที่กลางแจ้ง เปิด GPS ให้เต็มที่ แล้วลองบันทึกใหม่';
+      } else if (gpsData.status === 'error') {
+        errMsg = '⚠️ GPS เกิดข้อผิดพลาด — ลองปิด/เปิด GPS แล้วบันทึกใหม่';
+      } else if (gpsData.status === 'unsupported') {
+        errMsg = '❓ อุปกรณ์ของคุณไม่รองรับ GPS — ต้องใช้ smartphone ที่มี GPS';
+      } else {
+        errMsg = '❌ ไม่ได้พิกัด GPS — ต้องบันทึกให้ได้พิกัด GPS ก่อน';
+      }
+      toast(errMsg, 'ng');
+      return;
+    }
+
+    // ─── ได้พิกัด → ดำเนินการบันทึก ───
     const jig  = catalog.jigs.find(j => j.id === selection.jigId);
     const line = catalog.lines.find(l => l.id === selection.lineId);
     const dept = catalog.depts.find(d => d.id === selection.deptId);
@@ -865,13 +885,13 @@
       items:      checkState.map(i => ({ id: i.id, label: i.label, status: i.status, note: i.note, photos: i.photos, value: i.value ?? null, unit: i.unit || '' })),
       sigInspector:  $('sig-inspector').value.trim(),
       sigSupervisor: $('sig-supervisor').value.trim(),
-      // ─── GPS Data ─── (บันทึกพิกัด ถ้าได้)
+      // ─── GPS Data ─── (บันทึกพิกัด - ตรวจสอบแล้วว่าได้พิกัด)
       gps: {
         latitude:   gpsData.latitude,
         longitude:  gpsData.longitude,
         accuracy:   gpsData.accuracy,
         timestamp:  gpsData.timestamp,
-        status:     gpsData.status // 'success', 'denied', 'timeout', 'error', 'unsupported'
+        status:     gpsData.status // 'success' เท่านั้น
       }
     };
 
@@ -879,10 +899,7 @@
     hist.unshift(record);
     if (hist.length > 100) hist = hist.slice(0, 100);
     if (saveHistory(hist)) {
-      const gpsMsg = gpsData.status === 'success' 
-        ? `✅ บันทึกสำเร็จ! (GPS: ${gpsData.latitude.toFixed(6)}, ${gpsData.longitude.toFixed(6)})`
-        : `✅ บันทึกสำเร็จ! (ไม่มีพิกัด GPS)`;
-      toast(gpsMsg, 'ok');
+      toast(`✅ บันทึกสำเร็จ! GPS: ${gpsData.latitude.toFixed(6)}, ${gpsData.longitude.toFixed(6)} (±${Math.round(gpsData.accuracy)}m)`, 'ok');
     }
   }
 
