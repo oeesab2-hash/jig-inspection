@@ -1227,30 +1227,6 @@
       refreshDashboard();
     });
 
-    /* Clear all — require checkbox confirmation first */
-    $('chk-clear-confirm').addEventListener('change', (e) => {
-      if (e.target.checked) {
-        $('btn-clear-all').style.display = 'block';
-      } else {
-        $('btn-clear-all').style.display = 'none';
-      }
-    });
-    
-    $('btn-clear-all').addEventListener('click', () => {
-      if (!confirm('ลบข้อมูลทั้งหมด (catalog + history)? การกระทำนี้ไม่สามารถยกเลิกได้')) return;
-      catalog = { depts: [], lines: [], jigs: [], templates: [] };
-      saveCatalog(); saveHistory([]);
-      selection = { deptId: null, lineId: null, jigId: null };
-      hideInspectionCards(); renderAdminLists(); renderFilter();
-      refreshDashboard();
-      _syncing = true;
-      setTimeout(() => { _syncing = false; }, 2000);
-      $('chk-clear-confirm').checked = false; // Uncheck checkbox
-      $('btn-clear-all').style.display = 'none'; // Hide delete button
-      toast('ล้างข้อมูลทั้งหมดแล้ว ระบบจะรีเฟรช...', 'ng');
-      setTimeout(() => location.reload(), 1500);
-    });
-
     renderAdminLists();
   }
 
