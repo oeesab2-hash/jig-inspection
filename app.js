@@ -40,7 +40,19 @@
     const rows = [];
     (jigs || []).forEach(j => {
       (j.checkpoints || []).forEach(cp => {
-        rows.push({ jig_id: j.id, item_id: cp.id, label: cp.label, sub: cp.sub, method: cp.method, x: cp.x, y: cp.y });
+        rows.push({ 
+          jig_id: j.id, 
+          item_id: cp.id, 
+          label: cp.label, 
+          sub: cp.sub, 
+          method: cp.method, 
+          x: cp.x, 
+          y: cp.y,
+          type: cp.type || null,
+          min: cp.min || null,
+          max: cp.max || null,
+          unit: cp.unit || null
+        });
       });
     });
     return rows;
@@ -105,7 +117,18 @@
       const cpByJig = {};
       (c.data || []).forEach(row => {
         if (!cpByJig[row.jig_id]) cpByJig[row.jig_id] = [];
-        cpByJig[row.jig_id].push({ id: row.item_id, label: row.label, sub: row.sub, method: row.method, x: row.x, y: row.y });
+        cpByJig[row.jig_id].push({ 
+          id: row.item_id, 
+          label: row.label, 
+          sub: row.sub, 
+          method: row.method, 
+          x: row.x, 
+          y: row.y,
+          type: row.type || undefined,
+          min: row.min || undefined,
+          max: row.max || undefined,
+          unit: row.unit || undefined
+        });
       });
       const jigs = (j.data || []).map(row => ({
         id: row.id, lineId: row.line_id, name: row.name, docNo: row.doc_no,
