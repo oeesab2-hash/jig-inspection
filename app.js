@@ -1910,7 +1910,7 @@
       return `<div class="history-item">
         <div class="hi-path">${escHtml(h.deptName || '')}  ›  ${escHtml(h.lineName || '')}  ›  ${escHtml(h.jigName || '')}</div>
         <div class="hi-head">
-          <div class="hi-meta"><strong>${escHtml(h.date)}</strong> · ${escHtml(h.shift)} · ผู้ตรวจ: ${escHtml(h.inspector)}</div>
+          <div class="hi-meta"><strong>${escHtml(h.date)}</strong> เวลา: ${new Date(h.timestamp).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' })} · ${escHtml(h.shift)} · ผู้ตรวจ: ${escHtml(h.inspector)}</div>
           <div class="hi-badges">
             <span class="badge ok">OK ${okCount}</span>
             ${ngItems.length ? `<span class="badge ng">NG ${ngItems.length}</span>` : ''}
