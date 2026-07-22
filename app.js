@@ -1962,7 +1962,7 @@
       <div class="pdf-subtitle">${escHtml(record.deptName)} &gt; ${escHtml(record.lineName)}</div>
       <div class="pdf-meta-row">
         <span>ผู้ตรวจสอบ: ${escHtml(record.inspector)}</span>
-        <span>วันที่: ${escHtml(record.date)}  กะ: ${escHtml(record.shift)}</span>
+        <span>วันที่: ${escHtml(record.date)}  เวลา: ${new Date(record.timestamp).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' })}  กะ: ${escHtml(record.shift)}</span>
       </div>
       <table class="pdf-table">
         <thead>
