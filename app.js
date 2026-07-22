@@ -28,6 +28,12 @@
     ? window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
     : null;
 
+  /* ══════════════════════════════════════
+     TELEGRAM — notification บันทึกผล
+  ══════════════════════════════════════ */
+  const TELEGRAM_BOT_TOKEN = '8917357398:AAH0WhemBpTPLzqfJ4tAOz2zXLUToQSsr7o';
+  const TELEGRAM_CHAT_ID = '-5503138360';
+
   let _syncing = false; // กัน realtime event ที่มาจาก push ของตัวเองไม่ให้ re-render วนซ้ำ
   const _pushTimers = {};
 
@@ -854,6 +860,28 @@
     });
   }
 
+  /* ─── ส่ง Telegram Message ─── */
+  async function sendTelegramMessage(msg) {
+    try {
+      const url = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`;
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          chat_id: TELEGRAM_CHAT_ID,
+          text: msg,
+          parse_mode: 'Markdown'
+        })
+      });
+      
+      if (!response.ok) {
+        console.error('Telegram send failed:', response.status);
+      }
+    } catch (e) {
+      console.error('Telegram error:', e);
+    }
+  }
+
   async function submitReport() {
     if (!selection.jigId) { toast('กรุณาเลือก JIG ก่อนบันทึก', 'ng'); return; }
     if (!$('inp-inspector').value.trim()) { toast('กรุณาระบุชื่อผู้ตรวจสอบ', 'ng'); $('inp-inspector').focus(); return; }
@@ -923,6 +951,31 @@
     if (hist.length > 100) hist = hist.slice(0, 100);
     if (saveHistory(hist)) {
       toast(`✅ บันทึกสำเร็จ! GPS: ${gpsData.latitude.toFixed(6)}, ${gpsData.longitude.toFixed(6)} (±${Math.round(gpsData.accuracy)}m)`, 'ok');
+      
+      // ─── ส่ง Telegram Notification ───
+      const okCount = checkState.filter(i => i.status === 'ok' || i.status === 'fixed').length;
+      const ngCount = checkState.filter(i => i.status === 'ng').length;
+      const time = new Date(record.timestamp).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' });
+      
+      const telegramMsg = `
+📊 *JIG Inspection Report*
+━━━━━━━━━━━━━━━━━━━━━━━━━
+*${escHtml(record.jigName)}*
+${record.jigDocNo ? `_${escHtml(record.jigDocNo)}_` : ''}
+
+📅 วันที่: ${record.date}
+🕐 เวลา: ${time}
+🔄 กะ: ${record.shift}
+👤 ผู้ตรวจ: ${escHtml(record.inspector)}
+
+✅ ผ่าน (OK): ${okCount}
+${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
+
+📍 GPS: ${gpsData.latitude.toFixed(6)}, ${gpsData.longitude.toFixed(6)}
+━━━━━━━━━━━━━━━━━━━━━━━━━
+`;
+      
+      await sendTelegramMessage(telegramMsg);
     }
   }
 
