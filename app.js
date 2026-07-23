@@ -394,6 +394,9 @@
      INIT
   ══════════════════════════════════════ */
   async function init() {
+    // ─── ตรวจสอบ GPS Status ───
+    await checkGPSStatusOnLoad();
+    
     // ดึงข้อมูลล่าสุดจากทีมมาก่อน แล้วค่อย render (ถ้ายังไม่เคย sync ขึ้นเลยจะได้ null แล้วใช้ local ต่อ)
     const [remoteCat, remoteHist] = await Promise.all([pullCatalogFromSupabase(), pullHistoryFromSupabase()]);
     if (remoteCat) localStorage.setItem(SK.catalog, JSON.stringify(remoteCat));
@@ -2300,6 +2303,29 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
   /* ══════════════════════════════════════
      CHANGE JIG BUTTON + INIT
   ══════════════════════════════════════ */
+  /* ─── ตรวจสอบ GPS Status ─── */
+  async function checkGPSStatus() {
+    return new Promise((resolve) => {
+      if (!navigator.geolocation) {
+        resolve(false);
+        return;
+      }
+      
+      const timeout = setTimeout(() => resolve(false), 3000);
+      navigator.geolocation.getCurrentPosition(
+        () => { clearTimeout(timeout); resolve(true); },
+        () => { clearTimeout(timeout); resolve(false); }
+      );
+    });
+  }
+
+  async function checkGPSStatusOnLoad() {
+    const gpsEnabled = await checkGPSStatus();
+    if (!gpsEnabled) {
+      $('gps-alert-modal').classList.remove('hidden');
+    }
+  }
+
   document.addEventListener('DOMContentLoaded', () => {
     $('btn-change-jig').addEventListener('click', () => {
       selection.jigId = null;
@@ -2314,6 +2340,17 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
     startDashClock();
     initPanelResize();
     init();
+    
+    // ─── GPS Check Button ───
+    $('btn-gps-check').addEventListener('click', async () => {
+      const gpsEnabled = await checkGPSStatus();
+      if (gpsEnabled) {
+        $('gps-alert-modal').classList.add('hidden');
+        toast('✅ GPS เปิดสำเร็จ!', 'ok');
+      } else {
+        toast('❌ GPS ยังไม่เปิด โปรดเปิด GPS ในอุปกรณ์', 'ng');
+      }
+    });
   });
 
   /* ══════════════════════════════════════
