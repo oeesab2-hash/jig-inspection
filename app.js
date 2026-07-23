@@ -958,9 +958,10 @@
       // ─── ส่ง Telegram Notification ───
       const okCount = checkState.filter(i => i.status === 'ok' || i.status === 'fixed').length;
       const ngCount = checkState.filter(i => i.status === 'ng').length;
+      const ngItems = checkState.filter(i => i.status === 'ng');
       const time = new Date(record.timestamp).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' });
       
-      const telegramMsg = `
+      let telegramMsg = `
 📊 *JIG Inspection Report*
 ━━━━━━━━━━━━━━━━━━━━━━━━━
 *${escHtml(record.jigName)}*
@@ -973,7 +974,19 @@ ${record.jigDocNo ? `_${escHtml(record.jigDocNo)}_` : ''}
 
 ✅ ผ่าน (OK): ${okCount}
 ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
+`;
 
+      // เพิ่มรายละเอียด NG items
+      if (ngItems.length > 0) {
+        telegramMsg += `\n*🔴 รายการที่ไม่ผ่าน:*\n`;
+        ngItems.forEach((item, idx) => {
+          const value = item.value ? ` (ค่า: ${item.value}${item.unit ? ' ' + item.unit : ''})` : '';
+          const note = item.note ? ` - _${escHtml(item.note)}_` : '';
+          telegramMsg += `${idx + 1}. ${escHtml(item.label)}${value}${note}\n`;
+        });
+      }
+
+      telegramMsg += `
 📍 GPS: ${gpsData.latitude.toFixed(6)}, ${gpsData.longitude.toFixed(6)}
 ━━━━━━━━━━━━━━━━━━━━━━━━━
 `;
