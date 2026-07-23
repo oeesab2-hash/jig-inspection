@@ -30,9 +30,12 @@
 
   /* ══════════════════════════════════════
      TELEGRAM — notification บันทึกผล
+     ⚠️ ห้ามใส่ Bot Token ตรงนี้เด็ดขาด — client-side โค้ดทุกไฟล์เปิด View Source ดูได้
+     ใครก็ตามที่เข้าเว็บนี้จะเห็น token ทันทีถ้าใส่ตรงนี้ (เคยเกิดปัญหานี้มาแล้ว)
+     แก้โดยย้าย token ไปเก็บเป็น secret ฝั่ง Supabase Edge Function แทน
+     ดู supabase/functions/send-telegram/index.ts + คำแนะนำ deploy แนบมาด้วย
   ══════════════════════════════════════ */
-  const TELEGRAM_BOT_TOKEN = '8917357398:AAH0WhemBpTPLzqfJ4tAOz2zXLUToQSsr7o';
-  const TELEGRAM_CHAT_ID = '-5503138360';
+  const TELEGRAM_FUNCTION_URL = `${SUPABASE_URL}/functions/v1/send-telegram`;
 
   let _syncing = false; // กัน realtime event ที่มาจาก push ของตัวเองไม่ให้ re-render วนซ้ำ
   const _pushTimers = {};
@@ -863,22 +866,20 @@
     });
   }
 
-  /* ─── ส่ง Telegram Message ─── */
+  /* ─── ส่ง Telegram Message — ผ่าน Edge Function เท่านั้น (token ไม่เคยอยู่ฝั่ง client) ─── */
   async function sendTelegramMessage(msg) {
     try {
-      const url = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`;
-      const response = await fetch(url, {
+      const response = await fetch(TELEGRAM_FUNCTION_URL, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          chat_id: TELEGRAM_CHAT_ID,
-          text: msg,
-          parse_mode: 'Markdown'
-        })
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${SUPABASE_ANON_KEY}`, // Edge Function ต้องการ header นี้ตามค่า default ของ Supabase
+        },
+        body: JSON.stringify({ text: msg }),
       });
-      
+
       if (!response.ok) {
-        console.error('Telegram send failed:', response.status);
+        console.error('Telegram send failed:', response.status, await response.text().catch(() => ''));
       }
     } catch (e) {
       console.error('Telegram error:', e);
@@ -1223,34 +1224,26 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
         return;
       }
 
-      // ตรวจสอบจาก Supabase admin_users
+      // ตรวจสอบผ่าน RPC — DB จะตอบแค่ true/false เท่านั้น ไม่เคยส่ง password_hash กลับมาให้ client เห็น
       try {
         $('btn-login-submit').disabled = true;
         const btnText = $('btn-login-submit').textContent;
         $('btn-login-submit').textContent = '🔄 กำลังตรวจสอบ...';
 
-        const { data, error } = await sb
-          .from('admin_users')
-          .select('id, username, password_hash, is_active')
-          .eq('username', username)
-          .single();
+        const { data: ok, error } = await sb.rpc('verify_admin_login', {
+          p_username: username,
+          p_password: pass,
+        });
 
-        if (error || !data) {
-          toast('ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง', 'ng');
+        if (error) {
+          console.error('Login RPC error:', error);
+          toast('เกิดข้อผิดพลาดในการตรวจสอบ', 'ng');
           $('btn-login-submit').disabled = false;
           $('btn-login-submit').textContent = btnText;
           return;
         }
 
-        if (!data.is_active) {
-          toast('บัญชีนี้ถูกปิดการใช้งาน', 'ng');
-          $('btn-login-submit').disabled = false;
-          $('btn-login-submit').textContent = btnText;
-          return;
-        }
-
-        // ตรวจสอบรหัสผ่าน (Plain text — แนะนำให้ hash ใน production)
-        if (pass === data.password_hash) {
+        if (ok) {
           admLoggedIn = true;
           localStorage.setItem('jig_admin_user', username);
           $('admin-login-modal').classList.add('hidden');
@@ -1270,9 +1263,11 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
 
     $('btn-close-admin').addEventListener('click', () => closePanel('admin-panel'));
 
-    /* Change Pass — ตรวจสอบ admin account + อัปเดต Supabase */
+    /* Change Pass — ต้องยืนยันรหัสเดิมก่อนเสมอ (ผ่าน RPC ฝั่ง DB) */
     $('btn-adm-pass').addEventListener('click', async () => {
+      const oldPass = $('adm-old-pass').value.trim();
       const newPass = $('adm-new-pass').value.trim();
+      if (!oldPass) { toast('กรุณากรอกรหัสผ่านเดิม', 'ng'); return; }
       if (!newPass || newPass.length < 4) { 
         toast('รหัสผ่านใหม่ต้องยาว 4 ตัวขึ้นไป', 'ng'); 
         return; 
@@ -1280,8 +1275,10 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
       
       // ถ้า Supabase ไม่พร้อม ให้บันทึกใน localStorage (fallback)
       if (!sb) {
+        const localPass = localStorage.getItem('jig_admin_pass') || 'admin1234';
+        if (oldPass !== localPass) { toast('รหัสผ่านเดิมไม่ถูกต้อง', 'ng'); return; }
         localStorage.setItem('jig_admin_pass', newPass);
-        $('adm-new-pass').value = '';
+        $('adm-old-pass').value = ''; $('adm-new-pass').value = '';
         $('hint-default-pass').classList.add('hidden');
         toast('เปลี่ยนรหัสผ่าน Admin แล้ว (local mode)', 'ok');
         return;
@@ -1293,16 +1290,21 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
         $('btn-adm-pass').textContent = '🔄 กำลังบันทึก...';
 
         const adminUser = localStorage.getItem('jig_admin_user') || 'admin';
-        
-        // อัปเดตรหัสผ่านใน Supabase
-        const { error } = await sb
-          .from('admin_users')
-          .update({ password_hash: newPass })
-          .eq('username', adminUser);
+
+        const { data: ok, error } = await sb.rpc('change_admin_password', {
+          p_username: adminUser,
+          p_old_password: oldPass,
+          p_new_password: newPass,
+        });
 
         if (error) throw error;
 
-        $('adm-new-pass').value = '';
+        if (!ok) {
+          toast('รหัสผ่านเดิมไม่ถูกต้อง', 'ng');
+          return;
+        }
+
+        $('adm-old-pass').value = ''; $('adm-new-pass').value = '';
         $('hint-default-pass').classList.add('hidden');
         toast('เปลี่ยนรหัสผ่าน Admin แล้ว', 'ok');
       } catch (e) {
