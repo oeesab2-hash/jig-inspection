@@ -2303,7 +2303,7 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
   /* ══════════════════════════════════════
      CHANGE JIG BUTTON + INIT
   ══════════════════════════════════════ */
-  /* ─── ตรวจสอบ GPS Status ─── */
+  /* ─── ตรวจสอบ GPS Status (เร็ว + Auto-retry) ─── */
   async function checkGPSStatus() {
     return new Promise((resolve) => {
       if (!navigator.geolocation) {
@@ -2311,7 +2311,8 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
         return;
       }
       
-      const timeout = setTimeout(() => resolve(false), 3000);
+      // ลดเวลา timeout จาก 3000 → 1500 ms (เร็วขึ้น 2 เท่า)
+      const timeout = setTimeout(() => resolve(false), 1500);
       navigator.geolocation.getCurrentPosition(
         () => { clearTimeout(timeout); resolve(true); },
         () => { clearTimeout(timeout); resolve(false); }
@@ -2320,9 +2321,24 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
   }
 
   async function checkGPSStatusOnLoad() {
-    const gpsEnabled = await checkGPSStatus();
-    if (!gpsEnabled) {
-      $('gps-alert-modal').classList.remove('hidden');
+    let attempts = 0;
+    const maxAttempts = 3;
+    
+    while (attempts < maxAttempts) {
+      const gpsEnabled = await checkGPSStatus();
+      if (gpsEnabled) {
+        $('gps-alert-modal').classList.add('hidden');
+        return;
+      }
+      attempts++;
+      
+      // ถ้า retry ยังไม่พร้อม ให้ show modal
+      if (attempts >= maxAttempts) {
+        $('gps-alert-modal').classList.remove('hidden');
+      } else {
+        // retry automatic เร็ว ๆ
+        await new Promise(r => setTimeout(r, 400));
+      }
     }
   }
 
@@ -2341,15 +2357,31 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
     initPanelResize();
     init();
     
-    // ─── GPS Check Button ───
+    // ─── GPS Check Button (เร็ว + Auto-retry) ───
     $('btn-gps-check').addEventListener('click', async () => {
-      const gpsEnabled = await checkGPSStatus();
-      if (gpsEnabled) {
+      $('btn-gps-check').disabled = true;
+      $('btn-gps-check').textContent = '🔄 กำลังเช็ค GPS...';
+      
+      // try multiple times automatically
+      let success = false;
+      for (let i = 0; i < 3; i++) {
+        const gpsEnabled = await checkGPSStatus();
+        if (gpsEnabled) {
+          success = true;
+          break;
+        }
+        if (i < 2) await new Promise(r => setTimeout(r, 300));
+      }
+      
+      if (success) {
         $('gps-alert-modal').classList.add('hidden');
         toast('✅ GPS เปิดสำเร็จ!', 'ok');
       } else {
         toast('❌ GPS ยังไม่เปิด โปรดเปิด GPS ในอุปกรณ์', 'ng');
       }
+      
+      $('btn-gps-check').disabled = false;
+      $('btn-gps-check').textContent = '✓ เช็ค GPS ใหม่';
     });
   });
 
