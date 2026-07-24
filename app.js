@@ -1988,7 +1988,13 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
             ${gpsDisplay}
           </div>
         </div>
-        ${ngItems.length ? `<div class="hi-details">NG: ${ngItems.map(i=>`ข้อ ${i.id}`).join(', ')}</div>` : ''}
+        ${ngItems.length ? `<div class="hi-ng-list">
+          ${ngItems.map(i => `<div class="hi-ng-item">
+            <span class="hi-ng-label">❌ ข้อ ${i.id}: ${escHtml(i.label || '')}</span>
+            ${i.value != null && i.value !== '' ? `<span class="hi-ng-value">ค่าที่วัดได้: ${escHtml(String(i.value))}${escHtml(i.unit || '')}</span>` : ''}
+            ${i.note ? `<span class="hi-ng-note">หมายเหตุ: ${escHtml(i.note)}</span>` : `<span class="hi-ng-note hi-ng-note-empty">ไม่ได้ระบุรายละเอียดความผิดปกติ</span>`}
+          </div>`).join('')}
+        </div>` : ''}
         ${photos.length  ? `<div class="hi-photos">${photos.slice(0,4).map(p=>`<img src="${escHtml(p)}" class="hi-photo" data-src="${escHtml(p)}">`).join('')}</div>` : ''}
         ${(h.sigInspector||h.sigSupervisor) ? `<div class="hi-sigs" style="font-size:11px; color:var(--text-main); margin-top:6px; display:flex; gap:16px;">
           ${h.sigInspector?`<div><strong>ผู้ตรวจ:</strong> ${escHtml(h.sigInspector)}</div>`:''}

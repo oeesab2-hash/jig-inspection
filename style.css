@@ -959,6 +959,16 @@ h1, h2, h3, h4, label, button, input, select, textarea, p, span, div {
 .hi-badges { display: flex; gap: 4px; }
 .hi-path { font-size: 11px; color: var(--text-muted); margin-bottom: 4px; font-family: var(--font-en); }
 .hi-details { font-size: 12px; color: var(--text-muted); margin-top: 6px; }
+
+.hi-ng-list { margin-top: 8px; display: flex; flex-direction: column; gap: 6px; }
+.hi-ng-item {
+  background: var(--ng-bg); border: 1px solid var(--ng-border); border-radius: 7px;
+  padding: 6px 10px; font-size: 12px; display: flex; flex-direction: column; gap: 2px;
+}
+.hi-ng-label { color: var(--ng); font-weight: 600; }
+.hi-ng-value { color: var(--text-main); }
+.hi-ng-note { color: var(--text-main); }
+.hi-ng-note-empty { color: var(--text-muted); font-style: italic; }
 .hi-photos { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
 .hi-photo {
   width: 48px; height: 48px; object-fit: cover;
