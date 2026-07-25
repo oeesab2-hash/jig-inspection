@@ -157,11 +157,14 @@
   }
 
   // ── ส่ง History ขึ้น Supabase (ตาราง history จริง 1 แถวต่อ 1 รายการตรวจ) ──
+  // ⚠️ แก้บั๊ก (2026-07-25): เดิมใช้ "delete ทั้งตาราง แล้ว insert ใหม่หมด" ซึ่งพัง
+  // เพราะ local เก็บแค่ history ล่าสุด 100 รายการ (ดู submitReport) — ทุกครั้งที่มีคน
+  // บันทึก/ลบรายการจากเครื่องที่มี local cache ไม่ครบ จะไปลบของเก่าที่เกิน 100 ทิ้งถาวร
+  // จาก Supabase ด้วย! เปลี่ยนมาใช้ upsert แทน เพื่อไม่ให้แถวอื่นที่ไม่ได้ส่งมาถูกลบ
   async function pushHistoryToSupabase(arr) {
     if (!sb) return;
     _syncing = true;
     try {
-      await sb.from('history').delete().not('id', 'is', null);
       const rows = (arr || []).map(h => ({
         id: h.id, ts: h.timestamp,
         dept_id: h.deptId, dept_name: h.deptName,
@@ -178,12 +181,27 @@
         gps_status: h.gps?.status || 'unknown',
       }));
       // แบ่งส่งเป็นชุดๆ (มีรูปถ่าย base64 อยู่ในนั้น ก้อนใหญ่ได้) กันพัง request เดียวโตเกินไป
+      // upsert ตาม id — แถวที่มีอยู่แล้วจะถูกอัปเดตทับ ส่วนแถวอื่นในตารางที่ไม่ได้ส่งมาจะไม่ถูกแตะต้อง
       for (let i = 0; i < rows.length; i += 40) {
-        const { error } = await sb.from('history').insert(rows.slice(i, i + 40));
+        const { error } = await sb.from('history').upsert(rows.slice(i, i + 40), { onConflict: 'id' });
         if (error) throw error;
       }
     } catch (e) {
       console.error('pushHistoryToSupabase error:', e);
+    } finally {
+      setTimeout(() => { _syncing = false; }, 1500);
+    }
+  }
+
+  // ── ลบ history รายการเดียวออกจาก Supabase (ใช้ตอนกดลบใน History Panel) ──
+  async function deleteHistoryFromSupabase(id) {
+    if (!sb) return;
+    _syncing = true;
+    try {
+      const { error } = await sb.from('history').delete().eq('id', id);
+      if (error) throw error;
+    } catch (e) {
+      console.error('deleteHistoryFromSupabase error:', e);
     } finally {
       setTimeout(() => { _syncing = false; }, 1500);
     }
@@ -2014,7 +2032,10 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
     }));
     list.querySelectorAll('[data-del]').forEach(b => b.addEventListener('click', () => {
       if (!confirm('ลบรายการนี้?')) return;
-      saveHistory(loadHistory().filter(h => String(h.id) !== b.dataset.del));
+      const delId = b.dataset.del;
+      const remaining = loadHistory().filter(h => String(h.id) !== delId);
+      localStorage.setItem(SK.history, JSON.stringify(remaining)); // อัปเดต local ทันที
+      deleteHistoryFromSupabase(delId); // ลบเฉพาะแถวนี้จริงๆ บน Supabase (ไม่กระทบแถวอื่น)
       populateHistoryPanel(); toast('ลบแล้ว', 'ok');
     }));
     list.querySelectorAll('.hi-photo').forEach(img => {
