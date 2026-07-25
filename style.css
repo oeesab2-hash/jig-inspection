@@ -822,6 +822,12 @@ h1, h2, h3, h4, label, button, input, select, textarea, p, span, div {
   border-radius: 4px; transition: background 0.2s;
 }
 .adm-item-del:hover { background: var(--ng-bg); }
+.adm-item-edit {
+  background: none; border: none; cursor: pointer;
+  color: var(--accent); font-size: 13px; padding: 2px 6px;
+  border-radius: 4px; transition: background 0.2s; margin-right: 2px;
+}
+.adm-item-edit:hover { background: var(--accent-bg, hsla(210,80%,58%,0.12)); }
 .adm-item-cfg {
   background: none; border: none; cursor: pointer;
   color: var(--accent); font-size: 13px; padding: 2px 6px;

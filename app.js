@@ -1837,6 +1837,7 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
               <div>${escHtml(d.name)}</div>
               <div class="adm-item-code">${escHtml(d.id)}</div>
             </div>
+            <button class="adm-item-edit" data-etype="dept" data-id="${escHtml(d.id)}">✏️</button>
             <button class="adm-item-del" data-dtype="dept" data-id="${escHtml(d.id)}">🗑</button>
           </div>`).join('')
       : '<div class="adm-item" style="color:var(--text-muted);font-style:italic">ยังไม่มีแผนก</div>';
@@ -1850,6 +1851,7 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
               <div>${escHtml(l.name)}</div>
               <div class="adm-item-code">${escHtml(l.id)} · ${escHtml(dept ? dept.name : l.deptId)}</div>
             </div>
+            <button class="adm-item-edit" data-etype="line" data-id="${escHtml(l.id)}">✏️</button>
             <button class="adm-item-del" data-dtype="line" data-id="${escHtml(l.id)}">🗑</button>
           </div>`;}).join('')
       : '<div class="adm-item" style="color:var(--text-muted);font-style:italic">ยังไม่มี Line</div>';
@@ -1877,12 +1879,47 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
             <div>🔧 ${escHtml(j.name)}</div>
             <div class="adm-item-code">${escHtml(j.id)} · ${escHtml(line ? line.name : j.lineId)}</div>
           </div>
+          <button class="adm-item-edit" data-etype="jig" data-id="${escHtml(j.id)}">✏️</button>
           <button class="adm-item-del" data-dtype="jig" data-id="${escHtml(j.id)}">🗑</button>
         </div>`;
       });
       $('adm-jig-list').innerHTML = html;
     }
     filterJigList(); // เผื่อผู้ใช้พิมพ์ค้นหาค้างอยู่ตอนที่ list ถูก re-render (เช่น หลังลบ)
+
+    /* Edit buttons — แก้ชื่อ (และรหัส JIG) ตรงๆ โดยไม่ต้องลบแล้วสร้างใหม่ */
+    document.querySelectorAll('.adm-item-edit').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const { etype, id } = btn.dataset;
+        if (etype === 'dept') {
+          const d = catalog.depts.find(x => x.id === id);
+          if (!d) return;
+          const newName = prompt('แก้ไขชื่อแผนก:', d.name);
+          if (newName === null) return; // กดยกเลิก
+          if (!newName.trim()) { toast('ชื่อห้ามว่าง', 'ng'); return; }
+          d.name = newName.trim();
+        } else if (etype === 'line') {
+          const l = catalog.lines.find(x => x.id === id);
+          if (!l) return;
+          const newName = prompt('แก้ไขชื่อ Line:', l.name);
+          if (newName === null) return;
+          if (!newName.trim()) { toast('ชื่อห้ามว่าง', 'ng'); return; }
+          l.name = newName.trim();
+        } else if (etype === 'jig') {
+          const j = catalog.jigs.find(x => x.id === id);
+          if (!j) return;
+          const newName = prompt('แก้ไขชื่อ JIG:', j.name);
+          if (newName === null) return;
+          if (!newName.trim()) { toast('ชื่อห้ามว่าง', 'ng'); return; }
+          const newDocNo = prompt('แก้ไขรหัส/Part No. (เว้นว่างได้):', j.docNo || '');
+          if (newDocNo === null) return;
+          j.name = newName.trim();
+          j.docNo = newDocNo.trim();
+        }
+        saveCatalog(); renderAdminLists(); renderFilter();
+        toast('แก้ไขสำเร็จ', 'ok');
+      });
+    });
 
     /* Delete buttons */
     document.querySelectorAll('.adm-item-del').forEach(btn => {
