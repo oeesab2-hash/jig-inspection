@@ -1169,6 +1169,33 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
         toast('รูปแบบไฟล์ไม่ถูกต้อง — ต้อง export มาจากระบบนี้เท่านั้น', 'ng');
         return;
       }
+
+      // Normalize data: convert snake_case from backup to camelCase for internal use
+      cat.lines = (cat.lines || []).map(l => ({
+        id: l.id,
+        name: l.name,
+        deptId: l.deptId || l.dept_id  // Support both formats
+      }));
+      
+      cat.jigs = (cat.jigs || []).map(j => ({
+        id: j.id,
+        name: j.name,
+        lineId: j.lineId || j.line_id,  // Support both formats
+        docNo: j.docNo || j.doc_no || '',
+        bgImage: j.bgImage || j.bg_image || null,
+        checkpoints: (j.checkpoints || []).map(cp => ({
+          id: cp.id,
+          label: cp.label || '',
+          sub: cp.sub || '',
+          method: cp.method || '',
+          x: cp.x || 0,
+          y: cp.y || 0,
+          type: cp.type || null,
+          min: cp.min || null,
+          max: cp.max || null,
+          unit: cp.unit || null
+        }))
+      }));
       if (!confirm(`นำเข้าข้อมูลนี้จะ "แทนที่" ข้อมูลปัจจุบันทั้งหมด\n(${cat.jigs.length} JIG, ${hist.length} ประวัติ)\nแนะนำให้ Export สำรองไว้ก่อน — ต้องการดำเนินการต่อหรือไม่?`)) return;
 
       if (!sb) { toast('ไม่ได้เชื่อมต่อ Supabase', 'ng'); return; }
@@ -1188,15 +1215,25 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
           if (error) throw error;
         }
 
-        // Insert lines
+        // Insert lines (data is already normalized to camelCase)
         if (cat.lines.length) {
-          const { error } = await sb.from('lines').insert(cat.lines.map(l => ({ id: l.id, dept_id: l.deptId, name: l.name })));
+          const { error } = await sb.from('lines').insert(cat.lines.map(l => ({ 
+            id: l.id, 
+            dept_id: l.deptId,  // Now using normalized camelCase
+            name: l.name 
+          })));
           if (error) throw error;
         }
 
-        // Insert jigs (ไม่รวม checkpoints)
+        // Insert jigs (data is already normalized to camelCase)
         if (cat.jigs.length) {
-          const { error } = await sb.from('jigs').insert(cat.jigs.map(j => ({ id: j.id, line_id: j.lineId, name: j.name, doc_no: j.docNo || j.doc_no || '', bg_image: j.bgImage || j.bg_image || null })));
+          const { error } = await sb.from('jigs').insert(cat.jigs.map(j => ({ 
+            id: j.id, 
+            line_id: j.lineId,  // Now using normalized camelCase
+            name: j.name, 
+            doc_no: j.docNo, 
+            bg_image: j.bgImage 
+          })));
           if (error) throw error;
         }
 
@@ -1234,6 +1271,10 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
         }
 
         setTimeout(() => { _syncing = false; }, 2000);
+
+        // Save normalized catalog to localStorage
+        localStorage.setItem(SK.catalog, JSON.stringify(cat));
+        localStorage.setItem(SK.history, JSON.stringify(hist));
 
         // รีโหลดข้อมูลเข้า memory และ re-render
         await refreshCatalog();
