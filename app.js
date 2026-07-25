@@ -39,6 +39,12 @@
 
   let _syncing = false; // กัน realtime event ที่มาจาก push ของตัวเองไม่ให้ re-render วนซ้ำ
   const _pushTimers = {};
+  
+  /* ══════════════════════════════════════
+     🔧 FIX: Global flags to prevent event listener memory leak
+     ────────────────────────────────────── */
+  let _editHandlerAttached = false;
+  let _deleteHandlerAttached = false;
 
   function debouncedPush(key, fn) {
     clearTimeout(_pushTimers[key]);
@@ -328,6 +334,73 @@
       toast('พื้นที่จัดเก็บเต็ม — รูปภาพอาจไม่ถูกบันทึก ลองลบรูปพื้นหลังบาง JIG ออก', 'ng');
     }
     debouncedPush('catalog', () => pushCatalogToSupabase(catalog));
+  }
+
+  /* ══════════════════════════════════════
+     🔧 FIX: Global Event Handlers for Admin Panel (Event Delegation)
+     This prevents memory leak by using event delegation instead of
+     creating a new listener for each admin item.
+  ══════════════════════════════════════ */
+  function handleAdminEdit(e) {
+    const btn = e.target.closest('.adm-item-edit');
+    if (!btn) return;
+    
+    e.stopPropagation();
+    const { etype, id } = btn.dataset;
+    
+    if (etype === 'dept') {
+      const d = catalog.depts.find(x => x.id === id);
+      if (!d) return;
+      const newName = prompt('แก้ไขชื่อแผนก:', d.name);
+      if (newName === null) return;
+      if (!newName.trim()) { toast('ชื่อห้ามว่าง', 'ng'); return; }
+      d.name = newName.trim();
+    } else if (etype === 'line') {
+      const l = catalog.lines.find(x => x.id === id);
+      if (!l) return;
+      const newName = prompt('แก้ไขชื่อ Line:', l.name);
+      if (newName === null) return;
+      if (!newName.trim()) { toast('ชื่อห้ามว่าง', 'ng'); return; }
+      l.name = newName.trim();
+    } else if (etype === 'jig') {
+      const j = catalog.jigs.find(x => x.id === id);
+      if (!j) return;
+      const newName = prompt('แก้ไขชื่อ JIG:', j.name);
+      if (newName === null) return;
+      if (!newName.trim()) { toast('ชื่อห้ามว่าง', 'ng'); return; }
+      const newDocNo = prompt('แก้ไขรหัส/Part No. (เว้นว่างได้):', j.docNo || '');
+      if (newDocNo === null) return;
+      j.name = newName.trim();
+      j.docNo = newDocNo.trim();
+    }
+    
+    saveCatalog(); renderAdminLists(); renderFilter();
+    toast('แก้ไขสำเร็จ', 'ok');
+  }
+
+  function handleAdminDelete(e) {
+    const btn = e.target.closest('.adm-item-del');
+    if (!btn) return;
+    
+    e.stopPropagation();
+    const { dtype, id } = btn.dataset;
+    
+    if (dtype === 'dept') {
+      catalog.lines = catalog.lines.filter(l => l.deptId !== id);
+      catalog.jigs  = catalog.jigs.filter(j => {
+        const l = catalog.lines.find(x => x.id === j.lineId); 
+        return l;
+      });
+      catalog.depts = catalog.depts.filter(d => d.id !== id);
+    } else if (dtype === 'line') {
+      catalog.jigs  = catalog.jigs.filter(j => j.lineId !== id);
+      catalog.lines = catalog.lines.filter(l => l.id !== id);
+    } else if (dtype === 'jig') {
+      catalog.jigs = catalog.jigs.filter(j => j.id !== id);
+    }
+    
+    saveCatalog(); renderAdminLists(); renderFilter();
+    toast('ลบสำเร็จ', 'ok');
   }
 
   /* ══════════════════════════════════════
@@ -1371,7 +1444,7 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
       if (!lineId) { toast('กรุณาเลือก Line', 'ng'); return; }
       if (!id || !name) { toast('กรุณากรอกรหัสและชื่อ JIG', 'ng'); return; }
       if (catalog.jigs.find(j => j.id === id)) { toast(`รหัส ${id} มีแล้ว`, 'ng'); return; }
-      catalog.jigs.push({ id, lineId, name, docNo: id, checkpoints: [] });
+      catalog.jigs.push({ id, lineId, name, docNo: id, bgImage: null, checkpoints: [] });
       saveCatalog();
       $('adm-jig-id').value = ''; $('adm-jig-name').value = '';
       renderAdminLists(); renderFilter();
@@ -1887,60 +1960,17 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
     }
     filterJigList(); // เผื่อผู้ใช้พิมพ์ค้นหาค้างอยู่ตอนที่ list ถูก re-render (เช่น หลังลบ)
 
-    /* Edit buttons — แก้ชื่อ (และรหัส JIG) ตรงๆ โดยไม่ต้องลบแล้วสร้างใหม่ */
-    document.querySelectorAll('.adm-item-edit').forEach(btn => {
-      btn.addEventListener('click', () => {
-        const { etype, id } = btn.dataset;
-        if (etype === 'dept') {
-          const d = catalog.depts.find(x => x.id === id);
-          if (!d) return;
-          const newName = prompt('แก้ไขชื่อแผนก:', d.name);
-          if (newName === null) return; // กดยกเลิก
-          if (!newName.trim()) { toast('ชื่อห้ามว่าง', 'ng'); return; }
-          d.name = newName.trim();
-        } else if (etype === 'line') {
-          const l = catalog.lines.find(x => x.id === id);
-          if (!l) return;
-          const newName = prompt('แก้ไขชื่อ Line:', l.name);
-          if (newName === null) return;
-          if (!newName.trim()) { toast('ชื่อห้ามว่าง', 'ng'); return; }
-          l.name = newName.trim();
-        } else if (etype === 'jig') {
-          const j = catalog.jigs.find(x => x.id === id);
-          if (!j) return;
-          const newName = prompt('แก้ไขชื่อ JIG:', j.name);
-          if (newName === null) return;
-          if (!newName.trim()) { toast('ชื่อห้ามว่าง', 'ng'); return; }
-          const newDocNo = prompt('แก้ไขรหัส/Part No. (เว้นว่างได้):', j.docNo || '');
-          if (newDocNo === null) return;
-          j.name = newName.trim();
-          j.docNo = newDocNo.trim();
-        }
-        saveCatalog(); renderAdminLists(); renderFilter();
-        toast('แก้ไขสำเร็จ', 'ok');
-      });
-    });
-
-    /* Delete buttons */
-    document.querySelectorAll('.adm-item-del').forEach(btn => {
-      btn.addEventListener('click', () => {
-        const { dtype, id } = btn.dataset;
-        if (dtype === 'dept') {
-          catalog.lines = catalog.lines.filter(l => l.deptId !== id);
-          catalog.jigs  = catalog.jigs.filter(j => {
-            const l = catalog.lines.find(x => x.id === j.lineId); return l;
-          });
-          catalog.depts = catalog.depts.filter(d => d.id !== id);
-        } else if (dtype === 'line') {
-          catalog.jigs  = catalog.jigs.filter(j => j.lineId !== id);
-          catalog.lines = catalog.lines.filter(l => l.id !== id);
-        } else if (dtype === 'jig') {
-          catalog.jigs = catalog.jigs.filter(j => j.id !== id);
-        }
-        saveCatalog(); renderAdminLists(); renderFilter();
-        toast('ลบสำเร็จ', 'ok');
-      });
-    });
+    /* 🔧 FIXED: Event Delegation — Attach handlers once using global functions
+       ไม่ต้องสร้าง listeners ทีละปุ่ม แล้วใช้ event.target.closest() ตรวจจับ
+       เพื่อป้องกัน memory leak ของ listeners ที่สะสมกันเรื่อยๆ */
+    if (!_editHandlerAttached) {
+      document.addEventListener('click', handleAdminEdit);
+      _editHandlerAttached = true;
+    }
+    if (!_deleteHandlerAttached) {
+      document.addEventListener('click', handleAdminDelete);
+      _deleteHandlerAttached = true;
+    }
 
     /* Refresh selects in admin */
     $('adm-line-dept').innerHTML = '<option value="">เลือกแผนก</option>' +
