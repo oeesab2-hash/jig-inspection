@@ -2932,16 +2932,16 @@ ${JSON.stringify(summary, null, 2)}
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
   }
 
-  // ✅ ฟังก์ชัน: render Storage Status panel
+  // ✅ ฟังก์ชัน: render Storage Status panel (Gauge Chart Version)
   async function renderStorageStatus() {
     const storageEl = $('storage-stats-panel');
     if (!storageEl) return;
 
-    storageEl.innerHTML = `<div style="padding: 12px; text-align: center; color: var(--text-muted);">⏳ Loading Storage Info...</div>`;
+    storageEl.innerHTML = `<div style="padding: 12px; text-align: center; color: var(--text-muted);">⏳ Loading...</div>`;
 
     const stats = await getStorageStats();
     if (!stats) {
-      storageEl.innerHTML = `<div style="padding: 12px; color: var(--text-muted); font-size: 12px;">⚠️ Cannot retrieve storage data</div>`;
+      storageEl.innerHTML = `<div style="padding: 12px; color: var(--text-muted); font-size: 12px;">⚠️ Cannot retrieve storage</div>`;
       return;
     }
 
@@ -2949,59 +2949,99 @@ ${JSON.stringify(summary, null, 2)}
     const estimatedSize = stats.totalRecords * 500;
     const usagePercent = Math.min((estimatedSize / SUPABASE_FREE_LIMIT) * 100, 100);
     const remainingBytes = Math.max(SUPABASE_FREE_LIMIT - estimatedSize, 0);
-    const warningStyle = usagePercent > 80 ? 'color: #ff6b6b; font-weight: bold;' : '';
+
+    // ✨ Gauge Chart สร้าง SVG
+    const gaugeColor = usagePercent > 80 ? '#ff6b6b' : usagePercent > 50 ? '#ffd43b' : '#51cf66';
+    const gaugeRotation = (usagePercent / 100) * 180 - 90; // 0-180 degrees
+    
+    const gaugeSVG = `
+      <svg viewBox="0 0 120 70" style="width: 100%; height: 80px; margin-bottom: 8px;">
+        <!-- Background arc -->
+        <path d="M 10 60 A 50 50 0 0 1 110 60" fill="none" stroke="var(--bg-tertiary)" stroke-width="8" stroke-linecap="round"/>
+        <!-- Progress arc -->
+        <path d="M 10 60 A 50 50 0 ${usagePercent > 50 ? '1' : '0'} 1 ${10 + 100 * Math.cos((usagePercent / 100) * Math.PI)} ${60 - 100 * Math.sin((usagePercent / 100) * Math.PI)}" 
+              fill="none" stroke="${gaugeColor}" stroke-width="8" stroke-linecap="round"/>
+        <!-- Center text -->
+        <text x="60" y="45" text-anchor="middle" font-size="20" font-weight="bold" fill="var(--text-main)">${usagePercent.toFixed(0)}%</text>
+        <text x="60" y="58" text-anchor="middle" font-size="10" fill="var(--text-muted)">${formatBytes(estimatedSize)}</text>
+      </svg>
+    `;
 
     storageEl.innerHTML = `
       <div class="storage-panel" style="padding: 12px; background: var(--bg-secondary); border-radius: 6px; font-size: 12px;">
-        <div style="margin-bottom: 10px; font-weight: bold; color: var(--text-main);">💾 Storage Status</div>
+        <div style="margin-bottom: 8px; font-weight: bold; color: var(--text-main);">💾 Storage Status</div>
         
-        <div style="margin-bottom: 8px;">
-          <div style="display: flex; justify-content: space-between; margin-bottom: 4px; font-size: 11px;">
-            <span>Usage:</span>
-            <span style="${warningStyle}">${formatBytes(estimatedSize)} / ${formatBytes(SUPABASE_FREE_LIMIT)} (${usagePercent.toFixed(1)}%)</span>
-          </div>
-          <div style="width: 100%; height: 8px; background: var(--bg-tertiary); border-radius: 4px; overflow: hidden;">
-            <div style="width: ${usagePercent}%; height: 100%; background: ${usagePercent > 80 ? '#ff6b6b' : usagePercent > 50 ? '#ffd43b' : '#51cf66'}; transition: width 0.3s;"></div>
+        <!-- Gauge Chart -->
+        <div style="margin-bottom: 10px;">
+          ${gaugeSVG}
+          <div style="text-align: center; color: var(--text-muted); font-size: 10px;">
+            ${formatBytes(estimatedSize)} / ${formatBytes(SUPABASE_FREE_LIMIT)} 
+            | Remaining: <strong style="color: ${remainingBytes < 100000000 ? '#ff6b6b' : '#51cf66'}">${formatBytes(remainingBytes)}</strong>
           </div>
         </div>
 
-        <div style="color: ${remainingBytes < 100000000 ? '#ff6b6b' : 'var(--text-muted)'}; font-size: 11px; margin-bottom: 8px;">
-          Remaining: <strong>${formatBytes(remainingBytes)}</strong>
-        </div>
-
-        <div style="background: var(--bg-tertiary); padding: 8px; border-radius: 4px; font-size: 11px; margin-bottom: 8px;">
+        <!-- Records Count -->
+        <div style="background: var(--bg-tertiary); padding: 8px; border-radius: 4px; font-size: 10px; margin-bottom: 8px;">
           <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 4px;">
-            <div>📁 Departments: <strong>${stats.departments}</strong></div>
+            <div>📁 Dept: <strong>${stats.departments}</strong></div>
             <div>📍 Lines: <strong>${stats.lines}</strong></div>
             <div>🔧 JIGs: <strong>${stats.jigs}</strong></div>
-            <div>✓ Checkpoints: <strong>${stats.checkpoints}</strong></div>
+            <div>✓ Points: <strong>${stats.checkpoints}</strong></div>
             <div>📋 History: <strong>${stats.history}</strong></div>
-            <div>📝 Templates: <strong>${stats.templates}</strong></div>
+            <div>📝 Tpl: <strong>${stats.templates}</strong></div>
           </div>
-          <div style="margin-top: 4px; padding-top: 4px; border-top: 1px solid var(--border-color); color: var(--text-main);">
+          <div style="margin-top: 4px; padding-top: 4px; border-top: 1px solid var(--border-color); color: var(--text-main); text-align: center;">
             📊 Total: <strong>${stats.totalRecords}</strong> records
           </div>
         </div>
 
-        <div style="color: var(--text-muted); font-size: 10px; text-align: right; margin-bottom: 8px;">
+        <div style="color: var(--text-muted); font-size: 9px; text-align: right; margin-bottom: 8px;">
           🕐 ${stats.timestamp}
         </div>
 
+        <!-- Buttons: Refresh + Backup (Clean removed) -->
         <div style="display: flex; gap: 6px;">
           <button id="btn-refresh-storage" style="flex: 1; padding: 6px 8px; background: var(--primary-color); color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 11px; font-weight: bold;">🔄 Refresh</button>
-          <button id="btn-cleanup-history" style="flex: 1; padding: 6px 8px; background: #ffa94d; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 11px; font-weight: bold;">🗑️ Clean</button>
+          <button id="btn-backup-storage" style="flex: 1; padding: 6px 8px; background: #4dabf7; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 11px; font-weight: bold;">💾 Backup</button>
         </div>
 
-        ${usagePercent > 90 ? `<div style="margin-top: 8px; padding: 8px; background: #ffe066; border-left: 3px solid #ff6b6b; border-radius: 3px; color: #333; font-size: 11px;">⚠️ <strong>Warning:</strong> Almost full!</div>` : ''}
+        ${usagePercent > 90 ? `<div style="margin-top: 8px; padding: 8px; background: #ffe066; border-left: 3px solid #ff6b6b; border-radius: 3px; color: #333; font-size: 11px;">⚠️ <strong>Warning:</strong> Almost full! Delete old history or upgrade plan</div>` : ''}
       </div>
     `;
 
     const refreshBtn = $('btn-refresh-storage');
-    const cleanupBtn = $('btn-cleanup-history');
+    const backupBtn = $('btn-backup-storage');
+    
     if (refreshBtn) refreshBtn.addEventListener('click', () => renderStorageStatus());
-    if (cleanupBtn) cleanupBtn.addEventListener('click', () => {
-      if (confirm('Delete history older than 30 days?')) deleteOldHistory(30);
-    });
+    if (backupBtn) backupBtn.addEventListener('click', () => backupStorageData());
+  }
+
+  // ✅ ฟังก์ชัน: Backup ข้อมูล
+  async function backupStorageData() {
+    try {
+      const cat = JSON.parse(localStorage.getItem(SK.catalog) || '{}');
+      const hist = JSON.parse(localStorage.getItem(SK.history) || '[]');
+      
+      const backup = {
+        type: 'JIG_Inspection_Backup',
+        version: '2.0',
+        timestamp: new Date().toISOString(),
+        data: { catalog: cat, history: hist }
+      };
+
+      const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `jig-backup-${new Date().toISOString().split('T')[0]}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+
+      toast('✅ Backup downloaded', 'ok');
+    } catch (error) {
+      console.error('❌ Backup error:', error);
+      toast('❌ Backup failed', 'error');
+    }
   }
 
   // ✅ ฟังก์ชัน: ลบ history เก่า
