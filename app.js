@@ -21,25 +21,12 @@
      ตาราง: departments, lines, jigs, checkpoints, templates, history
      กลยุทธ์: "sync ทั้งก้อน" — เวลาบันทึก จะลบของเก่าทั้งหมดในตารางที่เกี่ยวข้อง
      แล้ว insert ชุดปัจจุบันใหม่ทั้งหมด (ง่าย ตรงไปตรงมา เหมาะกับทีมขนาดเล็ก)
-     
-     ✅ FIX: ใช้ environment variables แทน hardcoded credentials
-     สร้าง .env file ที่โปรเจคต้นทาง ด้วย:
-       VITE_SUPABASE_URL=https://otytpzimuyaqagvxvexf.supabase.co
-       VITE_SUPABASE_ANON_KEY=<regenerated-key-from-dashboard>
   ══════════════════════════════════════ */
-  // ✅ FIXED: อ่าน credentials จาก environment variables แทน
-  const SUPABASE_URL = import.meta?.env?.VITE_SUPABASE_URL || '';
-  const SUPABASE_ANON_KEY = import.meta?.env?.VITE_SUPABASE_ANON_KEY || '';
-  
-  // Fallback สำหรับ development (ถ้าไม่มี env var)
-  const sb = (window.supabase && window.supabase.createClient && SUPABASE_URL && SUPABASE_ANON_KEY)
+  const SUPABASE_URL = 'https://otytpzimuyaqagvxvexf.supabase.co';
+  const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im90eXRwemltdXlhcWFndnh2ZXhmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ1MTMyMDEsImV4cCI6MjEwMDA4OTIwMX0.QQVIcDkIByAgyFTHrF7AmcZ-l-HfvLnbU8jh3Vnwyjw';
+  const sb = (window.supabase && window.supabase.createClient)
     ? window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
     : null;
-  
-  // เตือนถ้า credentials ไม่มี
-  if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
-    console.warn('⚠️ Supabase credentials ไม่พบ — ใช้ localStorage เท่านั้น (ไม่ sync ขึ้นเมฆ)');
-  }
 
   /* ══════════════════════════════════════
      TELEGRAM — notification บันทึกผล
@@ -413,18 +400,12 @@
     // ─── ตรวจสอบ GPS Status ───
     await checkGPSStatusOnLoad();
     
-    // ✅ FIX #8: ตรวจสอบ Supabase credentials
-    if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
-      console.warn('⚠️ Supabase credentials ไม่ได้ตั้งค่า — ใช้ localStorage เท่านั้น');
-    }
-    
     // ดึงข้อมูลล่าสุดจากทีมมาก่อน แล้วค่อย render (ถ้ายังไม่เคย sync ขึ้นเลยจะได้ null แล้วใช้ local ต่อ)
     const [remoteCat, remoteHist] = await Promise.all([pullCatalogFromSupabase(), pullHistoryFromSupabase()]);
     if (remoteCat) localStorage.setItem(SK.catalog, JSON.stringify(remoteCat));
     if (remoteHist) localStorage.setItem(SK.history, JSON.stringify(remoteHist));
     loadCatalog();
-    const dateInput = $('inp-date');
-    if (dateInput) dateInput.value = new Date().toISOString().slice(0, 10);
+    $('inp-date').value = new Date().toISOString().slice(0, 10);
 
     renderFilter();
     bindJigSearch();
@@ -600,12 +581,6 @@
   function selectJig(id) {
     if (selection.jigId === id) return;
     selection.jigId = id;
-    
-    // ✅ FIX #4: เตือน GPS ก่อนเริ่มตรวจ
-    if (!navigator.geolocation) {
-      toast('⚠️ อุปกรณ์นี้ไม่รองรับ GPS — ระบบจะไม่สามารถบันทึกพิกัดได้', 'ng');
-    }
-    
     renderFilter();
     showInspectionCards();
   }
@@ -839,17 +814,11 @@
     checkState[idx].photos.forEach((src, pi) => {
       const wrap = document.createElement('div');
       wrap.className = 'photo-thumb-wrap';
-      // ✅ FIX: ใช้ data-photo-idx แทน pi ใน closure
-      wrap.innerHTML = `<img src="${escHtml(src)}" class="photo-thumb"><button class="photo-del" data-photo-idx="${pi}">✕</button>`;
+      wrap.innerHTML = `<img src="${escHtml(src)}" class="photo-thumb"><button class="photo-del" data-pi="${pi}">✕</button>`;
       row.insertBefore(wrap, row.querySelector('.btn-camera'));
       wrap.querySelector('.photo-thumb').addEventListener('click', () => openLightbox(src));
-      // ✅ FIX: อ่าน index จาก data-photo-idx แทนใช้ closure
-      wrap.querySelector('.photo-del').addEventListener('click', (e) => {
-        const photoIdx = parseInt(e.currentTarget.dataset.photoIdx, 10);
-        checkState[idx].photos.splice(photoIdx, 1);
-        // ✅ FIX: บันทึกหลังลบ
-        saveCatalog();
-        renderPhotos(idx);
+      wrap.querySelector('.photo-del').addEventListener('click', () => {
+        checkState[idx].photos.splice(pi, 1); renderPhotos(idx);
       });
     });
   }
@@ -899,9 +868,6 @@
 
   /* ─── ส่ง Telegram Message — ผ่าน Edge Function เท่านั้น (token ไม่เคยอยู่ฝั่ง client) ─── */
   async function sendTelegramMessage(msg) {
-    // ✅ FIX #6: Guard clause
-    if (!msg || typeof msg !== 'string' || !SUPABASE_ANON_KEY) return;
-    
     try {
       const response = await fetch(TELEGRAM_FUNCTION_URL, {
         method: 'POST',
@@ -916,8 +882,7 @@
         console.error('Telegram send failed:', response.status, await response.text().catch(() => ''));
       }
     } catch (e) {
-      // ✅ FIX #6: Silently fail — user data แล้วเก็บ ส่ง Telegram เป็นโบนัส
-      console.error('Telegram error (ไม่ส่งผลต่อการบันทึก):', e);
+      console.error('Telegram error:', e);
     }
   }
 
@@ -953,48 +918,28 @@
     }
 
     // ─── ได้พิกัด → ดำเนินการบันทึก ───
-    const jig  = catalog.jigs.find(j => j?.id === selection.jigId);
-    const line = catalog.lines.find(l => l?.id === selection.lineId);
-    const dept = catalog.depts.find(d => d?.id === selection.deptId);
-    
-    // ✅ FIX: เช็คว่า jig/line/dept มี value
-    if (!jig || !line || !dept) {
-      toast('❌ ข้อมูล JIG/Line/Dept ไม่ครบถ้วน — กรุณาลองใหม่', 'ng');
-      return;
-    }
+    const jig  = catalog.jigs.find(j => j.id === selection.jigId);
+    const line = catalog.lines.find(l => l.id === selection.lineId);
+    const dept = catalog.depts.find(d => d.id === selection.deptId);
 
     const record = {
       id:         genId(),
       timestamp:  new Date().toISOString(),
       deptId:     selection.deptId,
-      // ✅ FIX: มี fallback หากไม่พบ dept
-      deptName:   dept?.name || '(ไม่ระบุ)',
+      deptName:   dept ? dept.name : '',
       lineId:     selection.lineId,
-      // ✅ FIX: มี fallback หากไม่พบ line
-      lineName:   line?.name || '(ไม่ระบุ)',
+      lineName:   line ? line.name : '',
       jigId:      selection.jigId,
-      // ✅ FIX: มี fallback หากไม่พบ jig
-      jigName:    jig?.name || '(ไม่ระบุ)',
-      jigDocNo:   jig?.docNo || jig?.id || '',
+      jigName:    jig  ? jig.name  : '',
+      jigDocNo:   jig  ? (jig.docNo || jig.id) : '',
       date:       $('inp-date').value,
       shift:      $('inp-shift').value,
-      // ✅ FIX: ใช้ optional chaining สำหรับ inp-month
-      month:      $('inp-month')?.value || '',
+      month:      $('inp-month').value,
       inspector:  $('inp-inspector').value.trim(),
-      // ✅ FIX: optional chaining สำหรับ report-notes
-      notes:      $('report-notes')?.value || '',
-      items:      checkState.map(i => ({ 
-        id: i.id, 
-        label: i.label, 
-        status: i.status, 
-        note: i.note || '', 
-        photos: i.photos || [], 
-        value: i.value ?? null, 
-        unit: i.unit || '' 
-      })),
-      // ✅ FIX: optional chaining สำหรับ signatures
-      sigInspector:  $('sig-inspector')?.value?.trim() || '',
-      sigSupervisor: $('sig-supervisor')?.value?.trim() || '',
+      notes:      $('report-notes').value,
+      items:      checkState.map(i => ({ id: i.id, label: i.label, status: i.status, note: i.note, photos: i.photos, value: i.value ?? null, unit: i.unit || '' })),
+      sigInspector:  $('sig-inspector').value.trim(),
+      sigSupervisor: $('sig-supervisor').value.trim(),
       // ─── GPS Data ─── (บันทึกพิกัด - ตรวจสอบแล้วว่าได้พิกัด)
       gps: {
         latitude:   gpsData.latitude,
@@ -1047,49 +992,8 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
 ━━━━━━━━━━━━━━━━━━━━━━━━━
 `;
       
-      // ✅ FIX #6: ส่ง Telegram async (ไม่ block)
-      sendTelegramMessage(telegramMsg).catch(e => console.error('Telegram error:', e));
-      
-      // ✅ FIX #7: Reset form หลังบันทึกเสร็จ
-      setTimeout(() => resetInspectionForm(), 800);
+      await sendTelegramMessage(telegramMsg);
     }
-  }
-
-  // ✅ FIX #7: Reset inspection form หลังบันทึก
-  function resetInspectionForm() {
-    // Clear all inputs
-    const inpInspector = $('inp-inspector');
-    const inpDate = $('inp-date');
-    const inpShift = $('inp-shift');
-    const inpMonth = $('inp-month');
-    const reportNotes = $('report-notes');
-    const sigInspector = $('sig-inspector');
-    const sigSupervisor = $('sig-supervisor');
-    
-    if (inpInspector) inpInspector.value = '';
-    if (inpDate) inpDate.value = '';
-    if (inpShift) inpShift.value = '';
-    if (inpMonth) inpMonth.value = '';
-    if (reportNotes) reportNotes.value = '';
-    if (sigInspector) sigInspector.value = '';
-    if (sigSupervisor) sigSupervisor.value = '';
-    
-    // Reset state
-    checkState = [];
-    selection = { deptId: null, lineId: null, jigId: null };
-    
-    // Reset UI
-    renderFilter();
-    renderInspectionItems();
-    updateStats();
-    
-    // Show filter, hide others
-    const metaCard = $('meta-card');
-    const inspectCard = $('inspect-card');
-    const filterCard = $('filter-card');
-    if (metaCard) metaCard.classList.add('hidden');
-    if (inspectCard) inspectCard.classList.add('hidden');
-    if (filterCard) filterCard.classList.remove('hidden');
   }
 
   /* ══════════════════════════════════════
@@ -1475,8 +1379,7 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
       const sub = $('adm-cp-sub').value.trim();
       const method = $('adm-cp-method').value.trim();
       if (!label) { toast('กรุณาใส่ชื่อจุดตรวจ', 'ng'); return; }
-      // ✅ FIX #5: ใช้ timestamp แทน Math.max เพื่อป้องกัน ID collision
-      const newId = Date.now();
+      const newId = jig.checkpoints.length ? Math.max(...jig.checkpoints.map(p=>p.id)) + 1 : 1;
       // วางจุดใหม่ไว้กลางแผนผังแบบสุ่มเล็กน้อยกันซ้อนทับ แล้วให้ผู้ใช้ลากจัดตำแหน่งเอง
       const x = 300 + Math.round(Math.random() * 60 - 30);
       const y = 170 + Math.round(Math.random() * 60 - 30);
@@ -1522,8 +1425,7 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
 
       const jig = catalog.jigs.find(j => j.id === jid);
       if (!jig.checkpoints) jig.checkpoints = [];
-      // ✅ FIX #5: ใช้ timestamp + increment สำหรับ unique ID
-      let nextId = Date.now();
+      let nextId = jig.checkpoints.length ? Math.max(...jig.checkpoints.map(p => p.id)) + 1 : 1;
       selectedItems.forEach((item, i) => {
         // กระจายตำแหน่งเริ่มต้นเป็นตารางกลางแผนผัง กันจุดซ้อนทับกันหมด — ลากจัดตำแหน่งจริงภายหลัง
         const col = i % 4, row = Math.floor(i / 4);
