@@ -2887,5 +2887,155 @@ ${JSON.stringify(summary, null, 2)}
       </p>`;
   }
 
+  /* ═══════════════════════════════════════════════════════════════
+     STORAGE STATUS MONITOR — แสดงข้อมูล storage usage ใน Admin Panel
+     ═══════════════════════════════════════════════════════════════ */
+
+  // ✅ ฟังก์ชัน: ดึงข้อมูลสถิติ storage จาก Supabase
+  async function getStorageStats() {
+    if (!sb) return null;
+    try {
+      const [deptCount, lineCount, jigCount, cpCount, historyCount, templateCount] = await Promise.all([
+        sb.from('departments').select('id', { count: 'exact', head: true }),
+        sb.from('lines').select('id', { count: 'exact', head: true }),
+        sb.from('jigs').select('id', { count: 'exact', head: true }),
+        sb.from('checkpoints').select('id', { count: 'exact', head: true }),
+        sb.from('history').select('id', { count: 'exact', head: true }),
+        sb.from('templates').select('id', { count: 'exact', head: true }),
+      ]);
+
+      const stats = {
+        departments: deptCount.count || 0,
+        lines: lineCount.count || 0,
+        jigs: jigCount.count || 0,
+        checkpoints: cpCount.count || 0,
+        history: historyCount.count || 0,
+        templates: templateCount.count || 0,
+        totalRecords: (deptCount.count || 0) + (lineCount.count || 0) + (jigCount.count || 0) + 
+                      (cpCount.count || 0) + (historyCount.count || 0) + (templateCount.count || 0),
+        timestamp: new Date().toLocaleString('th-TH'),
+      };
+
+      return stats;
+    } catch (error) {
+      console.error('❌ Error fetching storage stats:', error);
+      return null;
+    }
+  }
+
+  // ✅ ฟังก์ชัน: คำนวณขนาดเป็น KB/MB/GB
+  function formatBytes(bytes) {
+    if (!bytes || bytes === 0) return '0 B';
+    const k = 1024;
+    const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+  }
+
+  // ✅ ฟังก์ชัน: render Storage Status panel
+  async function renderStorageStatus() {
+    const storageEl = $('storage-stats-panel');
+    if (!storageEl) return;
+
+    storageEl.innerHTML = `<div style="padding: 12px; text-align: center; color: var(--text-muted);">⏳ Loading Storage Info...</div>`;
+
+    const stats = await getStorageStats();
+    if (!stats) {
+      storageEl.innerHTML = `<div style="padding: 12px; color: var(--text-muted); font-size: 12px;">⚠️ Cannot retrieve storage data</div>`;
+      return;
+    }
+
+    const SUPABASE_FREE_LIMIT = 1073741824; // 1GB
+    const estimatedSize = stats.totalRecords * 500;
+    const usagePercent = Math.min((estimatedSize / SUPABASE_FREE_LIMIT) * 100, 100);
+    const remainingBytes = Math.max(SUPABASE_FREE_LIMIT - estimatedSize, 0);
+    const warningStyle = usagePercent > 80 ? 'color: #ff6b6b; font-weight: bold;' : '';
+
+    storageEl.innerHTML = `
+      <div class="storage-panel" style="padding: 12px; background: var(--bg-secondary); border-radius: 6px; font-size: 12px;">
+        <div style="margin-bottom: 10px; font-weight: bold; color: var(--text-main);">💾 Storage Status</div>
+        
+        <div style="margin-bottom: 8px;">
+          <div style="display: flex; justify-content: space-between; margin-bottom: 4px; font-size: 11px;">
+            <span>Usage:</span>
+            <span style="${warningStyle}">${formatBytes(estimatedSize)} / ${formatBytes(SUPABASE_FREE_LIMIT)} (${usagePercent.toFixed(1)}%)</span>
+          </div>
+          <div style="width: 100%; height: 8px; background: var(--bg-tertiary); border-radius: 4px; overflow: hidden;">
+            <div style="width: ${usagePercent}%; height: 100%; background: ${usagePercent > 80 ? '#ff6b6b' : usagePercent > 50 ? '#ffd43b' : '#51cf66'}; transition: width 0.3s;"></div>
+          </div>
+        </div>
+
+        <div style="color: ${remainingBytes < 100000000 ? '#ff6b6b' : 'var(--text-muted)'}; font-size: 11px; margin-bottom: 8px;">
+          Remaining: <strong>${formatBytes(remainingBytes)}</strong>
+        </div>
+
+        <div style="background: var(--bg-tertiary); padding: 8px; border-radius: 4px; font-size: 11px; margin-bottom: 8px;">
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 4px;">
+            <div>📁 Departments: <strong>${stats.departments}</strong></div>
+            <div>📍 Lines: <strong>${stats.lines}</strong></div>
+            <div>🔧 JIGs: <strong>${stats.jigs}</strong></div>
+            <div>✓ Checkpoints: <strong>${stats.checkpoints}</strong></div>
+            <div>📋 History: <strong>${stats.history}</strong></div>
+            <div>📝 Templates: <strong>${stats.templates}</strong></div>
+          </div>
+          <div style="margin-top: 4px; padding-top: 4px; border-top: 1px solid var(--border-color); color: var(--text-main);">
+            📊 Total: <strong>${stats.totalRecords}</strong> records
+          </div>
+        </div>
+
+        <div style="color: var(--text-muted); font-size: 10px; text-align: right; margin-bottom: 8px;">
+          🕐 ${stats.timestamp}
+        </div>
+
+        <div style="display: flex; gap: 6px;">
+          <button id="btn-refresh-storage" style="flex: 1; padding: 6px 8px; background: var(--primary-color); color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 11px; font-weight: bold;">🔄 Refresh</button>
+          <button id="btn-cleanup-history" style="flex: 1; padding: 6px 8px; background: #ffa94d; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 11px; font-weight: bold;">🗑️ Clean</button>
+        </div>
+
+        ${usagePercent > 90 ? `<div style="margin-top: 8px; padding: 8px; background: #ffe066; border-left: 3px solid #ff6b6b; border-radius: 3px; color: #333; font-size: 11px;">⚠️ <strong>Warning:</strong> Almost full!</div>` : ''}
+      </div>
+    `;
+
+    const refreshBtn = $('btn-refresh-storage');
+    const cleanupBtn = $('btn-cleanup-history');
+    if (refreshBtn) refreshBtn.addEventListener('click', () => renderStorageStatus());
+    if (cleanupBtn) cleanupBtn.addEventListener('click', () => {
+      if (confirm('Delete history older than 30 days?')) deleteOldHistory(30);
+    });
+  }
+
+  // ✅ ฟังก์ชัน: ลบ history เก่า
+  async function deleteOldHistory(daysOld = 30) {
+    if (!sb) return;
+    try {
+      const cutoffDate = new Date();
+      cutoffDate.setDate(cutoffDate.getDate() - daysOld);
+      const cutoffISO = cutoffDate.toISOString();
+      const { error } = await sb.from('history').delete().lt('ts', cutoffISO);
+      if (error) throw error;
+      toast(`✅ Deleted history older than ${daysOld} days`, 'ok');
+      renderStorageStatus();
+    } catch (error) {
+      console.error('❌ Error deleting old history:', error);
+      toast('❌ Cannot delete', 'error');
+    }
+  }
+
+  // ✅ Auto-refresh storage status
+  function autoRefreshStorageStatus(intervalSeconds = 30) {
+    renderStorageStatus();
+    setInterval(() => renderStorageStatus(), intervalSeconds * 1000);
+  }
+
+  // ✅ เรียกเมื่อ initApp() เสร็จ
+  window.addEventListener('load', () => {
+    setTimeout(() => {
+      if (typeof renderStorageStatus === 'function') {
+        renderStorageStatus();
+        autoRefreshStorageStatus(30);
+      }
+    }, 1000);
+  });
+
 })();
 
