@@ -2328,7 +2328,7 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
     const handle = $('admin-resize-handle');
     if (!panel || !handle) return;
 
-    const maxWidth = () => Math.min(900, window.innerWidth - 40);
+    const maxWidth = () => Math.min(1400, window.innerWidth - 40);
 
     // คืนค่าความกว้างที่เคยตั้งไว้ (เฉพาะจอ desktop/tablet ที่กว้างพอ — บนมือถือให้เต็มจอเสมอ)
     if (window.innerWidth > 640) {
