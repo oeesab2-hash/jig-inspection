@@ -285,6 +285,23 @@
   }
 
   /* ══════════════════════════════════════
+     GLOBAL WRAPPER FUNCTIONS (accessible from importAllData)
+     These check if Supabase functions exist before calling
+  ══════════════════════════════════════ */
+  async function refreshCatalogGlobal() {
+    loadCatalog();
+    renderFilter();
+    if (typeof renderAdminLists === 'function') renderAdminLists();
+    toast('📥 Catalog อัปเดตจากระบบ', 'ok');
+  }
+  
+  async function refreshHistoryGlobal() {
+    if (typeof populateHistoryPanel === 'function') populateHistoryPanel();
+    if (typeof refreshDashboard === 'function') refreshDashboard();
+    toast('📥 ประวัติตรวจสอบอัปเดตจากระบบ', 'ok');
+  }
+
+  /* ══════════════════════════════════════
      DEFAULT CHECKLIST ITEMS
      (per-JIG items come from catalog in future;
       for now all JIGs share the same 10-point list)
@@ -1277,8 +1294,8 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
         localStorage.setItem(SK.history, JSON.stringify(hist));
 
         // รีโหลดข้อมูลเข้า memory และ re-render
-        await refreshCatalog();
-        await refreshHistory();
+        if (typeof refreshCatalogGlobal === 'function') await refreshCatalogGlobal();
+        if (typeof refreshHistoryGlobal === 'function') await refreshHistoryGlobal();
         selection = { deptId: null, lineId: null, jigId: null };
         hideInspectionCards(); renderAdminLists(); renderFilter(); refreshDashboard();
         toast(`✅ Import สำเร็จ — ${cat.jigs.length} JIG, ${hist.length} ประวัติ`, 'ok');
