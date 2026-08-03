@@ -109,7 +109,10 @@
         }
       }
       if (cat.templates?.length) {
-        const { error } = await sb.from('templates').insert(cat.templates.map(t => ({ id: t.id, name: t.name, items: t.items || [] })));
+        const { error } = await sb.from('templates').upsert(
+          cat.templates.map(t => ({ id: t.id, name: t.name, items: t.items || [] })),
+          { onConflict: 'id' }
+        );
         if (error) throw error;
       }
     } catch (e) {
@@ -1807,6 +1810,11 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
         if (!confirm(`ลบเทมเพลต "${t.name}" หรือไม่? (ไม่กระทบหัวข้อที่นำเข้าไปยัง JIG ต่างๆ แล้ว)`)) return;
         catalog.templates = catalog.templates.filter(x => x.id !== t.id);
         saveCatalog();
+        if (sb) { // ลบออกจาก Supabase ตรงๆ ด้วย — กันเด้งกลับมาเหมือนบั๊ก JIG/Line/Dept ก่อนหน้า
+          sb.from('templates').delete().eq('id', t.id).then(({ error }) => {
+            if (error) console.error('delete template error:', error);
+          });
+        }
         renderTplSelect();
         renderTplPreview();
         renderTplList();
