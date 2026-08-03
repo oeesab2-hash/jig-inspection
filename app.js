@@ -402,6 +402,55 @@
     toast('แก้ไขสำเร็จ', 'ok');
   }
 
+  // ── ลบ catalog item ออกจาก Supabase จริงๆ ──
+  // ⚠️ FIX (2026-08-03): pushCatalogToSupabase() เปลี่ยนมาใช้ upsert-only เพื่อกันข้อมูล
+  // history หายจากบั๊กก่อนหน้า แต่ผลข้างเคียงคือ "ลบ" ใน Admin Panel จะแค่เอาออกจาก local/
+  // localStorage เท่านั้น — แถวเดิมยังค้างอยู่ใน Supabase แล้วโดน pull กลับมาทีหลัง
+  // (ตอนเปิดแอปใหม่ / realtime sync) ทำให้ของที่ลบไป "เด้งกลับมา" เหมือนไม่เคยลบ
+  // ฟังก์ชันนี้ลบแถวออกจาก Supabase ตรงๆ ให้คู่กับการลบ local ทุกครั้ง
+  async function deleteCatalogItemFromSupabase(dtype, id) {
+    if (!sb) return;
+    _syncing = true;
+    try {
+      if (dtype === 'jig') {
+        // ลบ checkpoints ของ jig นี้ก่อน (กันเหนียว เผื่อ FK cascade ยังไม่ครอบคลุม) แล้วค่อยลบตัว jig
+        await sb.from('checkpoints').delete().eq('jig_id', id);
+        const { error } = await sb.from('jigs').delete().eq('id', id);
+        if (error) throw error;
+      } else if (dtype === 'line') {
+        // ลบ jig + checkpoints ทั้งหมดที่อยู่ใต้ line นี้ก่อน แล้วค่อยลบตัว line
+        const { data: jigsUnder } = await sb.from('jigs').select('id').eq('line_id', id);
+        const jigIds = (jigsUnder || []).map(j => j.id);
+        if (jigIds.length) {
+          await sb.from('checkpoints').delete().in('jig_id', jigIds);
+          await sb.from('jigs').delete().in('id', jigIds);
+        }
+        const { error } = await sb.from('lines').delete().eq('id', id);
+        if (error) throw error;
+      } else if (dtype === 'dept') {
+        // ลบทั้งสาย: checkpoints → jigs → lines → dept
+        const { data: linesUnder } = await sb.from('lines').select('id').eq('dept_id', id);
+        const lineIds = (linesUnder || []).map(l => l.id);
+        if (lineIds.length) {
+          const { data: jigsUnder } = await sb.from('jigs').select('id').in('line_id', lineIds);
+          const jigIds = (jigsUnder || []).map(j => j.id);
+          if (jigIds.length) {
+            await sb.from('checkpoints').delete().in('jig_id', jigIds);
+            await sb.from('jigs').delete().in('id', jigIds);
+          }
+          await sb.from('lines').delete().in('id', lineIds);
+        }
+        const { error } = await sb.from('departments').delete().eq('id', id);
+        if (error) throw error;
+      }
+    } catch (e) {
+      console.error(`deleteCatalogItemFromSupabase(${dtype}) error:`, e);
+      toast('ลบออกจาก Supabase ไม่สำเร็จ อาจเด้งกลับมาใหม่: ' + (e.message || e), 'ng');
+    } finally {
+      setTimeout(() => { _syncing = false; }, 1500);
+    }
+  }
+
   function handleAdminDelete(e) {
     const btn = e.target.closest('.adm-item-del');
     if (!btn) return;
@@ -424,6 +473,7 @@
     }
     
     saveCatalog(); renderAdminLists(); renderFilter();
+    if (dtype) deleteCatalogItemFromSupabase(dtype, id); // ลบจริงบน Supabase กันเด้งกลับ
     toast('ลบสำเร็จ', 'ok');
   }
 
