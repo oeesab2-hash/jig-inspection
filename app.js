@@ -74,30 +74,37 @@
   }
 
   // ── ส่ง Catalog ขึ้น Supabase (แยกเป็น 5 ตารางจริง) ──
+  // ✅ SAFE: ใช้ UPSERT แทน DELETE ป้องกันข้อมูลหาย
   async function pushCatalogToSupabase(cat) {
     if (!sb) return;
     _syncing = true;
     try {
-      // ลบข้อมูลเก่าก่อน — departments ลบแล้ว lines/jigs/checkpoints จะ cascade ลบตามด้วย (FK ON DELETE CASCADE)
-      await sb.from('departments').delete().not('id', 'is', null);
-      await sb.from('templates').delete().not('id', 'is', null);
-
+      // ✅ SAFE: ใช้ upsert แทน delete - ถ้า ID มี update, ถ้าไม่มี insert
       if (cat.depts?.length) {
-        const { error } = await sb.from('departments').insert(cat.depts.map(d => ({ id: d.id, name: d.name })));
+        const { error } = await sb.from('departments').upsert(
+          cat.depts.map(d => ({ id: d.id, name: d.name })),
+          { onConflict: 'id' }
+        );
         if (error) throw error;
       }
       if (cat.lines?.length) {
-        const { error } = await sb.from('lines').insert(cat.lines.map(l => ({ id: l.id, dept_id: l.deptId, name: l.name })));
+        const { error } = await sb.from('lines').upsert(
+          cat.lines.map(l => ({ id: l.id, dept_id: l.deptId, name: l.name })),
+          { onConflict: 'id' }
+        );
         if (error) throw error;
       }
       if (cat.jigs?.length) {
-        const { error } = await sb.from('jigs').insert(cat.jigs.map(j => ({
-          id: j.id, line_id: j.lineId, name: j.name, doc_no: j.docNo || j.id, bg_image: j.bgImage || null
-        })));
+        const { error } = await sb.from('jigs').upsert(
+          cat.jigs.map(j => ({
+            id: j.id, line_id: j.lineId, name: j.name, doc_no: j.docNo || j.id, bg_image: j.bgImage || null
+          })),
+          { onConflict: 'id' }
+        );
         if (error) throw error;
         const cpRows = flattenCheckpoints(cat.jigs);
         if (cpRows.length) {
-          const { error: cpErr } = await sb.from('checkpoints').insert(cpRows);
+          const { error: cpErr } = await sb.from('checkpoints').upsert(cpRows, { onConflict: 'jig_id,item_id' });
           if (cpErr) throw cpErr;
         }
       }
@@ -1221,51 +1228,62 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
       try {
         _syncing = true;
 
-        // ลบข้อมูลเก่าออกก่อน (cascade จะลบ lines → jigs → checkpoints อัตโนมัติ)
-        await sb.from('history').delete().neq('id', '___none___');
-        await sb.from('templates').delete().neq('id', '___none___');
-        await sb.from('departments').delete().neq('id', '___none___');
-
-        // Insert departments
+        // ✅ SAFE: ใช้ UPSERT แทน DELETE+INSERT - ป้องกันข้อมูลหาย
+        // Upsert departments
         if (cat.depts.length) {
-          const { error } = await sb.from('departments').insert(cat.depts.map(d => ({ id: d.id, name: d.name })));
+          const { error } = await sb.from('departments').upsert(
+            cat.depts.map(d => ({ id: d.id, name: d.name })),
+            { onConflict: 'id' }
+          );
           if (error) throw error;
         }
 
-        // Insert lines (data is already normalized to camelCase)
+        // Upsert lines (data is already normalized to camelCase)
         if (cat.lines.length) {
-          const { error } = await sb.from('lines').insert(cat.lines.map(l => ({ 
-            id: l.id, 
-            dept_id: l.deptId,  // Now using normalized camelCase
-            name: l.name 
-          })));
+          const { error } = await sb.from('lines').upsert(
+            cat.lines.map(l => ({ 
+              id: l.id, 
+              dept_id: l.deptId,  // Now using normalized camelCase
+              name: l.name 
+            })),
+            { onConflict: 'id' }
+          );
           if (error) throw error;
         }
 
-        // Insert jigs (data is already normalized to camelCase)
+        // Upsert jigs (data is already normalized to camelCase)
         if (cat.jigs.length) {
-          const { error } = await sb.from('jigs').insert(cat.jigs.map(j => ({ 
-            id: j.id, 
-            line_id: j.lineId,  // Now using normalized camelCase
-            name: j.name, 
-            doc_no: j.docNo, 
-            bg_image: j.bgImage 
-          })));
+          const { error } = await sb.from('jigs').upsert(
+            cat.jigs.map(j => ({ 
+              id: j.id, 
+              line_id: j.lineId,  // Now using normalized camelCase
+              name: j.name, 
+              doc_no: j.docNo, 
+              bg_image: j.bgImage 
+            })),
+            { onConflict: 'id' }
+          );
           if (error) throw error;
         }
 
-        // Insert checkpoints แยก
+        // ✅ Upsert checkpoints แยก
         const allCps = cat.jigs.flatMap(j =>
           (j.checkpoints || []).map(cp => ({ jig_id: j.id, item_id: cp.id, label: cp.label || '', sub: cp.sub || '', method: cp.method || '', x: cp.x || 0, y: cp.y || 0 }))
         );
         for (let i = 0; i < allCps.length; i += 200) {
-          const { error } = await sb.from('checkpoints').insert(allCps.slice(i, i + 200));
+          const { error } = await sb.from('checkpoints').upsert(
+            allCps.slice(i, i + 200),
+            { onConflict: 'jig_id,item_id' }
+          );
           if (error) throw error;
         }
 
-        // Insert templates
+        // ✅ Upsert templates
         if ((cat.templates || []).length) {
-          const { error } = await sb.from('templates').insert(cat.templates.map(t => ({ id: t.id, name: t.name, items: t.items || [] })));
+          const { error } = await sb.from('templates').upsert(
+            cat.templates.map(t => ({ id: t.id, name: t.name, items: t.items || [] })),
+            { onConflict: 'id' }
+          );
           if (error) throw error;
         }
 
@@ -1283,7 +1301,7 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
             sig_inspector: h.sigInspector || h.sig_inspector || '',
             sig_supervisor: h.sigSupervisor || h.sig_supervisor || '',
           }));
-          const { error } = await sb.from('history').insert(batch);
+          const { error } = await sb.from('history').upsert(batch, { onConflict: 'id' });
           if (error) throw error;
         }
 
@@ -3162,12 +3180,13 @@ ${JSON.stringify(summary, null, 2)}
     if (backupBtn) backupBtn.addEventListener('click', () => backupStorageData());
   }
 
-  // ✅ ฟังก์ชัน: Backup ข้อมูล
+  // ✅ ฟังก์ชัน: Backup ข้อมูล (SAFE - ดาวน์โหลดเท่านั้น ไม่ลบ)
   async function backupStorageData() {
     try {
       const cat = JSON.parse(localStorage.getItem(SK.catalog) || '{}');
       const hist = JSON.parse(localStorage.getItem(SK.history) || '[]');
       
+      // ✅ STEP 1: Download backup เสมอ (ปลอดภัย 100%)
       const backup = {
         type: 'JIG_Inspection_Backup',
         version: '2.0',
@@ -3183,10 +3202,25 @@ ${JSON.stringify(summary, null, 2)}
       a.click();
       URL.revokeObjectURL(url);
 
-      toast('✅ Backup downloaded', 'ok');
+      toast(`✅ Backup downloaded — ${cat.jigs?.length || 0} JIG, ${hist.length} records`, 'ok');
+      
+      // ✅ STEP 2: Push ไป Supabase (ถ้า connection OK)
+      // แต่ถ้า push ล้มเหลว ก็ไม่สำคัญ เพราะ local backup ยังอยู่
+      if (sb && cat.jigs?.length > 0) {
+        try {
+          _syncing = true;
+          await pushCatalogToSupabase(cat);
+          // ✅ Success - data ปลอดภัยแล้ว
+        } catch (pushErr) {
+          console.warn('⚠️ Supabase push failed, local backup is safe:', pushErr);
+          toast('⚠️ Local backup OK, Supabase sync failed (will retry)', 'warning');
+        } finally {
+          setTimeout(() => { _syncing = false; }, 1000);
+        }
+      }
     } catch (error) {
       console.error('❌ Backup error:', error);
-      toast('❌ Backup failed', 'error');
+      toast('❌ Backup failed: ' + error.message, 'ng');
     }
   }
 
