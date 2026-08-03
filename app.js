@@ -2110,8 +2110,33 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
     //  แล้ว dropdown รีเซ็ตเป็นค่าว่าง ทำให้ user ต้องเลือก JIG ใหม่)
     const cpJigSel = $('adm-cp-jig');
     const prevCpJig = cpJigSel.value;
-    cpJigSel.innerHTML = '<option value="">เลือก JIG เพื่อแก้ไขจุดตรวจ...</option>' + 
-      catalog.jigs.map(j => `<option value="${escHtml(j.id)}">${escHtml(j.id)} - ${escHtml(j.name)}</option>`).join('');
+    // จัดกลุ่ม JIG ตาม Line (แสดงเป็น "แผนก › Line") เพื่อให้หาง่ายขึ้นตอน JIG เยอะๆ
+    const jigsByLine = new Map(); // lineId -> jigs[]
+    const orphanJigs = [];
+    catalog.jigs.forEach(j => {
+      if (j.lineId && catalog.lines.some(l => l.id === j.lineId)) {
+        if (!jigsByLine.has(j.lineId)) jigsByLine.set(j.lineId, []);
+        jigsByLine.get(j.lineId).push(j);
+      } else {
+        orphanJigs.push(j);
+      }
+    });
+    let cpJigOptionsHtml = '<option value="">เลือก JIG เพื่อแก้ไขจุดตรวจ...</option>';
+    catalog.lines.forEach(l => {
+      const jigsInLine = jigsByLine.get(l.id);
+      if (!jigsInLine || !jigsInLine.length) return;
+      const dept = catalog.depts.find(d => d.id === l.deptId);
+      const groupLabel = dept ? `${dept.name} › ${l.name}` : l.name;
+      cpJigOptionsHtml += `<optgroup label="${escHtml(groupLabel)}">` +
+        jigsInLine.map(j => `<option value="${escHtml(j.id)}">${escHtml(j.id)} - ${escHtml(j.name)}</option>`).join('') +
+        `</optgroup>`;
+    });
+    if (orphanJigs.length) {
+      cpJigOptionsHtml += `<optgroup label="อื่นๆ (ไม่มี Line)">` +
+        orphanJigs.map(j => `<option value="${escHtml(j.id)}">${escHtml(j.id)} - ${escHtml(j.name)}</option>`).join('') +
+        `</optgroup>`;
+    }
+    cpJigSel.innerHTML = cpJigOptionsHtml;
     
     // re-bind dropdown event listener หลังจากเปลี่ยน innerHTML
     // (innerHTML ใหม่ = element ใหม่ = event listener หลัง bind ก่อนหน้าหายไป)
