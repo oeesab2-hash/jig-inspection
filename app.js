@@ -1186,8 +1186,8 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
         toast('ไฟล์ไม่ใช่ JSON ที่ถูกต้อง', 'ng');
         return;
       }
-      const cat = data && data.catalog;
-      const hist = data && data.history;
+      const cat = data && (data.catalog || (data.data && data.data.catalog));
+      const hist = data && (data.history || (data.data && data.data.history));
       const validCatalog = cat && Array.isArray(cat.depts) && Array.isArray(cat.lines) && Array.isArray(cat.jigs);
       if (!validCatalog || !Array.isArray(hist)) {
         toast('รูปแบบไฟล์ไม่ถูกต้อง — ต้อง export มาจากระบบนี้เท่านั้น', 'ng');
