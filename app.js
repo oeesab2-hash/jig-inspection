@@ -64,8 +64,8 @@
           x: cp.x, 
           y: cp.y,
           type: cp.type || null,
-          min: cp.min || null,
-          max: cp.max || null,
+          min: cp.min ?? null,
+          max: cp.max ?? null,
           unit: cp.unit || null
         });
       });
@@ -1186,7 +1186,7 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
         checkpoints: (checkpoints.data || [])
           .filter(cp => cp.jig_id === j.id)
           .sort((a, b) => a.item_id - b.item_id)
-          .map(cp => ({ id: cp.item_id, label: cp.label, sub: cp.sub, method: cp.method, x: cp.x, y: cp.y }))
+          .map(cp => ({ id: cp.item_id, label: cp.label, sub: cp.sub, method: cp.method, x: cp.x, y: cp.y, type: cp.type || null, min: cp.min ?? null, max: cp.max ?? null, unit: cp.unit || null }))
       }));
 
       const payload = {
@@ -1265,8 +1265,8 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
           x: cp.x || 0,
           y: cp.y || 0,
           type: cp.type || null,
-          min: cp.min || null,
-          max: cp.max || null,
+          min: cp.min ?? null,
+          max: cp.max ?? null,
           unit: cp.unit || null
         }))
       }));
@@ -1318,7 +1318,7 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
 
         // ✅ Upsert checkpoints แยก
         const allCps = cat.jigs.flatMap(j =>
-          (j.checkpoints || []).map(cp => ({ jig_id: j.id, item_id: cp.id, label: cp.label || '', sub: cp.sub || '', method: cp.method || '', x: cp.x || 0, y: cp.y || 0 }))
+          (j.checkpoints || []).map(cp => ({ jig_id: j.id, item_id: cp.id, label: cp.label || '', sub: cp.sub || '', method: cp.method || '', x: cp.x || 0, y: cp.y || 0, type: cp.type || null, min: cp.min ?? null, max: cp.max ?? null, unit: cp.unit || null }))
         );
         for (let i = 0; i < allCps.length; i += 200) {
           const { error } = await sb.from('checkpoints').upsert(
