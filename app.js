@@ -1901,6 +1901,11 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
     const newIdx = idx + dir;
     if (newIdx < 0 || newIdx >= pts.length) return;
     [pts[idx], pts[newIdx]] = [pts[newIdx], pts[idx]];
+    // ⚠️ FIX: สลับ id (item_id) ตามตำแหน่งใหม่ด้วย — เพราะตอนโหลด/sync จาก Supabase
+    // ระบบจะ sort checkpoints ตาม item_id เสมอ (ไม่ได้จำลำดับที่จัดไว้แยกต่างหาก)
+    // ถ้าสลับแค่ตำแหน่งใน array แต่ไม่สลับ id ด้วย พอ sync รอบถัดไปมันจะ sort กลับไป
+    // ตามลำดับ id เดิม ทำให้ดูเหมือนลำดับที่จัด "เด้งกลับ" ไปเป็นแบบเดิม
+    [pts[idx].id, pts[newIdx].id] = [pts[newIdx].id, pts[idx].id];
     saveCatalog();
     renderCpList(jid);
     renderAdmCpMap(jid);
