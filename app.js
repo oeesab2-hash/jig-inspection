@@ -1847,8 +1847,15 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
     document.querySelectorAll('.btn-del-cp').forEach(btn => {
       btn.addEventListener('click', () => {
         const j = catalog.jigs.find(x => x.id === btn.dataset.jid);
+        const removed = j.checkpoints[btn.dataset.idx];
         j.checkpoints.splice(btn.dataset.idx, 1);
         saveCatalog();
+        // ⚠️ FIX: pushCatalogToSupabase ใช้ upsert (ไม่ลบ) — ต้องลบแถวนี้ออกจาก Supabase ตรงๆ
+        // ไม่งั้นแถวเดิมจะยังค้างอยู่ใน DB แล้วโดน sync กลับมา "เด้งคืน" เหมือนไม่เคยลบ
+        if (sb && removed) {
+          sb.from('checkpoints').delete().eq('jig_id', btn.dataset.jid).eq('item_id', removed.id)
+            .then(({ error }) => { if (error) console.error('delete checkpoint error:', error); });
+        }
         renderCpList(btn.dataset.jid);
         renderAdmCpMap(btn.dataset.jid);
         toast('ลบจุดตรวจแล้ว', 'ok');
