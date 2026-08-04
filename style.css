@@ -1091,6 +1091,7 @@ h1, h2, h3, h4, label, button, input, select, textarea, p, span, div {
 .dash-filter-left {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 8px;
 }
 .dash-filter-left label {

@@ -2693,6 +2693,7 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
   let charts = {};
   const currentYearMonth = () => new Date().toISOString().slice(0, 7); // 'YYYY-MM'
   let dashMonthFilter = currentYearMonth(); // ⚠️ FIX: default เป็นเดือนปัจจุบัน (เดิมเป็น 'all') — ยังเปลี่ยนเป็นเดือนอื่นหรือ "ทั้งหมด" ได้ตามปกติ
+  let dashLineFilter  = 'all'; // 'all' หรือ line id — ใช้กรอง Dashboard ให้ดูได้เฉพาะ Line ที่เลือก
 
   // ตัวแปรสี CSS ในระบบนี้เป็นรูปแบบ hsl(H, S%, L%) — การต่อ '22'/'aa'/'cc' ท้ายสตริง
   // (แบบ hex alpha) ทำให้ได้ค่าสีที่ผิดรูปแบบ เช่น "hsl(145, 65%, 45%)22" ซึ่ง Canvas/Chart.js
@@ -2715,14 +2716,35 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
       dashMonthFilter = e.target.value;
       refreshDashboard();
     });
+    $('dash-line-filter').addEventListener('change', e => {
+      dashLineFilter = e.target.value;
+      refreshDashboard();
+    });
+  }
+
+  /* สร้าง options ของ dropdown Line จาก catalog ทั้งหมด (ไม่ใช่แค่ Line ที่มีข้อมูลตรวจแล้ว
+     เพื่อให้เลือกดู Line ที่ยังไม่เคยตรวจได้ด้วย — เห็นชัดว่า "ยังไม่มีข้อมูล") */
+  function populateDashLineOptions() {
+    const sel = $('dash-line-filter');
+    const sortedLines = [...catalog.lines].sort((a, b) => (a.name || '').localeCompare(b.name || '', 'th'));
+    sel.innerHTML = '<option value="all">ทุก Line (All)</option>' +
+      sortedLines.map(l => `<option value="${escHtml(l.id)}">${escHtml(l.name)}</option>`).join('');
+    if (dashLineFilter !== 'all' && catalog.lines.some(l => l.id === dashLineFilter)) {
+      sel.value = dashLineFilter;
+    } else {
+      sel.value = 'all';
+      dashLineFilter = 'all';
+    }
   }
 
   function refreshDashboard() {
     const allHist = loadHistory();
     populateDashMonthOptions(allHist);
-    const hist = dashMonthFilter === 'all'
+    populateDashLineOptions();
+    let hist = dashMonthFilter === 'all'
       ? allHist
       : allHist.filter(h => (h.date || '').slice(0, 7) === dashMonthFilter);
+    if (dashLineFilter !== 'all') hist = hist.filter(h => h.lineId === dashLineFilter);
     renderKpis(hist);
     renderTrendChart(hist, dashMonthFilter);
     renderByLineChart(hist);
