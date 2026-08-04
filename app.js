@@ -2691,7 +2691,8 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
      DASHBOARD
   ══════════════════════════════════════ */
   let charts = {};
-  let dashMonthFilter = 'all'; // 'all' หรือ 'YYYY-MM'
+  const currentYearMonth = () => new Date().toISOString().slice(0, 7); // 'YYYY-MM'
+  let dashMonthFilter = currentYearMonth(); // ⚠️ FIX: default เป็นเดือนปัจจุบัน (เดิมเป็น 'all') — ยังเปลี่ยนเป็นเดือนอื่นหรือ "ทั้งหมด" ได้ตามปกติ
 
   // ตัวแปรสี CSS ในระบบนี้เป็นรูปแบบ hsl(H, S%, L%) — การต่อ '22'/'aa'/'cc' ท้ายสตริง
   // (แบบ hex alpha) ทำให้ได้ค่าสีที่ผิดรูปแบบ เช่น "hsl(145, 65%, 45%)22" ซึ่ง Canvas/Chart.js
@@ -2739,11 +2740,11 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
   /* สร้าง options ของ dropdown จากเดือนที่มีข้อมูลจริงในประวัติ (เรียงล่าสุดก่อน)
      คงค่าที่เลือกไว้เดิมถ้ายังมีอยู่ ไม่งั้น fallback กลับไปที่ "ทั้งหมด" */
   function populateDashMonthOptions(hist) {
-    const months = Array.from(new Set(hist.map(h => (h.date || '').slice(0, 7)).filter(Boolean)))
+    const months = Array.from(new Set([currentYearMonth(), ...hist.map(h => (h.date || '').slice(0, 7)).filter(Boolean)]))
       .sort().reverse();
     const sel = $('dash-month-filter');
     sel.innerHTML = '<option value="all">ทั้งหมด (All)</option>' +
-      months.map(m => `<option value="${m}">${formatMonthLabel(m)}</option>`).join('');
+      months.map(m => `<option value="${m}">${formatMonthLabel(m)}${m === currentYearMonth() ? ' (เดือนนี้)' : ''}</option>`).join('');
     if (dashMonthFilter !== 'all' && months.includes(dashMonthFilter)) {
       sel.value = dashMonthFilter;
     } else {
