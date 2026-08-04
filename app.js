@@ -16,6 +16,10 @@
     history:  'jig_history_v2',   // array of report records
   };
 
+  // เดือนไทยแบบย่อ ตรงกับ <option> ใน dropdown #inp-month / #hf-month เป๊ะๆ — ใช้ set ค่า default เป็นเดือนปัจจุบัน
+  const TH_MONTHS_ABBR = ['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
+  const currentThaiMonthAbbr = () => TH_MONTHS_ABBR[new Date().getMonth()];
+
   /* ══════════════════════════════════════
      SUPABASE — cloud sync (เก็บเป็นตารางแยกจริง อ่านง่ายใน Table Editor)
      ตาราง: departments, lines, jigs, checkpoints, templates, history
@@ -574,6 +578,7 @@
     if (remoteHist) localStorage.setItem(SK.history, JSON.stringify(remoteHist));
     loadCatalog();
     $('inp-date').value = new Date().toISOString().slice(0, 10);
+    $('inp-month').value = currentThaiMonthAbbr();
 
     renderFilter();
     bindJigSearch();
@@ -2431,7 +2436,7 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
       $('inp-inspector').value = '';
       $('inp-date').value = new Date().toISOString().slice(0, 10);
       $('inp-shift').value = '';
-      $('inp-month').value = '';
+      $('inp-month').value = currentThaiMonthAbbr();
       $('report-notes').value = '';
       $('sig-inspector').value = '';
       $('sig-supervisor').value = '';
