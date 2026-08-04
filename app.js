@@ -1146,6 +1146,7 @@ ${record.jigDocNo ? `_${escHtml(record.jigDocNo)}_` : ''}
 🔄 กะ: ${record.shift}
 👤 ผู้ตรวจ: ${escHtml(record.inspector)}
 
+🔍 จุดเช็คทั้งหมด: ${checkState.length} จุด
 ✅ ผ่าน (OK): ${okCount}
 ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
 `;
