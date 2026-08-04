@@ -2847,7 +2847,7 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
     });
   }
 
-  /* ── Dept Donut ── */
+  /* ── Line Donut (เดิมเป็น Dept Donut — เปลี่ยนมาจัดกลุ่มตาม Line ตามที่พี่บีขอ) ── */
   function renderDeptDonut(hist) {
     const style = getComputedStyle(document.documentElement);
     const colors = [
@@ -2859,7 +2859,7 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
 
     const deptMap = {};
     hist.forEach(h => {
-      const key = h.deptName || h.deptId || 'ไม่ระบุ';
+      const key = h.lineName || h.lineId || 'ไม่ระบุ';
       if (!deptMap[key]) deptMap[key] = { pass: 0, total: 0 };
       deptMap[key].total++;
       if (h.items.every(i => i.status === 'ok' || i.status === 'fixed')) deptMap[key].pass++;
