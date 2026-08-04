@@ -1400,6 +1400,15 @@ h1, h2, h3, h4, label, button, input, select, textarea, p, span, div {
   box-sizing: border-box;
 }
 .pdf-export-root * { box-sizing: border-box; }
+.pdf-company-header {
+  display: flex; align-items: center; gap: 14px;
+  justify-content: center; margin-bottom: 10px;
+  padding-bottom: 10px; border-bottom: 2px solid #1e3a5f;
+}
+.pdf-company-logo { width: 52px; height: 52px; object-fit: contain; flex: 0 0 auto; }
+.pdf-company-name { text-align: center; }
+.pdf-company-th { font-size: 15px; font-weight: 700; color: #1e3a5f; }
+.pdf-company-en { font-size: 11px; color: #64748b; letter-spacing: 0.3px; }
 .pdf-title { font-size: 20px; font-weight: 700; text-align: center; margin: 0 0 4px; }
 .pdf-subtitle { font-size: 13px; text-align: center; margin: 0 0 2px; color: #374151; }
 .pdf-meta-row {
