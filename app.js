@@ -1178,6 +1178,74 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
      ดึงข้อมูลตรงจาก Supabase ทุกครั้ง เพื่อให้ได้ข้อมูลล่าสุดเสมอ
      ไม่ใช้ localStorage เพราะอาจค้างหรือไม่ตรงกับ Supabase
   ══════════════════════════════════════ */
+  async function exportHistoryToExcel() {
+    if (!window.XLSX) { toast('โหลด Excel library ไม่สำเร็จ', 'ng'); return; }
+    toast('กำลังดึงประวัติการตรวจจาก Supabase...', 'ok');
+    try {
+      // ดึงข้อมูลสดจาก Supabase ก่อนเสมอ (ไม่ใช้แค่ local cache) ถ้าเชื่อมต่ออยู่
+      const hist = (sb ? await pullHistoryFromSupabase() : null) || loadHistory();
+      if (!hist.length) { toast('ยังไม่มีประวัติการตรวจ', 'ng'); return; }
+
+      // ชีทที่ 1: สรุปการตรวจแต่ละครั้ง (1 แถว = 1 รายงาน)
+      const summaryRows = hist.map(h => {
+        const okCount = (h.items || []).filter(i => i.status === 'ok' || i.status === 'fixed').length;
+        const ngCount = (h.items || []).filter(i => i.status === 'ng').length;
+        return {
+          'วันที่': h.date || '',
+          'เวลา': h.timestamp ? new Date(h.timestamp).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' }) : '',
+          'กะ': h.shift || '',
+          'แผนก': h.deptName || '',
+          'Line': h.lineName || '',
+          'JIG': h.jigName || '',
+          'รหัส JIG': h.jigDocNo || '',
+          'ผู้ตรวจสอบ': h.inspector || '',
+          'จุดตรวจทั้งหมด': (h.items || []).length,
+          'ผ่าน (OK)': okCount,
+          'ไม่ผ่าน (NG)': ngCount,
+          'หมายเหตุ': h.notes || '',
+          'GPS ละติจูด': h.gps?.latitude ?? '',
+          'GPS ลองจิจูด': h.gps?.longitude ?? '',
+        };
+      });
+
+      // ชีทที่ 2: รายละเอียดหัวข้อที่ NG ทุกรายการ (1 แถว = 1 หัวข้อ NG)
+      const ngRows = [];
+      hist.forEach(h => {
+        (h.items || []).forEach(item => {
+          if (item.status === 'ng') {
+            ngRows.push({
+              'วันที่': h.date || '',
+              'JIG': h.jigName || '',
+              'Line': h.lineName || '',
+              'หัวข้อที่ไม่ผ่าน': item.label || '',
+              'ค่าที่วัดได้': item.value != null ? `${item.value}${item.unit ? ' ' + item.unit : ''}` : '',
+              'หมายเหตุ NG': item.note || '',
+              'ผู้ตรวจสอบ': h.inspector || '',
+            });
+          }
+        });
+      });
+
+      const wb = XLSX.utils.book_new();
+      const ws1 = XLSX.utils.json_to_sheet(summaryRows);
+      ws1['!cols'] = [{wch:11},{wch:8},{wch:8},{wch:12},{wch:14},{wch:28},{wch:16},{wch:14},{wch:10},{wch:10},{wch:10},{wch:24},{wch:12},{wch:12}];
+      XLSX.utils.book_append_sheet(wb, ws1, 'สรุปการตรวจ');
+
+      if (ngRows.length) {
+        const ws2 = XLSX.utils.json_to_sheet(ngRows);
+        ws2['!cols'] = [{wch:11},{wch:28},{wch:14},{wch:26},{wch:14},{wch:24},{wch:14}];
+        XLSX.utils.book_append_sheet(wb, ws2, 'รายละเอียด NG');
+      }
+
+      const stamp = new Date().toISOString().slice(0, 10);
+      XLSX.writeFile(wb, `jig-history-${stamp}.xlsx`);
+      toast(`✅ Export Excel สำเร็จ — ${hist.length} รายการ`, 'ok');
+    } catch (err) {
+      console.error('exportHistoryToExcel error:', err);
+      toast('Export Excel ไม่สำเร็จ: ' + (err.message || err), 'ng');
+    }
+  }
+
   async function exportAllData() {
     if (!sb) { toast('ไม่ได้เชื่อมต่อ Supabase', 'ng'); return; }
     toast('กำลังดึงข้อมูลจาก Supabase...', 'ok');
@@ -1727,6 +1795,7 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
       if (file) importAllData(file);
       e.target.value = '';
     });
+    $('btn-export-excel').addEventListener('click', exportHistoryToExcel);
 
     /* Save All — ยืนยันการบันทึกอีกครั้ง (ข้อมูลถูก auto-save ทุกครั้งที่กด "เพิ่ม" อยู่แล้ว
        ปุ่มนี้เพิ่มมาเพื่อความมั่นใจของผู้ใช้ และตรวจสอบ round-trip ผ่าน localStorage จริง) */

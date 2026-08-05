@@ -22,6 +22,7 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.1.6/purify.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <link rel="stylesheet" href="style.css">
 </head>
@@ -523,6 +524,7 @@
       <div style="font-size:11px; color:var(--text-muted); margin-top:6px; line-height:1.5;">
         Export เก็บทั้ง Catalog (แผนก/Line/JIG/จุดตรวจ) และประวัติการตรวจ — ใช้สำรองก่อนล้าง browser cache หรือย้ายเครื่อง
       </div>
+      <button id="btn-export-excel" class="btn-sec" style="width:100%; margin-top:8px;">📊 Export ประวัติการตรวจเป็น Excel (.xlsx)</button>
     </div>
 
 
