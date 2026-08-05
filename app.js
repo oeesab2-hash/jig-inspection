@@ -196,6 +196,11 @@
         insp_date: h.date, shift: h.shift, month: h.month,
         inspector: h.inspector, notes: h.notes, items: h.items || [],
         sig_inspector: h.sigInspector, sig_supervisor: h.sigSupervisor,
+        // ─── Approval Workflow ───
+        approval_status: h.approvalStatus || 'pending',
+        approved_by: h.approvedBy || null,
+        approved_at: h.approvedAt || null,
+        supervisor_comment: h.supervisorComment || null,
         // ─── GPS Data ───
         gps_latitude: h.gps?.latitude || null,
         gps_longitude: h.gps?.longitude || null,
@@ -245,6 +250,11 @@
         date: row.insp_date, shift: row.shift, month: row.month,
         inspector: row.inspector, notes: row.notes, items: row.items || [],
         sigInspector: row.sig_inspector, sigSupervisor: row.sig_supervisor,
+        // ─── Approval Workflow ───
+        approvalStatus: row.approval_status || 'pending',
+        approvedBy: row.approved_by || null,
+        approvedAt: row.approved_at || null,
+        supervisorComment: row.supervisor_comment || null,
         // ─── GPS Data ───
         gps: row.gps_latitude ? {
           latitude: row.gps_latitude,
@@ -1043,15 +1053,20 @@
   }
 
   /* ─── ส่ง Telegram Message — ผ่าน Edge Function เท่านั้น (token ไม่เคยอยู่ฝั่ง client) ─── */
-  async function sendTelegramMessage(msg) {
+  async function sendTelegramMessage(msg, buttonUrl, buttonText) {
     try {
+      const body = { text: msg };
+      if (buttonUrl) {
+        body.buttonUrl = buttonUrl;
+        body.buttonText = buttonText || '✅ เปิดเพื่ออนุมัติ';
+      }
       const response = await fetch(TELEGRAM_FUNCTION_URL, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${SUPABASE_ANON_KEY}`, // Edge Function ต้องการ header นี้ตามค่า default ของ Supabase
         },
-        body: JSON.stringify({ text: msg }),
+        body: JSON.stringify(body),
       });
 
       if (!response.ok) {
@@ -1116,6 +1131,11 @@
       items:      checkState.map(i => ({ id: i.id, label: i.label, status: i.status, note: i.note, photos: i.photos, value: i.value ?? null, unit: i.unit || '' })),
       sigInspector:  $('sig-inspector').value.trim(),
       sigSupervisor: $('sig-supervisor').value.trim(),
+      // ─── Approval Workflow — รอหัวหน้างานกดอนุมัติผ่าน Telegram ───
+      approvalStatus:     'pending',
+      approvedBy:         null,
+      approvedAt:         null,
+      supervisorComment:  null,
       // ─── GPS Data ─── (บันทึกพิกัด - ตรวจสอบแล้วว่าได้พิกัด)
       gps: {
         latitude:   gpsData.latitude,
@@ -1166,10 +1186,16 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
 
       telegramMsg += `
 📍 GPS: ${gpsData.latitude.toFixed(6)}, ${gpsData.longitude.toFixed(6)}
+
+🟡 สถานะ: รอหัวหน้างานอนุมัติ
 ━━━━━━━━━━━━━━━━━━━━━━━━━
 `;
-      
-      await sendTelegramMessage(telegramMsg);
+
+      // ลิงก์หน้าอนุมัติ — ใช้ path เดียวกับที่ deploy อยู่จริง (รองรับทั้ง root และ subpath)
+      const approveUrl = window.location.href.replace(/index\.html.*$/, '').replace(/\/?$/, '/')
+        + `approve.html?id=${encodeURIComponent(record.id)}`;
+
+      await sendTelegramMessage(telegramMsg, approveUrl, '✅ เปิดเพื่ออนุมัติ');
     }
   }
 
@@ -1203,6 +1229,9 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
           'ผ่าน (OK)': okCount,
           'ไม่ผ่าน (NG)': ngCount,
           'หมายเหตุ': h.notes || '',
+          'สถานะอนุมัติ': h.approvalStatus === 'approved' ? 'อนุมัติแล้ว' : 'รออนุมัติ',
+          'ผู้อนุมัติ': h.approvedBy || '',
+          'ความเห็นหัวหน้างาน': h.supervisorComment || '',
           'GPS ละติจูด': h.gps?.latitude ?? '',
           'GPS ลองจิจูด': h.gps?.longitude ?? '',
         };
@@ -1228,7 +1257,7 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
 
       const wb = XLSX.utils.book_new();
       const ws1 = XLSX.utils.json_to_sheet(summaryRows);
-      ws1['!cols'] = [{wch:11},{wch:8},{wch:8},{wch:12},{wch:14},{wch:28},{wch:16},{wch:14},{wch:10},{wch:10},{wch:10},{wch:24},{wch:12},{wch:12}];
+      ws1['!cols'] = [{wch:11},{wch:8},{wch:8},{wch:12},{wch:14},{wch:28},{wch:16},{wch:14},{wch:10},{wch:10},{wch:10},{wch:24},{wch:14},{wch:14},{wch:24},{wch:12},{wch:12}];
       XLSX.utils.book_append_sheet(wb, ws1, 'สรุปการตรวจ');
 
       if (ngRows.length) {
@@ -2319,9 +2348,13 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
           <div class="hi-badges">
             <span class="badge ok">OK ${okCount}</span>
             ${ngItems.length ? `<span class="badge ng">NG ${ngItems.length}</span>` : ''}
+            ${h.approvalStatus === 'approved'
+              ? `<span class="badge approved" title="อนุมัติโดย ${escHtml(h.approvedBy || '')} เมื่อ ${h.approvedAt ? new Date(h.approvedAt).toLocaleString('th-TH') : ''}">✅ อนุมัติแล้ว</span>`
+              : `<span class="badge pending">🟡 รออนุมัติ</span>`}
             ${gpsDisplay}
           </div>
         </div>
+        ${h.supervisorComment ? `<div class="hi-supervisor-comment">💬 <strong>ความเห็นหัวหน้างาน:</strong> ${escHtml(h.supervisorComment)}</div>` : ''}
         ${ngItems.length ? `<div class="hi-ng-list">
           ${ngItems.map(i => `<div class="hi-ng-item">
             <span class="hi-ng-label">❌ ข้อ ${i.id}: ${escHtml(i.label || '')}</span>
@@ -2415,6 +2448,7 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
         <tbody>${rows}</tbody>
       </table>
       ${record.notes ? `<div class="pdf-notes"><strong>หมายเหตุ:</strong> ${escHtml(record.notes)}</div>` : ''}
+      ${record.supervisorComment ? `<div class="pdf-notes"><strong>ความเห็นหัวหน้างาน:</strong> ${escHtml(record.supervisorComment)}</div>` : ''}
       <div class="pdf-sig-row">
         <div>
           <div>${record.sigInspector ? `( ${escHtml(record.sigInspector)} )` : '(\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0)'}</div>
@@ -2422,7 +2456,7 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
         </div>
         <div>
           <div>${record.sigSupervisor ? `( ${escHtml(record.sigSupervisor)} )` : '(\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0)'}</div>
-          <div class="pdf-sig-line">หัวหน้างาน</div>
+          <div class="pdf-sig-line">หัวหน้างาน${record.approvalStatus === 'approved' ? ' — ✅ อนุมัติแล้ว' : ' — 🟡 รออนุมัติ'}</div>
         </div>
       </div>`;
   }

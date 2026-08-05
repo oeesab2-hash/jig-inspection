@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>อนุมัติรายงานการตรวจ JIG</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Thai:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  :root {
+    --navy: #1e3a5f;
+    --navy-light: #2d5586;
+    --accent: #2f6fd1;
+    --ok: #16a34a;
+    --ok-bg: #dcfce7;
+    --ng: #dc2626;
+    --ng-bg: #fee2e2;
+    --pending: #d97706;
+    --pending-bg: #fef3c7;
+    --text: #1f2937;
+    --muted: #6b7280;
+    --border: #e5e7eb;
+    --bg: #f3f4f6;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: 'Noto Sans Thai', 'Sarabun', Tahoma, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    padding-bottom: 40px;
+  }
+  header {
+    background: linear-gradient(135deg, var(--navy), var(--navy-light));
+    color: #fff;
+    padding: 20px 16px;
+    text-align: center;
+  }
+  header h1 { margin: 0; font-size: 17px; font-weight: 700; }
+  header p { margin: 4px 0 0; font-size: 12px; opacity: 0.85; }
+
+  .wrap { max-width: 560px; margin: 0 auto; padding: 16px; }
+  .card {
+    background: #fff;
+    border-radius: 14px;
+    border: 1px solid var(--border);
+    padding: 18px;
+    margin-bottom: 14px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+  }
+  .jig-title { font-size: 18px; font-weight: 700; margin: 0 0 2px; }
+  .jig-sub { font-size: 12px; color: var(--muted); margin: 0 0 12px; }
+
+  .meta-grid {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 8px 16px;
+    font-size: 13px; margin-bottom: 4px;
+  }
+  .meta-grid div span { color: var(--muted); }
+
+  .status-badge {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 6px 12px; border-radius: 999px; font-size: 13px; font-weight: 600;
+    margin-top: 10px;
+  }
+  .status-pending { background: var(--pending-bg); color: var(--pending); }
+  .status-approved { background: var(--ok-bg); color: var(--ok); }
+
+  .kpi-row { display: flex; gap: 10px; margin: 14px 0; }
+  .kpi { flex: 1; text-align: center; padding: 10px 6px; border-radius: 10px; }
+  .kpi-ok { background: var(--ok-bg); color: var(--ok); }
+  .kpi-ng { background: var(--ng-bg); color: var(--ng); }
+  .kpi b { display: block; font-size: 20px; }
+  .kpi span { font-size: 11px; }
+
+  .item-row {
+    display: flex; justify-content: space-between; gap: 10px;
+    padding: 9px 0; border-bottom: 1px solid var(--border); font-size: 13px;
+  }
+  .item-row:last-child { border-bottom: none; }
+  .item-label { flex: 1; }
+  .item-note { font-size: 11px; color: var(--ng); margin-top: 2px; }
+  .item-status { font-weight: 600; white-space: nowrap; }
+  .st-ok, .st-fixed { color: var(--ok); }
+  .st-ng { color: var(--ng); }
+
+  .section-title { font-size: 13px; font-weight: 700; color: var(--navy); margin: 0 0 10px; }
+
+  textarea, input[type=text] {
+    width: 100%; border: 1px solid var(--border); border-radius: 10px;
+    padding: 10px 12px; font-family: inherit; font-size: 14px; color: var(--text);
+    background: #fafafa;
+  }
+  textarea { min-height: 70px; resize: vertical; }
+  label.field-label { font-size: 12px; color: var(--muted); display: block; margin: 10px 0 4px; }
+
+  .btn {
+    width: 100%; border: none; border-radius: 12px; padding: 14px;
+    font-size: 15px; font-weight: 700; cursor: pointer; font-family: inherit;
+    margin-top: 6px;
+  }
+  .btn-approve { background: var(--ok); color: #fff; }
+  .btn-approve:disabled { background: #9ca3af; cursor: default; }
+
+  .gps-link { font-size: 12px; color: var(--accent); text-decoration: none; }
+
+  .center-msg { text-align: center; padding: 40px 16px; color: var(--muted); font-size: 14px; }
+  .spinner {
+    width: 28px; height: 28px; border: 3px solid var(--border); border-top-color: var(--accent);
+    border-radius: 50%; animation: spin 0.8s linear infinite; margin: 0 auto 12px;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .approved-box {
+    background: var(--ok-bg); color: var(--ok); border-radius: 10px;
+    padding: 12px 14px; font-size: 13px; margin-top: 4px; line-height: 1.6;
+  }
+</style>
+</head>
+<body>
+  <header>
+    <h1>📋 อนุมัติรายงานการตรวจ JIG</h1>
+    <p>บริษัท ซัมมิท โอโต บอดี้ อินดัสตรี จำกัด (สาขาอยุธยา)</p>
+  </header>
+
+  <div class="wrap" id="app">
+    <div class="center-msg"><div class="spinner"></div>กำลังโหลดรายงาน...</div>
+  </div>
+
+<script>
+  const SUPABASE_URL = 'https://otytpzimuyaqagvxvexf.supabase.co';
+  const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im90eXRwemltdXlhcWFndnh2ZXhmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ1MTMyMDEsImV4cCI6MjEwMDA4OTIwMX0.QQVIcDkIByAgyFTHrF7AmcZ-l-HfvLnbU8jh3Vnwyjw';
+  const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+  const app = document.getElementById('app');
+  const params = new URLSearchParams(window.location.search);
+  const recordId = params.get('id');
+
+  function esc(s) {
+    return String(s ?? '').replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
+  }
+  function statusLabel(s) {
+    return s === 'ok' ? 'ผ่าน (OK)' : s === 'fixed' ? 'แก้ไขแล้ว' : s === 'ng' ? 'ไม่ผ่าน (NG)' : '-';
+  }
+  function statusClass(s) {
+    return s === 'ok' ? 'st-ok' : s === 'fixed' ? 'st-fixed' : s === 'ng' ? 'st-ng' : '';
+  }
+
+  async function loadReport() {
+    if (!recordId) {
+      app.innerHTML = `<div class="center-msg">❌ ไม่พบรหัสรายงาน (ลิงก์ไม่ถูกต้อง)</div>`;
+      return;
+    }
+    const { data, error } = await sb.from('history').select('*').eq('id', recordId).single();
+    if (error || !data) {
+      app.innerHTML = `<div class="center-msg">❌ ไม่พบรายงานนี้ในระบบ (อาจถูกลบไปแล้ว)</div>`;
+      return;
+    }
+    render(data);
+  }
+
+  function render(row) {
+    const items = row.items || [];
+    const okCount = items.filter(i => i.status === 'ok' || i.status === 'fixed').length;
+    const ngItems = items.filter(i => i.status === 'ng');
+    const isApproved = row.approval_status === 'approved';
+    const time = row.ts ? new Date(row.ts).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' }) : '';
+
+    app.innerHTML = `
+      <div class="card">
+        <div class="jig-title">${esc(row.jig_name)}</div>
+        <div class="jig-sub">${esc(row.jig_doc_no || '')} · ${esc(row.dept_name)} &gt; ${esc(row.line_name)}</div>
+
+        <div class="meta-grid">
+          <div><span>วันที่:</span> ${esc(row.insp_date)}</div>
+          <div><span>เวลา:</span> ${esc(time)}</div>
+          <div><span>กะ:</span> ${esc(row.shift || '-')}</div>
+          <div><span>ผู้ตรวจ:</span> ${esc(row.inspector)}</div>
+        </div>
+
+        ${isApproved
+          ? `<span class="status-badge status-approved">✅ อนุมัติแล้ว</span>`
+          : `<span class="status-badge status-pending">🟡 รออนุมัติ</span>`}
+
+        <div class="kpi-row">
+          <div class="kpi kpi-ok"><b>${okCount}</b><span>ผ่าน (OK)</span></div>
+          <div class="kpi kpi-ng"><b>${ngItems.length}</b><span>ไม่ผ่าน (NG)</span></div>
+        </div>
+
+        ${row.gps_latitude ? `<a class="gps-link" target="_blank" href="https://maps.google.com/?q=${row.gps_latitude},${row.gps_longitude}">📍 เปิดตำแหน่ง GPS</a>` : ''}
+      </div>
+
+      ${ngItems.length ? `
+      <div class="card">
+        <div class="section-title">🔴 รายการที่ไม่ผ่าน (${ngItems.length})</div>
+        ${ngItems.map(i => `
+          <div class="item-row">
+            <div class="item-label">
+              ${esc(i.label)}
+              ${i.note ? `<div class="item-note">${esc(i.note)}</div>` : ''}
+            </div>
+            <div class="item-status st-ng">NG</div>
+          </div>
+        `).join('')}
+      </div>` : ''}
+
+      <div class="card">
+        <div class="section-title">📝 หัวข้อตรวจทั้งหมด (${items.length})</div>
+        ${items.map(i => `
+          <div class="item-row">
+            <div class="item-label">${esc(i.label)}</div>
+            <div class="item-status ${statusClass(i.status)}">${statusLabel(i.status)}</div>
+          </div>
+        `).join('')}
+      </div>
+
+      ${row.notes ? `
+      <div class="card">
+        <div class="section-title">💬 หมายเหตุจากผู้ตรวจสอบ</div>
+        <div style="font-size:13px;">${esc(row.notes)}</div>
+      </div>` : ''}
+
+      <div class="card" id="approval-card"></div>
+    `;
+
+    renderApprovalCard(row);
+  }
+
+  function renderApprovalCard(row) {
+    const box = document.getElementById('approval-card');
+    if (row.approval_status === 'approved') {
+      box.innerHTML = `
+        <div class="section-title">✅ สถานะการอนุมัติ</div>
+        <div class="approved-box">
+          อนุมัติโดย <strong>${esc(row.approved_by)}</strong><br>
+          เมื่อ ${row.approved_at ? new Date(row.approved_at).toLocaleString('th-TH') : '-'}
+          ${row.supervisor_comment ? `<br><br>💬 ความเห็น: ${esc(row.supervisor_comment)}` : ''}
+        </div>
+      `;
+      return;
+    }
+
+    box.innerHTML = `
+      <div class="section-title">✍️ อนุมัติรายงานนี้</div>
+      <label class="field-label">ชื่อผู้อนุมัติ (หัวหน้างาน)</label>
+      <input type="text" id="approver-name" placeholder="พิมพ์ชื่อ-นามสกุล">
+      <label class="field-label">ความเห็นเพิ่มเติม (ถ้ามี)</label>
+      <textarea id="approver-comment" placeholder="เช่น รับทราบ NG แล้ว ให้ทีมซ่อมเข้าแก้ไขภายในวันนี้"></textarea>
+      <button class="btn btn-approve" id="btn-approve">✅ อนุมัติรายงานนี้</button>
+      <div id="approve-msg" style="font-size:12px; color:var(--ng); margin-top:8px;"></div>
+    `;
+
+    document.getElementById('btn-approve').addEventListener('click', () => approveReport(row));
+  }
+
+  async function approveReport(row) {
+    const nameEl = document.getElementById('approver-name');
+    const commentEl = document.getElementById('approver-comment');
+    const msgEl = document.getElementById('approve-msg');
+    const btn = document.getElementById('btn-approve');
+    const name = nameEl.value.trim();
+
+    if (!name) {
+      msgEl.textContent = 'กรุณากรอกชื่อผู้อนุมัติก่อน';
+      nameEl.focus();
+      return;
+    }
+
+    btn.disabled = true;
+    btn.textContent = 'กำลังบันทึก...';
+    msgEl.textContent = '';
+
+    const nowIso = new Date().toISOString();
+    const { error } = await sb.from('history').update({
+      approval_status: 'approved',
+      approved_by: name,
+      approved_at: nowIso,
+      supervisor_comment: commentEl.value.trim() || null,
+      sig_supervisor: name, // ให้ชื่อผู้อนุมัติกลายเป็นลายเซ็นหัวหน้างานในรายงาน/PDF ด้วย
+    }).eq('id', row.id);
+
+    if (error) {
+      btn.disabled = false;
+      btn.textContent = '✅ อนุมัติรายงานนี้';
+      msgEl.textContent = 'บันทึกไม่สำเร็จ: ' + error.message;
+      return;
+    }
+
+    row.approval_status = 'approved';
+    row.approved_by = name;
+    row.approved_at = nowIso;
+    row.supervisor_comment = commentEl.value.trim() || null;
+    renderApprovalCard(row);
+    document.querySelector('.status-badge').outerHTML = `<span class="status-badge status-approved">✅ อนุมัติแล้ว</span>`;
+  }
+
+  loadReport();
+</script>
+</body>
+</html>
