@@ -131,6 +131,8 @@
   const SUPABASE_URL = 'https://otytpzimuyaqagvxvexf.supabase.co';
   const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im90eXRwemltdXlhcWFndnh2ZXhmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ1MTMyMDEsImV4cCI6MjEwMDA4OTIwMX0.QQVIcDkIByAgyFTHrF7AmcZ-l-HfvLnbU8jh3Vnwyjw';
   const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+  const TELEGRAM_FUNCTION_URL = `${SUPABASE_URL}/functions/v1/send-telegram`;
+  const APPROVED_NOTIFY_CHAT_ID = '-5170940793'; // กลุ่ม Telegram ที่แจ้งผล "อนุมัติแล้ว"
 
   const app = document.getElementById('app');
   const params = new URLSearchParams(window.location.search);
@@ -292,6 +294,45 @@
     row.supervisor_comment = commentEl.value.trim() || null;
     renderApprovalCard(row);
     document.querySelector('.status-badge').outerHTML = `<span class="status-badge status-approved">✅ อนุมัติแล้ว</span>`;
+
+    notifyApproved(row); // ยิงแจ้งเตือนไปกลุ่ม "อนุมัติแล้ว" — ไม่ต้องรอผล ไม่บล็อกหน้าจอ
+  }
+
+  async function notifyApproved(row) {
+    const items = row.items || [];
+    const okCount = items.filter(i => i.status === 'ok' || i.status === 'fixed').length;
+    const ngCount = items.filter(i => i.status === 'ng').length;
+    const time = row.ts ? new Date(row.ts).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' }) : '';
+
+    const text = `
+✅ *อนุมัติรายงานตรวจ JIG แล้ว*
+━━━━━━━━━━━━━━━━━━━━━━━━━
+*${esc(row.jig_name)}*
+${row.jig_doc_no ? `_${esc(row.jig_doc_no)}_` : ''}
+
+📅 วันที่ตรวจ: ${esc(row.insp_date)} เวลา ${esc(time)}
+👤 ผู้ตรวจ: ${esc(row.inspector)}
+🔍 ผ่าน (OK): ${okCount}  ❌ ไม่ผ่าน (NG): ${ngCount}
+
+👔 อนุมัติโดย: ${esc(row.approved_by)}
+🕐 เมื่อ: ${new Date(row.approved_at).toLocaleString('th-TH')}
+${row.supervisor_comment ? `💬 ความเห็น: ${esc(row.supervisor_comment)}` : ''}
+━━━━━━━━━━━━━━━━━━━━━━━━━
+`;
+
+    try {
+      await fetch(TELEGRAM_FUNCTION_URL, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+        },
+        body: JSON.stringify({ text, chatId: APPROVED_NOTIFY_CHAT_ID }),
+      });
+    } catch (e) {
+      console.error('notifyApproved error:', e);
+      // ไม่ต้องโชว์ error ให้หัวหน้างานเห็น — การอนุมัติบันทึกลง DB สำเร็จแล้ว แค่แจ้งเตือนอาจพลาด
+    }
   }
 
   loadReport();
