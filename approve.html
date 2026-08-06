@@ -70,8 +70,40 @@
   .kpi { flex: 1; text-align: center; padding: 10px 6px; border-radius: 10px; }
   .kpi-ok { background: var(--ok-bg); color: var(--ok); }
   .kpi-ng { background: var(--ng-bg); color: var(--ng); }
+  .kpi-pending { background: var(--pending-bg); color: var(--pending); }
   .kpi b { display: block; font-size: 20px; }
   .kpi span { font-size: 11px; }
+
+  .line-table { width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 4px; }
+  .line-table th {
+    text-align: left; font-size: 11px; color: var(--muted); font-weight: 600;
+    padding: 6px 4px; border-bottom: 1px solid var(--border);
+  }
+  .line-table th:not(:first-child), .line-table td:not(:first-child) { text-align: center; }
+  .line-table td { padding: 8px 4px; border-bottom: 1px solid var(--border); }
+  .line-table tr:last-child td { border-bottom: none; }
+  .line-name-cell { font-weight: 600; }
+  .mini-badge {
+    display: inline-block; min-width: 22px; padding: 2px 8px; border-radius: 999px;
+    font-size: 12px; font-weight: 700;
+  }
+  .mini-badge.pending { background: var(--pending-bg); color: var(--pending); }
+  .mini-badge.approved { background: var(--ok-bg); color: var(--ok); }
+  .mini-badge.zero { background: #f3f4f6; color: #9ca3af; }
+
+  .pending-item {
+    display: flex; align-items: center; justify-content: space-between; gap: 10px;
+    padding: 12px 4px; border-bottom: 1px solid var(--border);
+    text-decoration: none; color: inherit;
+  }
+  .pending-item:last-child { border-bottom: none; }
+  .pending-item-jig { font-size: 14px; font-weight: 600; }
+  .pending-item-meta { font-size: 11px; color: var(--muted); margin-top: 2px; }
+  .pending-item-arrow { font-size: 20px; color: var(--muted); flex: 0 0 auto; }
+  .pending-item-badge {
+    flex: 0 0 auto; font-size: 10px; font-weight: 700; padding: 3px 8px;
+    border-radius: 999px; background: var(--ng-bg); color: var(--ng);
+  }
 
   .item-row {
     display: flex; justify-content: space-between; gap: 10px;
@@ -123,8 +155,11 @@
     <p>บริษัท ซัมมิท โอโต บอดี้ อินดัสตรี จำกัด (สาขาอยุธยา)</p>
   </header>
 
-  <div class="wrap" id="app">
-    <div class="center-msg"><div class="spinner"></div>กำลังโหลดรายงาน...</div>
+  <div class="wrap">
+    <div id="dashboard">
+      <div class="center-msg"><div class="spinner"></div>กำลังโหลดภาพรวม...</div>
+    </div>
+    <div id="app"></div>
   </div>
 
 <script>
@@ -148,14 +183,83 @@
     return s === 'ok' ? 'st-ok' : s === 'fixed' ? 'st-fixed' : s === 'ng' ? 'st-ng' : '';
   }
 
-  async function loadReport() {
-    if (!recordId) {
-      app.innerHTML = `<div class="center-msg">❌ ไม่พบรหัสรายงาน (ลิงก์ไม่ถูกต้อง)</div>`;
+  async function loadDashboard() {
+    const dash = document.getElementById('dashboard');
+    const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+    const { data, error } = await sb.from('history')
+      .select('id, jig_name, line_name, insp_date, ts, approval_status, inspector')
+      .gte('insp_date', since)
+      .order('ts', { ascending: false });
+
+    if (error || !data) {
+      dash.innerHTML = `<div class="card"><div class="section-title">📊 ภาพรวมการอนุมัติ</div><div class="center-msg" style="padding:10px 0;">โหลดข้อมูลไม่สำเร็จ</div></div>`;
       return;
     }
+    renderDashboard(data);
+  }
+
+  function renderDashboard(rows) {
+    const dash = document.getElementById('dashboard');
+
+    // จัดกลุ่มตาม Line นับ pending / approved
+    const byLine = new Map();
+    rows.forEach(r => {
+      const key = r.line_name || 'ไม่ระบุ Line';
+      if (!byLine.has(key)) byLine.set(key, { pending: 0, approved: 0 });
+      const g = byLine.get(key);
+      if (r.approval_status === 'approved') g.approved++; else g.pending++;
+    });
+    // เรียง Line ที่มีรออนุมัติเยอะสุดไว้บนสุด (สำคัญที่สุดก่อน)
+    const lineRows = Array.from(byLine.entries()).sort((a, b) => b[1].pending - a[1].pending);
+
+    const totalPending = rows.filter(r => r.approval_status !== 'approved').length;
+    const totalApproved = rows.length - totalPending;
+
+    const pendingList = rows.filter(r => r.approval_status !== 'approved');
+
+    dash.innerHTML = `
+      <div class="card">
+        <div class="section-title">📊 ภาพรวมการอนุมัติ (30 วันล่าสุด)</div>
+        <div class="kpi-row">
+          <div class="kpi kpi-pending"><b>${totalPending}</b><span>รออนุมัติ</span></div>
+          <div class="kpi kpi-ok"><b>${totalApproved}</b><span>อนุมัติแล้ว</span></div>
+        </div>
+        ${lineRows.length ? `
+        <table class="line-table">
+          <thead><tr><th>Line</th><th>รออนุมัติ</th><th>อนุมัติแล้ว</th></tr></thead>
+          <tbody>
+            ${lineRows.map(([name, g]) => `
+              <tr>
+                <td class="line-name-cell">${esc(name)}</td>
+                <td>${g.pending ? `<span class="mini-badge pending">${g.pending}</span>` : `<span class="mini-badge zero">0</span>`}</td>
+                <td>${g.approved ? `<span class="mini-badge approved">${g.approved}</span>` : `<span class="mini-badge zero">0</span>`}</td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>` : `<div class="center-msg" style="padding:10px 0;">ยังไม่มีข้อมูลการตรวจในช่วงนี้</div>`}
+      </div>
+
+      <div class="card">
+        <div class="section-title">🟡 รายการที่รออนุมัติ (${pendingList.length})</div>
+        ${pendingList.length ? pendingList.map(r => `
+          <a class="pending-item" href="approve.html?id=${encodeURIComponent(r.id)}">
+            <div>
+              <div class="pending-item-jig">${esc(r.jig_name)}</div>
+              <div class="pending-item-meta">${esc(r.line_name || '')} · ${esc(r.insp_date)} · ผู้ตรวจ: ${esc(r.inspector)}</div>
+            </div>
+            <div class="pending-item-arrow">›</div>
+          </a>
+        `).join('') : `<div class="center-msg" style="padding:16px 0;">🎉 ไม่มีรายการค้างอนุมัติ</div>`}
+      </div>
+    `;
+  }
+
+  async function loadReport() {
+    if (!recordId) return; // ไม่มี id ไม่เป็นไร — มี dashboard ให้เลือกรายการแทน
+    app.innerHTML = `<div class="center-msg"><div class="spinner"></div>กำลังโหลดรายงาน...</div>`;
     const { data, error } = await sb.from('history').select('*').eq('id', recordId).single();
     if (error || !data) {
-      app.innerHTML = `<div class="center-msg">❌ ไม่พบรายงานนี้ในระบบ (อาจถูกลบไปแล้ว)</div>`;
+      app.innerHTML = `<div class="card center-msg">❌ ไม่พบรายงานนี้ในระบบ (อาจถูกลบไปแล้ว)</div>`;
       return;
     }
     render(data);
@@ -296,6 +400,7 @@
     document.querySelector('.status-badge').outerHTML = `<span class="status-badge status-approved">✅ อนุมัติแล้ว</span>`;
 
     notifyApproved(row); // ยิงแจ้งเตือนไปกลุ่ม "อนุมัติแล้ว" — ไม่ต้องรอผล ไม่บล็อกหน้าจอ
+    loadDashboard(); // รีเฟรชภาพรวมด้านบนให้ตัวเลขอัปเดตทันที ไม่ต้องรอ reload หน้า
   }
 
   async function notifyApproved(row) {
@@ -335,7 +440,11 @@ ${row.supervisor_comment ? `💬 ความเห็น: ${esc(row.supervisor_
     }
   }
 
+  loadDashboard();
   loadReport();
+
+  // รีเฟรชภาพรวมอัตโนมัติทุก 30 วิ — เพราะหน้างานตรวจ JIG พร้อมกันหลายจุด ข้อมูลจะเข้ามาเรื่อยๆ
+  setInterval(loadDashboard, 30000);
 </script>
 </body>
 </html>
