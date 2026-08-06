@@ -105,6 +105,26 @@
     border-radius: 999px; background: var(--ng-bg); color: var(--ng);
   }
 
+  .pending-line-group { margin-bottom: 18px; }
+  .pending-line-group:last-child { margin-bottom: 0; }
+  .pending-line-header {
+    font-size: 14px; font-weight: 700; color: var(--navy);
+    padding: 8px 0; border-bottom: 2px solid var(--navy);
+  }
+  .pending-line-count { font-weight: 400; color: var(--muted); font-size: 12px; }
+  .pending-subgroup { margin-top: 4px; }
+  .pending-subgroup-head {
+    display: flex; align-items: center; justify-content: space-between; gap: 8px;
+    font-size: 12px; font-weight: 600; color: var(--muted);
+    padding: 8px 0 4px;
+  }
+  .btn-bulk {
+    flex: 0 0 auto; background: var(--ok); color: #fff; border: none;
+    border-radius: 8px; padding: 6px 12px; font-size: 12px; font-weight: 700;
+    cursor: pointer; font-family: inherit;
+  }
+  .btn-bulk:disabled { background: #9ca3af; cursor: default; }
+
   .item-row {
     display: flex; justify-content: space-between; gap: 10px;
     padding: 9px 0; border-bottom: 1px solid var(--border); font-size: 13px;
@@ -187,7 +207,7 @@
     const dash = document.getElementById('dashboard');
     const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
     const { data, error } = await sb.from('history')
-      .select('id, jig_name, line_name, insp_date, ts, approval_status, inspector')
+      .select('id, jig_name, line_name, insp_date, ts, approval_status, inspector, items')
       .gte('insp_date', since)
       .order('ts', { ascending: false });
 
@@ -215,7 +235,20 @@
     const totalPending = rows.filter(r => r.approval_status !== 'approved').length;
     const totalApproved = rows.length - totalPending;
 
-    const pendingList = rows.filter(r => r.approval_status !== 'approved');
+    const pendingList = rows.filter(r => r.approval_status !== 'approved')
+      .map(r => ({ ...r, ngCount: (r.items || []).filter(i => i.status === 'ng').length }));
+
+    // จัดกลุ่มรายการรออนุมัติตาม Line — ภายในแต่ละ Line แยกเป็น "ไม่มี NG" (อนุมัติทีเดียวได้)
+    // กับ "มี NG" (ต้องเปิดดูทีละรายการ)
+    const pendingByLine = new Map();
+    pendingList.forEach(r => {
+      const key = r.line_name || 'ไม่ระบุ Line';
+      if (!pendingByLine.has(key)) pendingByLine.set(key, { clean: [], ng: [] });
+      (r.ngCount === 0 ? pendingByLine.get(key).clean : pendingByLine.get(key).ng).push(r);
+    });
+    // เรียง Line ที่มีรออนุมัติเยอะสุดไว้บนสุด
+    const pendingLineEntries = Array.from(pendingByLine.entries())
+      .sort((a, b) => (b[1].clean.length + b[1].ng.length) - (a[1].clean.length + a[1].ng.length));
 
     dash.innerHTML = `
       <div class="card">
@@ -241,17 +274,104 @@
 
       <div class="card">
         <div class="section-title">🟡 รายการที่รออนุมัติ (${pendingList.length})</div>
-        ${pendingList.length ? pendingList.map(r => `
-          <a class="pending-item" href="approve.html?id=${encodeURIComponent(r.id)}">
-            <div>
-              <div class="pending-item-jig">${esc(r.jig_name)}</div>
-              <div class="pending-item-meta">${esc(r.line_name || '')} · ${esc(r.insp_date)} · ผู้ตรวจ: ${esc(r.inspector)}</div>
-            </div>
-            <div class="pending-item-arrow">›</div>
-          </a>
+        ${pendingLineEntries.length ? pendingLineEntries.map(([lineName, g]) => `
+          <div class="pending-line-group">
+            <div class="pending-line-header">🏭 ${esc(lineName)} <span class="pending-line-count">(${g.clean.length + g.ng.length})</span></div>
+
+            ${g.clean.length ? `
+              <div class="pending-subgroup">
+                <div class="pending-subgroup-head">
+                  <span>✅ ไม่มี NG — อนุมัติทีเดียวได้ (${g.clean.length})</span>
+                  <button class="btn-bulk" data-line="${escAttr(lineName)}" data-ids="${g.clean.map(r => r.id).join(',')}">อนุมัติทั้งหมด</button>
+                </div>
+                ${g.clean.map(r => `
+                  <div class="pending-item" style="cursor:default;">
+                    <div>
+                      <div class="pending-item-jig">${esc(r.jig_name)}</div>
+                      <div class="pending-item-meta">${esc(r.insp_date)} · ผู้ตรวจ: ${esc(r.inspector)}</div>
+                    </div>
+                  </div>
+                `).join('')}
+              </div>
+            ` : ''}
+
+            ${g.ng.length ? `
+              <div class="pending-subgroup">
+                <div class="pending-subgroup-head"><span>🔴 มี NG — ต้องตรวจสอบทีละรายการ (${g.ng.length})</span></div>
+                ${g.ng.map(r => `
+                  <a class="pending-item" href="approve.html?id=${encodeURIComponent(r.id)}">
+                    <div>
+                      <div class="pending-item-jig">${esc(r.jig_name)}</div>
+                      <div class="pending-item-meta">${esc(r.insp_date)} · ผู้ตรวจ: ${esc(r.inspector)}</div>
+                    </div>
+                    <span class="pending-item-badge">NG ${r.ngCount}</span>
+                    <div class="pending-item-arrow">›</div>
+                  </a>
+                `).join('')}
+              </div>
+            ` : ''}
+          </div>
         `).join('') : `<div class="center-msg" style="padding:16px 0;">🎉 ไม่มีรายการค้างอนุมัติ</div>`}
       </div>
     `;
+
+    dash.querySelectorAll('.btn-bulk').forEach(btn => {
+      btn.addEventListener('click', () => bulkApprove(btn.dataset.line, btn.dataset.ids.split(',').filter(Boolean), btn));
+    });
+  }
+
+  function escAttr(s) {
+    return esc(s).replace(/"/g, '&quot;');
+  }
+
+  async function bulkApprove(lineName, ids, btn) {
+    if (!ids.length) return;
+    const name = prompt(`ยืนยันอนุมัติทั้งหมด ${ids.length} รายการของ Line "${lineName}" (ไม่มี NG ทุกรายการ)\n\nกรุณาพิมพ์ชื่อผู้อนุมัติ:`);
+    if (!name || !name.trim()) return;
+    const approverName = name.trim();
+
+    btn.disabled = true;
+    btn.textContent = 'กำลังบันทึก...';
+
+    const nowIso = new Date().toISOString();
+    const { error } = await sb.from('history').update({
+      approval_status: 'approved',
+      approved_by: approverName,
+      approved_at: nowIso,
+      sig_supervisor: approverName,
+    }).in('id', ids);
+
+    if (error) {
+      alert('บันทึกไม่สำเร็จ: ' + error.message);
+      btn.disabled = false;
+      btn.textContent = 'อนุมัติทั้งหมด';
+      return;
+    }
+
+    notifyBulkApproved(lineName, ids.length, approverName);
+    loadDashboard();
+    if (recordId && ids.includes(recordId)) loadReport(); // ถ้าหน้ารายละเอียดที่เปิดอยู่โดนอนุมัติไปด้วย ให้รีเฟรชตามด้วย
+  }
+
+  async function notifyBulkApproved(lineName, count, approverName) {
+    const text = `
+✅ *อนุมัติแบบกลุ่ม — ไม่มี NG*
+━━━━━━━━━━━━━━━━━━━━━━━━━
+🏭 Line: ${esc(lineName)}
+📦 จำนวน: ${count} รายการ (ผ่านทั้งหมด ไม่มี NG)
+👔 อนุมัติโดย: ${esc(approverName)}
+🕐 เมื่อ: ${new Date().toLocaleString('th-TH')}
+━━━━━━━━━━━━━━━━━━━━━━━━━
+`;
+    try {
+      await fetch(TELEGRAM_FUNCTION_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` },
+        body: JSON.stringify({ text, chatId: APPROVED_NOTIFY_CHAT_ID }),
+      });
+    } catch (e) {
+      console.error('notifyBulkApproved error:', e);
+    }
   }
 
   async function loadReport() {
