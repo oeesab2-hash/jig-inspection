@@ -167,6 +167,34 @@
     background: var(--ok-bg); color: var(--ok); border-radius: 10px;
     padding: 12px 14px; font-size: 13px; margin-top: 4px; line-height: 1.6;
   }
+
+  .hidden { display: none !important; }
+
+  /* ── Login screen ── */
+  .login-wrap { max-width: 360px; margin: 40px auto; padding: 0 16px; }
+  .login-card {
+    background: #fff; border-radius: 16px; border: 1px solid var(--border);
+    padding: 28px 22px; box-shadow: 0 2px 10px rgba(0,0,0,0.06);
+  }
+  .login-icon { font-size: 34px; text-align: center; margin-bottom: 6px; }
+  .login-title { font-size: 16px; font-weight: 700; text-align: center; color: var(--navy); margin-bottom: 18px; }
+  .login-error { font-size: 12px; color: var(--ng); margin-top: 8px; min-height: 16px; }
+
+  /* ── User bar (แสดงชื่อคนที่ login + ปุ่ม logout) ── */
+  .user-bar {
+    max-width: 560px; margin: 0 auto; padding: 10px 16px 0;
+    display: flex; align-items: center; justify-content: space-between;
+    font-size: 12px; color: var(--muted);
+  }
+  .user-bar b { color: var(--text); }
+  .btn-logout {
+    background: none; border: 1px solid var(--border); border-radius: 8px;
+    padding: 4px 10px; font-size: 11px; color: var(--muted); cursor: pointer; font-family: inherit;
+  }
+  .approver-display {
+    font-size: 13px; background: var(--bg); border-radius: 8px;
+    padding: 8px 12px; margin-bottom: 4px;
+  }
 </style>
 </head>
 <body>
@@ -175,11 +203,32 @@
     <p>บริษัท ซัมมิท โอโต บอดี้ อินดัสตรี จำกัด (สาขาอยุธยา)</p>
   </header>
 
-  <div class="wrap">
-    <div id="dashboard">
-      <div class="center-msg"><div class="spinner"></div>กำลังโหลดภาพรวม...</div>
+  <!-- ── หน้า Login (โชว์ถ้ายังไม่ได้ login) ── -->
+  <div id="login-screen" class="login-wrap">
+    <div class="login-card">
+      <div class="login-icon">🔐</div>
+      <div class="login-title">เข้าสู่ระบบหัวหน้างาน</div>
+      <label class="field-label">ชื่อผู้ใช้ (Username)</label>
+      <input type="text" id="login-username" placeholder="เช่น somchai" autocomplete="username">
+      <label class="field-label">รหัสผ่าน</label>
+      <input type="password" id="login-password" placeholder="รหัสผ่าน" autocomplete="current-password">
+      <button class="btn btn-approve" id="btn-login">เข้าสู่ระบบ</button>
+      <div class="login-error" id="login-error"></div>
     </div>
-    <div id="app"></div>
+  </div>
+
+  <!-- ── เนื้อหาหลัก (โชว์หลัง login สำเร็จ) ── -->
+  <div id="main-content" class="hidden">
+    <div class="user-bar">
+      <span>👤 <b id="user-bar-name"></b></span>
+      <button class="btn-logout" id="btn-logout">ออกจากระบบ</button>
+    </div>
+    <div class="wrap">
+      <div id="dashboard">
+        <div class="center-msg"><div class="spinner"></div>กำลังโหลดภาพรวม...</div>
+      </div>
+      <div id="app"></div>
+    </div>
   </div>
 
 <script>
@@ -188,6 +237,11 @@
   const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
   const TELEGRAM_FUNCTION_URL = `${SUPABASE_URL}/functions/v1/send-telegram`;
   const APPROVED_NOTIFY_CHAT_ID = '-5170940793'; // กลุ่ม Telegram ที่แจ้งผล "อนุมัติแล้ว"
+
+  // ── Supervisor session (เก็บไว้ใน localStorage ไม่ต้อง login ใหม่ทุกครั้งที่เปิดลิงก์) ──
+  const SESSION_KEY = 'jig_supervisor_session';
+  let supervisorSession = null;
+  try { supervisorSession = JSON.parse(localStorage.getItem(SESSION_KEY) || 'null'); } catch (e) { supervisorSession = null; }
 
   const app = document.getElementById('app');
   const params = new URLSearchParams(window.location.search);
@@ -326,9 +380,8 @@
 
   async function bulkApprove(lineName, ids, btn) {
     if (!ids.length) return;
-    const name = prompt(`ยืนยันอนุมัติทั้งหมด ${ids.length} รายการของ Line "${lineName}" (ไม่มี NG ทุกรายการ)\n\nกรุณาพิมพ์ชื่อผู้อนุมัติ:`);
-    if (!name || !name.trim()) return;
-    const approverName = name.trim();
+    const approverName = supervisorSession.full_name;
+    if (!confirm(`ยืนยันอนุมัติทั้งหมด ${ids.length} รายการของ Line "${lineName}" (ไม่มี NG ทุกรายการ)\n\nอนุมัติในนาม: ${approverName}`)) return;
 
     btn.disabled = true;
     btn.textContent = 'กำลังบันทึก...';
@@ -468,8 +521,7 @@
 
     box.innerHTML = `
       <div class="section-title">✍️ อนุมัติรายงานนี้</div>
-      <label class="field-label">ชื่อผู้อนุมัติ (หัวหน้างาน)</label>
-      <input type="text" id="approver-name" placeholder="พิมพ์ชื่อ-นามสกุล">
+      <div class="approver-display">อนุมัติในนาม: <strong>${esc(supervisorSession.full_name)}</strong></div>
       <label class="field-label">ความเห็นเพิ่มเติม (ถ้ามี)</label>
       <textarea id="approver-comment" placeholder="เช่น รับทราบ NG แล้ว ให้ทีมซ่อมเข้าแก้ไขภายในวันนี้"></textarea>
       <button class="btn btn-approve" id="btn-approve">✅ อนุมัติรายงานนี้</button>
@@ -480,17 +532,10 @@
   }
 
   async function approveReport(row) {
-    const nameEl = document.getElementById('approver-name');
     const commentEl = document.getElementById('approver-comment');
     const msgEl = document.getElementById('approve-msg');
     const btn = document.getElementById('btn-approve');
-    const name = nameEl.value.trim();
-
-    if (!name) {
-      msgEl.textContent = 'กรุณากรอกชื่อผู้อนุมัติก่อน';
-      nameEl.focus();
-      return;
-    }
+    const name = supervisorSession.full_name;
 
     btn.disabled = true;
     btn.textContent = 'กำลังบันทึก...';
@@ -560,11 +605,85 @@ ${row.supervisor_comment ? `💬 ความเห็น: ${esc(row.supervisor_
     }
   }
 
-  loadDashboard();
-  loadReport();
+  // ── Login / Logout / Session gating ──
+  function showLoginScreen() {
+    document.getElementById('login-screen').classList.remove('hidden');
+    document.getElementById('main-content').classList.add('hidden');
+  }
 
-  // รีเฟรชภาพรวมอัตโนมัติทุก 30 วิ — เพราะหน้างานตรวจ JIG พร้อมกันหลายจุด ข้อมูลจะเข้ามาเรื่อยๆ
-  setInterval(loadDashboard, 30000);
+  function showMainContent() {
+    document.getElementById('login-screen').classList.add('hidden');
+    document.getElementById('main-content').classList.remove('hidden');
+    document.getElementById('user-bar-name').textContent = supervisorSession.full_name;
+    startApp();
+  }
+
+  async function doLogin() {
+    const userEl = document.getElementById('login-username');
+    const passEl = document.getElementById('login-password');
+    const errEl = document.getElementById('login-error');
+    const btn = document.getElementById('btn-login');
+    const username = userEl.value.trim();
+    const password = passEl.value;
+
+    if (!username || !password) {
+      errEl.textContent = 'กรุณากรอกชื่อผู้ใช้และรหัสผ่าน';
+      return;
+    }
+
+    btn.disabled = true;
+    btn.textContent = 'กำลังตรวจสอบ...';
+    errEl.textContent = '';
+
+    const { data, error } = await sb.rpc('verify_supervisor_login', {
+      p_username: username,
+      p_password: password,
+    });
+
+    btn.disabled = false;
+    btn.textContent = 'เข้าสู่ระบบ';
+
+    if (error) {
+      console.error('Login error:', error);
+      errEl.textContent = 'เกิดข้อผิดพลาดในการตรวจสอบ';
+      return;
+    }
+
+    if (!data || !data.length) {
+      errEl.textContent = 'ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง';
+      passEl.value = '';
+      return;
+    }
+
+    supervisorSession = { id: data[0].id, full_name: data[0].full_name };
+    localStorage.setItem(SESSION_KEY, JSON.stringify(supervisorSession));
+    showMainContent();
+  }
+
+  function doLogout() {
+    localStorage.removeItem(SESSION_KEY);
+    supervisorSession = null;
+    document.getElementById('login-username').value = '';
+    document.getElementById('login-password').value = '';
+    showLoginScreen();
+  }
+
+  document.getElementById('btn-login').addEventListener('click', doLogin);
+  document.getElementById('login-password').addEventListener('keydown', e => { if (e.key === 'Enter') doLogin(); });
+  document.getElementById('btn-logout').addEventListener('click', doLogout);
+
+  function startApp() {
+    loadDashboard();
+    loadReport();
+    // รีเฟรชภาพรวมอัตโนมัติทุก 30 วิ — เพราะหน้างานตรวจ JIG พร้อมกันหลายจุด ข้อมูลจะเข้ามาเรื่อยๆ
+    setInterval(loadDashboard, 30000);
+  }
+
+  if (supervisorSession && supervisorSession.id) {
+    showMainContent();
+  } else {
+    showLoginScreen();
+  }
 </script>
 </body>
 </html>
