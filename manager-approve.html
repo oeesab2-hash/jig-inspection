@@ -110,6 +110,17 @@
     background: var(--navy); border-radius: 8px; padding: 6px 10px; white-space: nowrap;
   }
 
+  .back-link {
+    display: inline-block; font-size: 13px; font-weight: 600; color: var(--navy);
+    text-decoration: none; padding: 10px 4px; margin-bottom: 4px;
+  }
+  .back-link:hover { text-decoration: underline; }
+
+  summary.section-title { list-style: none; user-select: none; }
+  summary.section-title::-webkit-details-marker { display: none; }
+  summary.section-title::after { content: '▾'; float: right; color: var(--muted); font-size: 12px; }
+  details[open] summary.section-title::after { content: '▴'; }
+
   .pending-line-group { margin-bottom: 18px; }
   .pending-line-group:last-child { margin-bottom: 0; }
   .pending-line-header {
@@ -222,6 +233,14 @@
 
   async function loadDashboard() {
     const dash = document.getElementById('dashboard');
+
+    // ถ้ากำลังดูรายงานเจาะจงอยู่ (มี id) ไม่ต้องโหลด/แสดงภาพรวมทั้งหมด — โชว์แค่ลิงก์กลับ
+    // เพื่อให้เห็นรายละเอียด + ปุ่มอนุมัติได้ทันทีโดยไม่ต้องเลื่อนผ่านภาพรวมยาวๆ
+    if (recordId) {
+      dash.innerHTML = `<a class="back-link" href="manager-approve.html">← กลับไปหน้ารายการที่รออนุมัติ</a>`;
+      return;
+    }
+
     const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
     // หน้านี้ดูเฉพาะรายงานที่ "หัวหน้างานอนุมัติแล้ว" เท่านั้น (approval_status = 'approved')
     // ที่เหลือรอผู้จัดการฝ่ายผลิตอนุมัติต่อ (manager_approval_status)
@@ -450,13 +469,17 @@
       </div>` : ''}
 
       <div class="card">
-        <div class="section-title">📝 หัวข้อตรวจทั้งหมด (${items.length})</div>
-        ${items.map(i => `
-          <div class="item-row">
-            <div class="item-label">${esc(i.label)}</div>
-            <div class="item-status ${statusClass(i.status)}">${statusLabel(i.status)}</div>
+        <details>
+          <summary class="section-title" style="cursor:pointer;">📝 หัวข้อตรวจทั้งหมด (${items.length}) — แตะเพื่อดู</summary>
+          <div style="margin-top:8px;">
+            ${items.map(i => `
+              <div class="item-row">
+                <div class="item-label">${esc(i.label)}</div>
+                <div class="item-status ${statusClass(i.status)}">${statusLabel(i.status)}</div>
+              </div>
+            `).join('')}
           </div>
-        `).join('')}
+        </details>
       </div>
 
       ${row.notes ? `
