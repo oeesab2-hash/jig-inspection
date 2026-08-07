@@ -1435,3 +1435,216 @@ h1, h2, h3, h4, label, button, input, select, textarea, p, span, div {
 .pdf-notes { font-size: 12px; margin-top: 10px; color: #111827; }
 .pdf-sig-row { display: flex; justify-content: space-around; margin-top: 46px; font-size: 12px; text-align: center; }
 .pdf-sig-line { border-top: 1px solid #111827; padding-top: 4px; min-width: 140px; }
+
+/* ══════════════════════════════════════════════════════════
+   ISO/IATF 16949 PDF REPORT — Styles (append on top of base)
+   ══════════════════════════════════════════════════════════ */
+
+/* ─── Root container ─────────────────────────────────────── */
+.pdf-export-root {
+  position: fixed;
+  top: 0;
+  left: -99999px;
+  width: 794px;          /* A4 @ 96dpi */
+  background: #ffffff;
+  color: #111827;
+  font-family: 'Noto Sans Thai', 'Sarabun', 'Leelawadee UI', Tahoma, sans-serif;
+  padding: 0;
+  box-sizing: border-box;
+  font-size: 11px;
+}
+.pdf-export-root * { box-sizing: border-box; }
+
+/* ─── ISO outer border (document frame) ─────────────────── */
+.pdf-page {
+  border: 2px solid #1e3a5f;
+  margin: 10px;
+  padding: 0;
+}
+
+/* ─── HEADER BLOCK ──────────────────────────────────────── */
+.pdf-header-block {
+  display: grid;
+  grid-template-columns: 90px 1fr 200px;
+  border-bottom: 2px solid #1e3a5f;
+}
+.pdf-header-logo-cell {
+  border-right: 1px solid #1e3a5f;
+  display: flex; align-items: center; justify-content: center;
+  padding: 8px;
+}
+.pdf-company-logo { width: 64px; height: 64px; object-fit: contain; }
+.pdf-header-title-cell {
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  padding: 8px 12px; border-right: 1px solid #1e3a5f;
+}
+.pdf-company-th { font-size: 13px; font-weight: 700; color: #1e3a5f; }
+.pdf-company-en { font-size: 9px; color: #64748b; letter-spacing: 0.3px; margin-bottom: 6px; }
+.pdf-title { font-size: 16px; font-weight: 800; color: #111827; }
+.pdf-subtitle { font-size: 10px; color: #374151; margin-top: 2px; }
+.pdf-header-doc-cell {
+  display: grid; grid-template-rows: 1fr 1fr 1fr;
+  font-size: 9.5px;
+}
+.pdf-doc-row {
+  display: flex; align-items: center;
+  border-bottom: 1px solid #d1d5db; padding: 3px 8px; gap: 4px;
+}
+.pdf-doc-row:last-child { border-bottom: none; }
+.pdf-doc-label { color: #6b7280; min-width: 52px; font-weight: 600; }
+.pdf-doc-value { color: #111827; font-weight: 700; font-family: 'Outfit', monospace; font-size: 9px; }
+
+/* ─── TRACEABILITY / META ROW ───────────────────────────── */
+.pdf-meta-block {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  border-bottom: 1px solid #cbd5e1;
+  background: #f8fafc;
+}
+.pdf-meta-cell {
+  padding: 5px 10px;
+  border-right: 1px solid #e2e8f0;
+  font-size: 9.5px;
+}
+.pdf-meta-cell:last-child { border-right: none; }
+.pdf-meta-label { color: #6b7280; font-weight: 600; font-size: 8.5px; text-transform: uppercase; letter-spacing: 0.4px; }
+.pdf-meta-value { color: #111827; font-weight: 700; font-size: 11px; margin-top: 1px; }
+
+/* ─── SCOPE / PART INFO ROW ─────────────────────────────── */
+.pdf-scope-block {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  border-bottom: 2px solid #1e3a5f;
+  background: #1e3a5f;
+}
+.pdf-scope-cell {
+  padding: 4px 10px;
+  border-right: 1px solid #2d5a8e;
+  font-size: 9px; color: #e2e8f0;
+}
+.pdf-scope-cell:last-child { border-right: none; }
+.pdf-scope-label { font-weight: 600; text-transform: uppercase; letter-spacing: 0.3px; opacity: 0.75; font-size: 8px; }
+.pdf-scope-value { font-weight: 700; color: #ffffff; font-size: 10px; margin-top: 1px; }
+
+/* ─── INSPECTION TABLE ──────────────────────────────────── */
+.pdf-table-wrap { padding: 0; }
+.pdf-table {
+  width: 100%; border-collapse: collapse;
+  font-size: 10.5px; margin: 0;
+}
+.pdf-table thead tr {
+  background: #1e293b; color: #ffffff;
+}
+.pdf-table th {
+  padding: 6px 8px; font-weight: 600; font-size: 9.5px;
+  border-right: 1px solid #334155;
+  text-align: center;
+}
+.pdf-table th:last-child { border-right: none; }
+.pdf-table td {
+  padding: 5px 8px; border-bottom: 1px solid #e5e7eb;
+  border-right: 1px solid #f0f0f0;
+  vertical-align: middle;
+}
+.pdf-table td:last-child { border-right: none; }
+.pdf-table tbody tr:nth-child(even) { background: #f8fafc; }
+.pdf-row-ok      { background: #dcfce7 !important; }
+.pdf-row-ng      { background: #fee2e2 !important; }
+.pdf-row-fixed   { background: #fef9c3 !important; }
+.pdf-row-pending { background: #f8f8f8 !important; }
+
+/* status badge inside table */
+.pdf-status-badge {
+  display: inline-block; padding: 1px 7px; border-radius: 10px;
+  font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.3px;
+}
+.pdf-badge-ok    { background: #16a34a; color: #fff; }
+.pdf-badge-ng    { background: #dc2626; color: #fff; }
+.pdf-badge-fixed { background: #d97706; color: #fff; }
+
+/* spec / tolerance cells */
+.pdf-spec-cell   { text-align: center; font-family: 'Outfit', monospace; font-size: 9.5px; }
+.pdf-value-cell  { text-align: center; font-family: 'Outfit', monospace; font-size: 10px; font-weight: 700; }
+.pdf-value-ok    { color: #15803d; }
+.pdf-value-ng    { color: #dc2626; }
+
+/* ─── SUMMARY / RESULT BLOCK ────────────────────────────── */
+.pdf-result-block {
+  display: grid; grid-template-columns: 1fr 1fr 1fr 2fr;
+  border-top: 2px solid #1e3a5f; border-bottom: 1px solid #cbd5e1;
+  background: #f8fafc;
+}
+.pdf-result-cell {
+  padding: 6px 10px; border-right: 1px solid #e2e8f0; text-align: center;
+}
+.pdf-result-cell:last-child { border-right: none; text-align: left; }
+.pdf-result-label { font-size: 8px; font-weight: 600; text-transform: uppercase; color: #6b7280; }
+.pdf-result-num   { font-size: 22px; font-weight: 800; line-height: 1; margin-top: 2px; }
+.pdf-result-ok    { color: #15803d; }
+.pdf-result-ng    { color: #dc2626; }
+.pdf-result-total { color: #1e3a5f; }
+.pdf-result-verdict {
+  font-size: 14px; font-weight: 800; padding: 4px 0;
+}
+.pdf-verdict-pass { color: #15803d; }
+.pdf-verdict-fail { color: #dc2626; }
+
+/* ─── NOTES ─────────────────────────────────────────────── */
+.pdf-notes-block {
+  padding: 6px 10px; font-size: 10px; color: #111827;
+  border-bottom: 1px solid #e2e8f0; min-height: 28px;
+}
+.pdf-notes-label { font-weight: 700; color: #1e3a5f; margin-right: 6px; }
+
+/* ─── SUPERVISOR COMMENT BOX ────────────────────────────── */
+.pdf-supervisor-block {
+  display: grid; grid-template-columns: 1fr;
+  border-bottom: 1px solid #cbd5e1;
+  padding: 5px 10px; font-size: 10px; min-height: 26px;
+}
+.pdf-supervisor-label { font-weight: 700; color: #7c3aed; margin-right: 6px; font-size: 9px; text-transform: uppercase; }
+
+/* ─── SIGNATURE / APPROVAL BLOCK ───────────────────────── */
+.pdf-sig-block {
+  display: grid; grid-template-columns: 1fr 1fr 1fr;
+  border-top: 1px solid #cbd5e1;
+}
+.pdf-sig-cell {
+  padding: 10px 12px; border-right: 1px solid #e2e8f0; text-align: center;
+}
+.pdf-sig-cell:last-child { border-right: none; }
+.pdf-sig-role { font-size: 9px; font-weight: 700; text-transform: uppercase;
+  color: #6b7280; letter-spacing: 0.4px; margin-bottom: 22px; }
+.pdf-sig-name {
+  border-top: 1px solid #374151; padding-top: 4px; font-size: 10px;
+  font-weight: 600; min-height: 18px; color: #111827;
+}
+.pdf-sig-approval-badge {
+  display: inline-block; margin-top: 4px; padding: 1px 8px;
+  border-radius: 10px; font-size: 8px; font-weight: 700;
+}
+.pdf-approval-pending  { background: #fef3c7; color: #92400e; border: 1px solid #fbbf24; }
+.pdf-approval-approved { background: #dcfce7; color: #14532d; border: 1px solid #16a34a; }
+
+/* ─── FOOTER ISO/IATF COMPLIANCE BAR ───────────────────── */
+.pdf-footer-block {
+  background: #1e3a5f; color: #e2e8f0;
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 4px 10px; font-size: 8px; font-family: 'Outfit', monospace;
+}
+.pdf-footer-std { color: #93c5fd; font-weight: 700; }
+.pdf-footer-gps { color: #a5f3fc; }
+.pdf-footer-page { color: #cbd5e1; }
+
+/* ─── PRINT MEDIA ───────────────────────────────────────── */
+@media print {
+  .pdf-export-root {
+    position: static !important;
+    left: 0 !important;
+    width: 100% !important;
+    margin: 0 !important;
+  }
+  .pdf-page { border: 1px solid #1e3a5f !important; margin: 0 !important; }
+  @page { size: A4; margin: 8mm; }
+}

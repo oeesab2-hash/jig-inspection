@@ -2436,105 +2436,277 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
   }
 
   function buildPdfReportHtml(record) {
-    const rows = record.items.map((item, i) => `
-      <tr class="${statusRowClass(item.status)}">
-        <td>${i + 1}</td>
-        <td>${escHtml(item.label)}</td>
-        <td>${item.value != null ? escHtml(String(item.value)) + (item.unit ? ' ' + escHtml(item.unit) : '') : ''}</td>
-        <td>${statusLabel(item.status)}</td>
-        <td>${item.note ? escHtml(item.note) : ''}</td>
-      </tr>`).join('');
+    // ── Document ID (ISO requirement: unique traceable ID) ──
+    const docId = 'RPT-' + (record.id || '').toString().slice(-8).toUpperCase();
+    const revLevel = 'Rev.01';
+    const docDate  = new Date(record.timestamp).toLocaleDateString('th-TH', { year:'numeric', month:'2-digit', day:'2-digit' });
+    const docTime  = new Date(record.timestamp).toLocaleTimeString('th-TH', { hour:'2-digit', minute:'2-digit' });
+
+    // ── Result Summary ──
+    const okCount    = record.items.filter(i => i.status === 'ok' || i.status === 'fixed').length;
+    const ngCount    = record.items.filter(i => i.status === 'ng').length;
+    const totalCount = record.items.length;
+    const allPass    = ngCount === 0;
+
+    // ── GPS ──
+    const gpsText = record.gps && record.gps.status === 'success'
+      ? `${record.gps.latitude.toFixed(6)}, ${record.gps.longitude.toFixed(6)} (±${Math.round(record.gps.accuracy)}m)`
+      : 'N/A';
+
+    // ── Approval ──
+    const isApproved = record.approvalStatus === 'approved';
+    const approvalBadgeClass = isApproved ? 'pdf-approval-approved' : 'pdf-approval-pending';
+    const approvalText = isApproved
+      ? `✅ Approved — ${escHtml(record.approvedBy || '')} (${record.approvedAt ? new Date(record.approvedAt).toLocaleDateString('th-TH') : ''})`
+      : '🟡 Pending Approval';
+
+    // ── Table rows (ISO/IATF: include spec LSL/USL + Actual Value + Status Badge) ──
+    const rows = record.items.map((item, i) => {
+      const hasSpec  = item.type === 'numeric' || (item.min != null && item.max != null);
+      const specStr  = hasSpec ? `${item.min ?? '—'} ~ ${item.max ?? '—'}${item.unit ? ' ' + escHtml(item.unit) : ''}` : '—';
+      const valueStr = item.value != null ? `${item.value}${item.unit ? ' ' + escHtml(item.unit) : ''}` : '—';
+      const valueClass = item.value != null
+        ? (item.status === 'ok' || item.status === 'fixed' ? 'pdf-value-ok' : 'pdf-value-ng')
+        : '';
+      const badge = item.status === 'ok'    ? '<span class="pdf-status-badge pdf-badge-ok">OK</span>'
+                  : item.status === 'ng'    ? '<span class="pdf-status-badge pdf-badge-ng">NG</span>'
+                  : item.status === 'fixed' ? '<span class="pdf-status-badge pdf-badge-fixed">FIXED</span>'
+                  : '—';
+      const rowCls = statusRowClass(item.status);
+      return `
+        <tr class="${rowCls}">
+          <td style="text-align:center;font-weight:700">${i + 1}</td>
+          <td>${escHtml(item.label)}<br><span style="font-size:8.5px;color:#6b7280">${escHtml(item.sub || '')}</span></td>
+          <td style="text-align:center;font-size:9px;color:#475569">${escHtml(item.method || '—')}</td>
+          <td class="pdf-spec-cell">${specStr}</td>
+          <td class="pdf-value-cell ${valueClass}">${valueStr}</td>
+          <td style="text-align:center">${badge}</td>
+          <td style="font-size:9px">${item.note ? escHtml(item.note) : ''}</td>
+        </tr>`;
+    }).join('');
 
     return `
-      <div class="pdf-company-header">
-        <img class="pdf-company-logo" src="${SUMMIT_LOGO_B64}" alt="Summit Logo" />
-        <div class="pdf-company-name">
-          <div class="pdf-company-th">บริษัท ซัมมิท โอโต บอดี้ อินดัสตรี จำกัด (สาขาอยุธยา)</div>
-          <div class="pdf-company-en">SUMMIT AUTO BODY INDUSTRY CO., LTD. (AYUTTHAYA BRANCH)</div>
+      <div class="pdf-page">
+
+        <!-- ── HEADER: Logo / Title / Document Control ── -->
+        <div class="pdf-header-block">
+          <div class="pdf-header-logo-cell">
+            <img class="pdf-company-logo" src="${SUMMIT_LOGO_B64}" alt="Summit Logo" />
+          </div>
+          <div class="pdf-header-title-cell">
+            <div class="pdf-company-th">บริษัท ซัมมิท โอโต บอดี้ อินดัสตรี จำกัด (สาขาอยุธยา)</div>
+            <div class="pdf-company-en">SUMMIT AUTO BODY INDUSTRY CO., LTD. (AYUTTHAYA BRANCH)</div>
+            <div class="pdf-title">JIG Inspection Report</div>
+            <div class="pdf-subtitle">ใบรายงานการตรวจสอบสภาพจิ๊ก</div>
+          </div>
+          <div class="pdf-header-doc-cell">
+            <div class="pdf-doc-row">
+              <span class="pdf-doc-label">Doc No.</span>
+              <span class="pdf-doc-value">${escHtml(docId)}</span>
+            </div>
+            <div class="pdf-doc-row">
+              <span class="pdf-doc-label">Rev. Level</span>
+              <span class="pdf-doc-value">${revLevel}</span>
+            </div>
+            <div class="pdf-doc-row">
+              <span class="pdf-doc-label">Issue Date</span>
+              <span class="pdf-doc-value">${docDate} ${docTime}</span>
+            </div>
+          </div>
         </div>
-      </div>
-      <div class="pdf-title">JIG Inspection Report</div>
-      <div class="pdf-subtitle">${escHtml(record.jigName)} | ${escHtml(record.jigDocNo)}</div>
-      <div class="pdf-subtitle">${escHtml(record.deptName)} &gt; ${escHtml(record.lineName)}</div>
-      <div class="pdf-meta-row">
-        <span>ผู้ตรวจสอบ: ${escHtml(record.inspector)}</span>
-        <span>วันที่: ${escHtml(record.date)}  เวลา: ${new Date(record.timestamp).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' })}  กะ: ${escHtml(record.shift)}</span>
-      </div>
-      <table class="pdf-table">
-        <thead>
-          <tr><th style="width:6%">No</th><th style="width:38%">จุดตรวจสอบ</th><th style="width:14%">ค่าที่วัดได้</th><th style="width:18%">สถานะ</th><th style="width:24%">หมายเหตุ</th></tr>
-        </thead>
-        <tbody>${rows}</tbody>
-      </table>
-      ${record.notes ? `<div class="pdf-notes"><strong>หมายเหตุ:</strong> ${escHtml(record.notes)}</div>` : ''}
-      ${record.supervisorComment ? `<div class="pdf-notes"><strong>ความเห็นหัวหน้างาน:</strong> ${escHtml(record.supervisorComment)}</div>` : ''}
-      <div class="pdf-sig-row">
-        <div>
-          <div>${record.sigInspector ? `( ${escHtml(record.sigInspector)} )` : '(\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0)'}</div>
-          <div class="pdf-sig-line">ผู้ตรวจสอบ</div>
+
+        <!-- ── TRACEABILITY: Inspector / Date / Shift / Approval ── -->
+        <div class="pdf-meta-block">
+          <div class="pdf-meta-cell">
+            <div class="pdf-meta-label">Inspector / ผู้ตรวจสอบ</div>
+            <div class="pdf-meta-value">${escHtml(record.inspector)}</div>
+          </div>
+          <div class="pdf-meta-cell">
+            <div class="pdf-meta-label">Inspection Date / วันที่</div>
+            <div class="pdf-meta-value">${escHtml(record.date)}</div>
+          </div>
+          <div class="pdf-meta-cell">
+            <div class="pdf-meta-label">Shift / กะ</div>
+            <div class="pdf-meta-value">${escHtml(record.shift)}</div>
+          </div>
+          <div class="pdf-meta-cell">
+            <div class="pdf-meta-label">Approval Status / สถานะ</div>
+            <div class="pdf-meta-value" style="font-size:9px">${approvalText}</div>
+          </div>
         </div>
-        <div>
-          <div>${record.sigSupervisor ? `( ${escHtml(record.sigSupervisor)} )` : '(\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0)'}</div>
-          <div class="pdf-sig-line">หัวหน้างาน${record.approvalStatus === 'approved' ? ' — ✅ อนุมัติแล้ว' : ' — 🟡 รออนุมัติ'}</div>
+
+        <!-- ── SCOPE: Dept / Line / Part No. ── -->
+        <div class="pdf-scope-block">
+          <div class="pdf-scope-cell">
+            <div class="pdf-scope-label">Department / แผนก</div>
+            <div class="pdf-scope-value">${escHtml(record.deptName || '—')}</div>
+          </div>
+          <div class="pdf-scope-cell">
+            <div class="pdf-scope-label">Production Line / ไลน์</div>
+            <div class="pdf-scope-value">${escHtml(record.lineName || '—')}</div>
+          </div>
+          <div class="pdf-scope-cell">
+            <div class="pdf-scope-label">JIG ID / Part Number</div>
+            <div class="pdf-scope-value">${escHtml(record.jigDocNo || record.jigId)} — ${escHtml(record.jigName || '—')}</div>
+          </div>
         </div>
+
+        <!-- ── INSPECTION TABLE (ISO: LSL / USL / Actual / Status) ── -->
+        <div class="pdf-table-wrap">
+          <table class="pdf-table">
+            <thead>
+              <tr>
+                <th style="width:5%">No.</th>
+                <th style="width:26%;text-align:left">Inspection Item / จุดตรวจสอบ</th>
+                <th style="width:13%">Method / วิธี</th>
+                <th style="width:13%">Spec / เกณฑ์</th>
+                <th style="width:10%">Actual / ค่าจริง</th>
+                <th style="width:8%">Result</th>
+                <th style="width:25%;text-align:left">Remark / หมายเหตุ</th>
+              </tr>
+            </thead>
+            <tbody>${rows}</tbody>
+          </table>
+        </div>
+
+        <!-- ── RESULT SUMMARY ── -->
+        <div class="pdf-result-block">
+          <div class="pdf-result-cell">
+            <div class="pdf-result-label">Total / ทั้งหมด</div>
+            <div class="pdf-result-num pdf-result-total">${totalCount}</div>
+          </div>
+          <div class="pdf-result-cell">
+            <div class="pdf-result-label">PASS / ผ่าน</div>
+            <div class="pdf-result-num pdf-result-ok">${okCount}</div>
+          </div>
+          <div class="pdf-result-cell">
+            <div class="pdf-result-label">FAIL / NG</div>
+            <div class="pdf-result-num pdf-result-ng">${ngCount}</div>
+          </div>
+          <div class="pdf-result-cell" style="display:flex;align-items:center;padding:10px">
+            <div>
+              <div class="pdf-result-label">Overall Result / ผลการตรวจ</div>
+              <div class="pdf-result-verdict ${allPass ? 'pdf-verdict-pass' : 'pdf-verdict-fail'}">
+                ${allPass ? '✅ PASS — ผ่านทุกจุดตรวจ' : '❌ FAIL — พบ NG ' + ngCount + ' จุด'}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ── NOTES ── -->
+        <div class="pdf-notes-block">
+          <span class="pdf-notes-label">📝 Remarks / ความเห็นหัวหน้างาน:</span>
+          ${record.notes ? escHtml(record.notes) : ''}
+          ${record.supervisorComment ? `&nbsp;|&nbsp;<span style="color:#7c3aed;font-weight:600">${escHtml(record.supervisorComment)}</span>` : ''}
+        </div>
+
+        <!-- ── SIGNATURE (3-way: Inspector / Supervisor / QC Manager) ── -->
+        <div class="pdf-sig-block">
+          <div class="pdf-sig-cell">
+            <div class="pdf-sig-role">Inspector / ผู้ตรวจสอบ</div>
+            <div class="pdf-sig-name">${record.sigInspector ? escHtml(record.sigInspector) : '\u00A0'}</div>
+            <div style="font-size:8px;color:#6b7280;margin-top:2px">${escHtml(record.inspector)}</div>
+            <div style="font-size:8px;color:#6b7280">${escHtml(record.date)}</div>
+          </div>
+          <div class="pdf-sig-cell">
+            <div class="pdf-sig-role">Supervisor / หัวหน้างาน</div>
+            <div class="pdf-sig-name">${record.sigSupervisor ? escHtml(record.sigSupervisor) : '\u00A0'}</div>
+            <div style="margin-top:4px">
+              <span class="pdf-sig-approval-badge ${approvalBadgeClass}">
+                ${isApproved ? '✅ อนุมัติแล้ว' : '🟡 รออนุมัติ'}
+              </span>
+            </div>
+          </div>
+          <div class="pdf-sig-cell">
+            <div class="pdf-sig-role">QC Manager / ผู้จัดการ QC</div>
+            <div class="pdf-sig-name">&nbsp;</div>
+            <div style="font-size:8px;color:#9ca3af;margin-top:4px">Authorized Signature</div>
+          </div>
+        </div>
+
+        <!-- ── ISO/IATF FOOTER ── -->
+        <div class="pdf-footer-block">
+          <span class="pdf-footer-std">📋 ISO 9001:2015 | IATF 16949:2016 — Quality Management System</span>
+          <span class="pdf-footer-gps">📍 GPS: ${gpsText}</span>
+          <span class="pdf-footer-page">Doc: ${escHtml(docId)} | ${docDate}</span>
+        </div>
+
       </div>`;
   }
+
 
   async function generatePdf(record) {
     if (!window.jspdf) { toast('jsPDF โหลดไม่สำเร็จ', 'ng'); return; }
     if (!window.html2canvas) { toast('html2canvas โหลดไม่สำเร็จ', 'ng'); return; }
     const { jsPDF } = window.jspdf;
 
-    // Build the report off-screen as real HTML so the browser's
-    // Thai web fonts are used for shaping/rendering.
+    toast('⏳ กำลังสร้าง PDF (ISO/IATF format)...', 'ok');
+
+    // ── ISO Document ID ──
+    const docId   = 'RPT-' + (record.id || '').toString().slice(-8).toUpperCase();
+    const stamp   = record.date || new Date().toISOString().slice(0, 10);
+    const filename = `JIG-RPT_${docId}_${escHtml(record.jigId)}_${stamp}_${escHtml(record.shift)}.pdf`;
+
     const container = document.createElement('div');
     container.className = 'pdf-export-root';
     container.innerHTML = buildPdfReportHtml(record);
     document.body.appendChild(container);
 
-    // Make sure Thai web fonts are actually loaded before rasterizing,
-    // otherwise html2canvas may capture a fallback font mid-swap.
-    try {
-      if (document.fonts && document.fonts.ready) await document.fonts.ready;
-    } catch (e) { /* ignore */ }
-
-    // รอให้โลโก้บริษัท decode เสร็จก่อน ไม่งั้นบางเบราว์เซอร์อาจ capture ไปตอนรูปยังไม่ขึ้น
+    // ── ให้ font load เสร็จก่อน ──
+    try { if (document.fonts && document.fonts.ready) await document.fonts.ready; } catch (e) { /* ignore */ }
+    // ── รอโลโก้ decode ──
     try {
       const logoImg = container.querySelector('.pdf-company-logo');
       if (logoImg && logoImg.decode) await logoImg.decode();
     } catch (e) { /* ignore */ }
+    // ── รอ browser layout เสร็จ ──
+    await new Promise(r => setTimeout(r, 150));
 
     try {
+      // scale:3 ให้ความคมชัดสำหรับงาน QMS
       const canvas = await html2canvas(container, {
-        scale: 2,
+        scale: 3,
         backgroundColor: '#ffffff',
-        useCORS: true
+        useCORS: true,
+        allowTaint: false,
+        logging: false,
       });
 
-      const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
-      const pageW = doc.internal.pageSize.getWidth();
-      const pageH = doc.internal.pageSize.getHeight();
+      const doc  = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+      const pageW = doc.internal.pageSize.getWidth();   // 210 mm
+      const pageH = doc.internal.pageSize.getHeight();  // 297 mm
+
+      // ─── Add PDF metadata (ISO: traceable document properties) ───
+      doc.setProperties({
+        title:    `JIG Inspection Report — ${record.jigName}`,
+        subject:  `IATF 16949 / ISO 9001 Inspection Record`,
+        author:   record.inspector || 'System',
+        keywords: `JIG,Inspection,IATF,${record.jigId},${record.date}`,
+        creator:  'Summit JIG Inspection System v2',
+      });
+
+      const margin  = 8; // mm margin each side
+      const printW  = pageW - margin * 2;
       const imgData = canvas.toDataURL('image/jpeg', 0.95);
-      const imgW = pageW;
-      const imgH = (canvas.height * imgW) / canvas.width;
+      const imgH    = (canvas.height * printW) / canvas.width;
 
       let heightLeft = imgH;
-      let position = 0;
-      doc.addImage(imgData, 'JPEG', 0, position, imgW, imgH);
-      heightLeft -= pageH;
+      let position   = margin;
+      doc.addImage(imgData, 'JPEG', margin, position, printW, imgH);
+      heightLeft -= (pageH - margin);
 
       while (heightLeft > 0) {
-        position -= pageH;
+        position -= (pageH - margin * 2);
         doc.addPage();
-        doc.addImage(imgData, 'JPEG', 0, position, imgW, imgH);
-        heightLeft -= pageH;
+        doc.addImage(imgData, 'JPEG', margin, position + margin, printW, imgH);
+        heightLeft -= (pageH - margin * 2);
       }
 
-      doc.save(`JIG_${record.jigId}_${record.date}_${record.shift}.pdf`);
-      toast('📄 ส่งออก PDF สำเร็จ!', 'ok');
+      doc.save(filename);
+      toast(`📄 PDF บันทึกสำเร็จ! (${filename})`, 'ok');
     } catch (err) {
       console.error('generatePdf error:', err);
-      toast('สร้าง PDF ไม่สำเร็จ', 'ng');
+      toast('สร้าง PDF ไม่สำเร็จ: ' + (err.message || err), 'ng');
     } finally {
       document.body.removeChild(container);
     }
