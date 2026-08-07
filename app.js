@@ -36,6 +36,27 @@
     : null;
 
   /* ══════════════════════════════════════
+     LOCAL-MODE PASSWORD BOOTSTRAP (ใช้เฉพาะตอน Supabase ต่อไม่ติด — dev/offline เท่านั้น)
+     ห้ามฝังรหัสผ่าน default แบบคงที่ในซอร์สโค้ดเด็ดขาด เพราะไฟล์นี้เปิดดูได้จาก View Source
+     แทนที่ด้วยการสุ่มรหัสผ่านใหม่ทุกครั้งที่ยังไม่เคยตั้งรหัส แล้วแสดงให้ admin เห็น "ครั้งเดียว"
+     ผ่าน console เพื่อให้ไปตั้งรหัสใหม่ทันที — ป้องกันไม่ให้มีรหัสผ่านที่รู้กันทั่วไปฝังอยู่ในโค้ด
+  ══════════════════════════════════════ */
+  function ensureLocalAdminPassBootstrap() {
+    if (sb) return; // ใช้ Supabase RPC เป็นหลัก ไม่ต้องสุ่ม local pass
+    if (localStorage.getItem('jig_admin_pass')) return; // ตั้งรหัสไว้แล้ว ไม่ต้องสุ่มซ้ำ
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789';
+    let generated = '';
+    for (let i = 0; i < 10; i++) generated += chars[Math.floor(Math.random() * chars.length)];
+    localStorage.setItem('jig_admin_pass', generated);
+    console.warn(
+      '%c[Local mode] ยังไม่เคยตั้งรหัสผ่าน Admin — สุ่มรหัสผ่านเริ่มต้นให้แล้ว (แสดงครั้งนี้ครั้งเดียว):\n' +
+      generated +
+      '\nกรุณาเข้าสู่ระบบด้วยรหัสนี้แล้วรีบเปลี่ยนรหัสผ่านทันทีในเมนู Admin',
+      'font-weight:bold;font-size:14px;color:#b45309'
+    );
+  }
+
+  /* ══════════════════════════════════════
      TELEGRAM — notification บันทึกผล
      ⚠️ ห้ามใส่ Bot Token ตรงนี้เด็ดขาด — client-side โค้ดทุกไฟล์เปิด View Source ดูได้
      ใครก็ตามที่เข้าเว็บนี้จะเห็น token ทันทีถ้าใส่ตรงนี้ (เคยเกิดปัญหานี้มาแล้ว)
@@ -582,6 +603,8 @@
      INIT
   ══════════════════════════════════════ */
   async function init() {
+    ensureLocalAdminPassBootstrap();
+
     // ─── ตรวจสอบ GPS Status ───
     await checkGPSStatusOnLoad();
     
@@ -1599,11 +1622,10 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
       
       // ถ้า Supabase ไม่พร้อม ให้บันทึกใน localStorage (fallback)
       if (!sb) {
-        const localPass = localStorage.getItem('jig_admin_pass') || 'admin1234';
+        const localPass = localStorage.getItem('jig_admin_pass');
         if (oldPass !== localPass) { toast('รหัสผ่านเดิมไม่ถูกต้อง', 'ng'); return; }
         localStorage.setItem('jig_admin_pass', newPass);
         $('adm-old-pass').value = ''; $('adm-new-pass').value = '';
-        $('hint-default-pass').classList.add('hidden');
         toast('เปลี่ยนรหัสผ่าน Admin แล้ว (local mode)', 'ok');
         return;
       }
@@ -1629,7 +1651,6 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
         }
 
         $('adm-old-pass').value = ''; $('adm-new-pass').value = '';
-        $('hint-default-pass').classList.add('hidden');
         toast('เปลี่ยนรหัสผ่าน Admin แล้ว', 'ok');
       } catch (e) {
         console.error('Change password error:', e);
