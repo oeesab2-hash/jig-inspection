@@ -597,6 +597,17 @@
     }[c]));
   }
 
+  // Format an ISO timestamp as "D/M/YYYY HH:MM น." (Thai locale) — ใช้ให้ช่องลายเซ็นทั้ง 3
+  // (ผู้ตรวจสอบ / หัวหน้างาน / ผู้จัดการฝ่ายผลิต) ในหน้า PDF โชว์วันที่-เวลาแบบเดียวกัน
+  function sigDateTime(iso) {
+    if (!iso) return '';
+    const d = new Date(iso);
+    if (isNaN(d.getTime())) return '';
+    const date = d.toLocaleDateString('th-TH', { day: 'numeric', month: 'numeric', year: 'numeric' });
+    const time = d.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' });
+    return `${date} ${time} น.`;
+  }
+
   // Generate a collision-safe unique ID for records (history entries, etc).
   // Date.now() alone can collide if two records are created within the
   // same millisecond (e.g. the mock-data generator, or fast repeat taps).
@@ -2647,7 +2658,7 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
             <div class="pdf-sig-role">Inspector / ผู้ตรวจสอบ</div>
             <div class="pdf-sig-name">${record.sigInspector ? escHtml(record.sigInspector) : '\u00A0'}</div>
             <div style="font-size:8px;color:#6b7280;margin-top:2px">${escHtml(record.inspector)}</div>
-            <div style="font-size:8px;color:#6b7280">${escHtml(record.date)}</div>
+            <div style="font-size:8px;color:#6b7280">${sigDateTime(record.timestamp)}</div>
           </div>
           <div class="pdf-sig-cell">
             <div class="pdf-sig-role">Supervisor / หัวหน้างาน</div>
@@ -2657,13 +2668,14 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
                 ${record.approvalStatus === 'approved' ? '✅ อนุมัติแล้ว' : '🟡 รออนุมัติ'}
               </span>
             </div>
+            <div style="font-size:8px;color:#6b7280;margin-top:2px">${record.approvalStatus === 'approved' ? sigDateTime(record.approvedAt) : '\u00A0'}</div>
           </div>
           <div class="pdf-sig-cell">
             <div class="pdf-sig-role">Production Manager / ผู้จัดการฝ่ายผลิต</div>
             <div class="pdf-sig-name">${record.managerApprovedBy ? escHtml(record.managerApprovedBy) : '\u00A0'}</div>
             ${stage.key === 'approved'
               ? `<div style="margin-top:4px"><span class="pdf-sig-approval-badge pdf-approval-approved">✅ อนุมัติแล้ว</span></div>
-                 <div style="font-size:8px;color:#6b7280;margin-top:2px">${record.managerApprovedAt ? new Date(record.managerApprovedAt).toLocaleDateString('th-TH') : ''}</div>`
+                 <div style="font-size:8px;color:#6b7280;margin-top:2px">${sigDateTime(record.managerApprovedAt)}</div>`
               : `<div style="margin-top:4px"><span class="pdf-sig-approval-badge ${stage.key === 'partial' ? 'pdf-approval-pending' : 'pdf-approval-pending'}">🟡 รออนุมัติ</span></div>
                  <div style="font-size:8px;color:#9ca3af;margin-top:4px">Authorized Signature</div>`}
           </div>
