@@ -2600,7 +2600,7 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
           ${record.supervisorComment ? `&nbsp;|&nbsp;<span style="color:#7c3aed;font-weight:600">${escHtml(record.supervisorComment)}</span>` : ''}
         </div>
 
-        <!-- ── SIGNATURE (3-way: Inspector / Supervisor / QC Manager) ── -->
+        <!-- ── SIGNATURE (3-way: Inspector / Supervisor / Production Manager) ── -->
         <div class="pdf-sig-block">
           <div class="pdf-sig-cell">
             <div class="pdf-sig-role">Inspector / ผู้ตรวจสอบ</div>
@@ -2618,7 +2618,7 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
             </div>
           </div>
           <div class="pdf-sig-cell">
-            <div class="pdf-sig-role">QC Manager / ผู้จัดการ QC</div>
+            <div class="pdf-sig-role">Production Manager / ผู้จัดการฝ่ายผลิต</div>
             <div class="pdf-sig-name">&nbsp;</div>
             <div style="font-size:8px;color:#9ca3af;margin-top:4px">Authorized Signature</div>
           </div>
