@@ -32,7 +32,9 @@
   const SUPABASE_URL = 'https://otytpzimuyaqagvxvexf.supabase.co';
   const SUPABASE_ANON_KEY = 'sb_publishable_rB72Iheym4RdAsP6pngwHA_7pOFNWj5';
   const sb = (window.supabase && window.supabase.createClient)
-    ? window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
+    ? window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+        global: { headers: { apikey: SUPABASE_ANON_KEY } }, // ⚠️ กันปัญหา "No API key found in request" — บังคับแนบ header เอง
+      })
     : null;
 
   /* ══════════════════════════════════════
