@@ -30,11 +30,9 @@
      แล้ว insert ชุดปัจจุบันใหม่ทั้งหมด (ง่าย ตรงไปตรงมา เหมาะกับทีมขนาดเล็ก)
   ══════════════════════════════════════ */
   const SUPABASE_URL = 'https://otytpzimuyaqagvxvexf.supabase.co';
-  const SUPABASE_ANON_KEY = 'sb_publishable_rB72Iheym4RdAsP6pngwHA_7pOFNWj5';
+  const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im90eXRwemltdXlhcWFndnh2ZXhmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ1MTMyMDEsImV4cCI6MjEwMDA4OTIwMX0.QQVIcDkIByAgyFTHrF7AmcZ-l-HfvLnbU8jh3Vnwyjw';
   const sb = (window.supabase && window.supabase.createClient)
-    ? window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-        global: { headers: { apikey: SUPABASE_ANON_KEY } }, // ⚠️ กันปัญหา "No API key found in request" — บังคับแนบ header เอง
-      })
+    ? window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
     : null;
 
   /* ══════════════════════════════════════
