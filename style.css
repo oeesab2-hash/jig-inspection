@@ -494,6 +494,7 @@ h1, h2, h3, h4, label, button, input, select, textarea, p, span, div {
 .badge.ng    { background: var(--ng-bg);    color: var(--ng);    border: 1px solid var(--ng-border); }
 .badge.pending  { background: hsla(38, 92%, 50%, 0.15); color: hsl(38, 92%, 50%); border: 1px solid hsla(38, 92%, 50%, 0.4); }
 .badge.approved { background: var(--ok-bg); color: var(--ok); border: 1px solid var(--ok-border); }
+.badge.partial  { background: var(--accent-dim); color: var(--accent); border: 1px solid var(--accent); }
 .hi-supervisor-comment {
   font-size: 12px; color: var(--text-main); background: var(--bg-input);
   border-left: 3px solid var(--accent); border-radius: 6px;
@@ -1626,6 +1627,7 @@ h1, h2, h3, h4, label, button, input, select, textarea, p, span, div {
 }
 .pdf-approval-pending  { background: #fef3c7; color: #92400e; border: 1px solid #fbbf24; }
 .pdf-approval-approved { background: #dcfce7; color: #14532d; border: 1px solid #16a34a; }
+.pdf-approval-partial  { background: #dbeafe; color: #1e3a8a; border: 1px solid #3b82f6; }
 
 /* ─── FOOTER ISO/IATF COMPLIANCE BAR ───────────────────── */
 .pdf-footer-block {

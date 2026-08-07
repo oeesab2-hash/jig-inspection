@@ -217,11 +217,16 @@
         insp_date: h.date, shift: h.shift, month: h.month,
         inspector: h.inspector, notes: h.notes, items: h.items || [],
         sig_inspector: h.sigInspector, sig_supervisor: h.sigSupervisor,
-        // ─── Approval Workflow ───
+        // ─── Approval Workflow (Stage 1: หัวหน้างาน) ───
         approval_status: h.approvalStatus || 'pending',
         approved_by: h.approvedBy || null,
         approved_at: h.approvedAt || null,
         supervisor_comment: h.supervisorComment || null,
+        // ─── Approval Workflow (Stage 2: ผู้จัดการฝ่ายผลิต) ───
+        manager_approval_status: h.managerApprovalStatus || 'pending',
+        manager_approved_by: h.managerApprovedBy || null,
+        manager_approved_at: h.managerApprovedAt || null,
+        manager_comment: h.managerComment || null,
         // ─── GPS Data ───
         gps_latitude: h.gps?.latitude || null,
         gps_longitude: h.gps?.longitude || null,
@@ -271,11 +276,16 @@
         date: row.insp_date, shift: row.shift, month: row.month,
         inspector: row.inspector, notes: row.notes, items: row.items || [],
         sigInspector: row.sig_inspector, sigSupervisor: row.sig_supervisor,
-        // ─── Approval Workflow ───
+        // ─── Approval Workflow (Stage 1: หัวหน้างาน) ───
         approvalStatus: row.approval_status || 'pending',
         approvedBy: row.approved_by || null,
         approvedAt: row.approved_at || null,
         supervisorComment: row.supervisor_comment || null,
+        // ─── Approval Workflow (Stage 2: ผู้จัดการฝ่ายผลิต) ───
+        managerApprovalStatus: row.manager_approval_status || 'pending',
+        managerApprovedBy: row.manager_approved_by || null,
+        managerApprovedAt: row.manager_approved_at || null,
+        managerComment: row.manager_comment || null,
         // ─── GPS Data ───
         gps: row.gps_latitude ? {
           latitude: row.gps_latitude,
@@ -1159,6 +1169,11 @@
       approvedBy:         null,
       approvedAt:         null,
       supervisorComment:  null,
+      // ─── Approval Workflow (Stage 2) — รอผู้จัดการฝ่ายผลิตกดอนุมัติต่อ หลังหัวหน้างานอนุมัติแล้ว ───
+      managerApprovalStatus: 'pending',
+      managerApprovedBy:     null,
+      managerApprovedAt:     null,
+      managerComment:        null,
       // ─── GPS Data ─── (บันทึกพิกัด - ตรวจสอบแล้วว่าได้พิกัด)
       gps: {
         latitude:   gpsData.latitude,
@@ -1252,9 +1267,11 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
           'ผ่าน (OK)': okCount,
           'ไม่ผ่าน (NG)': ngCount,
           'หมายเหตุ': h.notes || '',
-          'สถานะอนุมัติ': h.approvalStatus === 'approved' ? 'อนุมัติแล้ว' : 'รออนุมัติ',
-          'ผู้อนุมัติ': h.approvedBy || '',
+          'สถานะอนุมัติ': approvalStage(h).label,
+          'หัวหน้างานอนุมัติโดย': h.approvedBy || '',
           'ความเห็นหัวหน้างาน': h.supervisorComment || '',
+          'ผู้จัดการฝ่ายผลิตอนุมัติโดย': h.managerApprovedBy || '',
+          'ความเห็นผู้จัดการฝ่ายผลิต': h.managerComment || '',
           'GPS ละติจูด': h.gps?.latitude ?? '',
           'GPS ลองจิจูด': h.gps?.longitude ?? '',
         };
@@ -2367,13 +2384,20 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
           <div class="hi-badges">
             <span class="badge ok">OK ${okCount}</span>
             ${ngItems.length ? `<span class="badge ng">NG ${ngItems.length}</span>` : ''}
-            ${h.approvalStatus === 'approved'
-              ? `<span class="badge approved" title="อนุมัติโดย ${escHtml(h.approvedBy || '')} เมื่อ ${h.approvedAt ? new Date(h.approvedAt).toLocaleString('th-TH') : ''}">✅ อนุมัติแล้ว</span>`
-              : `<span class="badge pending">🟡 รออนุมัติ</span>`}
+            ${(() => {
+              const st = approvalStage(h);
+              const title = st.key === 'approved'
+                ? `หัวหน้างาน: ${escHtml(h.approvedBy || '')} · ผู้จัดการฝ่ายผลิต: ${escHtml(h.managerApprovedBy || '')} เมื่อ ${h.managerApprovedAt ? new Date(h.managerApprovedAt).toLocaleString('th-TH') : ''}`
+                : st.key === 'partial'
+                ? `หัวหน้างานอนุมัติโดย ${escHtml(h.approvedBy || '')} เมื่อ ${h.approvedAt ? new Date(h.approvedAt).toLocaleString('th-TH') : ''} — รอผู้จัดการฝ่ายผลิต`
+                : '';
+              return `<span class="badge ${st.badgeClass}" title="${title}">${st.badge}</span>`;
+            })()}
             ${gpsDisplay}
           </div>
         </div>
         ${h.supervisorComment ? `<div class="hi-supervisor-comment">💬 <strong>ความเห็นหัวหน้างาน:</strong> ${escHtml(h.supervisorComment)}</div>` : ''}
+        ${h.managerComment ? `<div class="hi-supervisor-comment">💬 <strong>ความเห็นผู้จัดการฝ่ายผลิต:</strong> ${escHtml(h.managerComment)}</div>` : ''}
         ${ngItems.length ? `<div class="hi-ng-list">
           ${ngItems.map(i => `<div class="hi-ng-item">
             <span class="hi-ng-label">❌ ข้อ ${i.id}: ${escHtml(i.label || '')}</span>
@@ -2422,6 +2446,18 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
        This guarantees correct Thai rendering regardless
        of what fonts jsPDF ships with.
   ══════════════════════════════════════ */
+  // ── ระบุ stage การอนุมัติ (2 ขั้นตอน: หัวหน้างาน → ผู้จัดการฝ่ายผลิต) ──
+  // ใช้ร่วมกันทั้งใน History badge / PDF / Excel export เพื่อให้สถานะตรงกันทุกที่
+  function approvalStage(h) {
+    const supApproved = h.approvalStatus === 'approved';
+    const mgrApproved  = h.managerApprovalStatus === 'approved';
+    if (supApproved && mgrApproved) {
+      return { key: 'approved', label: 'อนุมัติครบแล้ว', badge: '✅ อนุมัติครบแล้ว', badgeClass: 'approved' };
+    } else if (supApproved && !mgrApproved) {
+      return { key: 'partial', label: 'รอผู้จัดการฝ่ายผลิตอนุมัติ', badge: '🔵 รอผู้จัดการฝ่ายผลิต', badgeClass: 'partial' };
+    }
+    return { key: 'pending', label: 'รอหัวหน้างานอนุมัติ', badge: '🟡 รอหัวหน้างาน', badgeClass: 'pending' };
+  }
   function statusLabel(status) {
     return status === 'ok' ? 'ผ่าน (OK)'
          : status === 'ng' ? 'ไม่ผ่าน (NG)'
@@ -2453,11 +2489,16 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
       ? `${record.gps.latitude.toFixed(6)}, ${record.gps.longitude.toFixed(6)} (±${Math.round(record.gps.accuracy)}m)`
       : 'N/A';
 
-    // ── Approval ──
-    const isApproved = record.approvalStatus === 'approved';
-    const approvalBadgeClass = isApproved ? 'pdf-approval-approved' : 'pdf-approval-pending';
-    const approvalText = isApproved
-      ? `✅ Approved — ${escHtml(record.approvedBy || '')} (${record.approvedAt ? new Date(record.approvedAt).toLocaleDateString('th-TH') : ''})`
+    // ── Approval (2-stage: หัวหน้างาน → ผู้จัดการฝ่ายผลิต) ──
+    const stage = approvalStage(record);
+    const isApproved = stage.key === 'approved'; // อนุมัติครบทุกขั้นตอนแล้วเท่านั้น
+    const approvalBadgeClass = stage.key === 'approved' ? 'pdf-approval-approved'
+                              : stage.key === 'partial'  ? 'pdf-approval-partial'
+                              : 'pdf-approval-pending';
+    const approvalText = stage.key === 'approved'
+      ? `✅ Approved — หัวหน้างาน: ${escHtml(record.approvedBy || '')} / ผู้จัดการฝ่ายผลิต: ${escHtml(record.managerApprovedBy || '')} (${record.managerApprovedAt ? new Date(record.managerApprovedAt).toLocaleDateString('th-TH') : ''})`
+      : stage.key === 'partial'
+      ? `🔵 หัวหน้างานอนุมัติแล้ว (${escHtml(record.approvedBy || '')}) — รอผู้จัดการฝ่ายผลิตอนุมัติ`
       : '🟡 Pending Approval';
 
     // ── Table rows (ISO/IATF: include spec LSL/USL + Actual Value + Status Badge) ──
@@ -2612,17 +2653,25 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
             <div class="pdf-sig-role">Supervisor / หัวหน้างาน</div>
             <div class="pdf-sig-name">${record.sigSupervisor ? escHtml(record.sigSupervisor) : '\u00A0'}</div>
             <div style="margin-top:4px">
-              <span class="pdf-sig-approval-badge ${approvalBadgeClass}">
-                ${isApproved ? '✅ อนุมัติแล้ว' : '🟡 รออนุมัติ'}
+              <span class="pdf-sig-approval-badge ${record.approvalStatus === 'approved' ? 'pdf-approval-approved' : 'pdf-approval-pending'}">
+                ${record.approvalStatus === 'approved' ? '✅ อนุมัติแล้ว' : '🟡 รออนุมัติ'}
               </span>
             </div>
           </div>
           <div class="pdf-sig-cell">
             <div class="pdf-sig-role">Production Manager / ผู้จัดการฝ่ายผลิต</div>
-            <div class="pdf-sig-name">&nbsp;</div>
-            <div style="font-size:8px;color:#9ca3af;margin-top:4px">Authorized Signature</div>
+            <div class="pdf-sig-name">${record.managerApprovedBy ? escHtml(record.managerApprovedBy) : '\u00A0'}</div>
+            ${stage.key === 'approved'
+              ? `<div style="margin-top:4px"><span class="pdf-sig-approval-badge pdf-approval-approved">✅ อนุมัติแล้ว</span></div>
+                 <div style="font-size:8px;color:#6b7280;margin-top:2px">${record.managerApprovedAt ? new Date(record.managerApprovedAt).toLocaleDateString('th-TH') : ''}</div>`
+              : `<div style="margin-top:4px"><span class="pdf-sig-approval-badge ${stage.key === 'partial' ? 'pdf-approval-pending' : 'pdf-approval-pending'}">🟡 รออนุมัติ</span></div>
+                 <div style="font-size:8px;color:#9ca3af;margin-top:4px">Authorized Signature</div>`}
           </div>
         </div>
+        ${record.managerComment ? `<div class="pdf-notes-block" style="margin-top:6px">
+          <span class="pdf-notes-label">📝 ความเห็นผู้จัดการฝ่ายผลิต:</span>
+          <span style="color:#7c3aed;font-weight:600">${escHtml(record.managerComment)}</span>
+        </div>` : ''}
 
         <!-- ── ISO/IATF FOOTER ── -->
         <div class="pdf-footer-block">

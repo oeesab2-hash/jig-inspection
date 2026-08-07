@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
-<title>อนุมัติรายงานการตรวจ JIG</title>
+<title>อนุมัติรายงานการตรวจ JIG — ผู้จัดการฝ่ายผลิต</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Thai:wght@400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -176,7 +176,7 @@
 </head>
 <body>
   <header>
-    <h1>📋 อนุมัติรายงานการตรวจ JIG — หัวหน้างาน (ขั้นที่ 1)</h1>
+    <h1>📋 อนุมัติรายงานการตรวจ JIG — ผู้จัดการฝ่ายผลิต (ขั้นที่ 2)</h1>
     <p>บริษัท ซัมมิท โอโต บอดี้ อินดัสตรี จำกัด (สาขาอยุธยา)</p>
   </header>
 
@@ -192,9 +192,7 @@
   const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im90eXRwemltdXlhcWFndnh2ZXhmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ1MTMyMDEsImV4cCI6MjEwMDA4OTIwMX0.QQVIcDkIByAgyFTHrF7AmcZ-l-HfvLnbU8jh3Vnwyjw';
   const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
   const TELEGRAM_FUNCTION_URL = `${SUPABASE_URL}/functions/v1/send-telegram`;
-  const APPROVED_NOTIFY_CHAT_ID = '-5170940793'; // กลุ่ม Telegram ที่แจ้งผล "อนุมัติแล้ว" (แจ้งซ้ำตอนหัวหน้าอนุมัติ เพื่อให้ทุกคนตามงานได้)
-  // Telegram chat id ของกลุ่มผู้จัดการฝ่ายผลิต — แจ้งเตือนให้เข้ามาอนุมัติขั้นที่ 2
-  const MANAGER_NOTIFY_CHAT_ID = '-5415757971'; // กลุ่ม Telegram แจ้งผู้จัดการฝ่ายผลิตให้เข้ามาอนุมัติขั้นที่ 2
+  const APPROVED_NOTIFY_CHAT_ID = '-5170940793'; // กลุ่ม Telegram ที่แจ้งผล "อนุมัติครบทุกขั้นตอนแล้ว"
 
   const app = document.getElementById('app');
   const params = new URLSearchParams(window.location.search);
@@ -221,8 +219,11 @@
   async function loadDashboard() {
     const dash = document.getElementById('dashboard');
     const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+    // หน้านี้ดูเฉพาะรายงานที่ "หัวหน้างานอนุมัติแล้ว" เท่านั้น (approval_status = 'approved')
+    // ที่เหลือรอผู้จัดการฝ่ายผลิตอนุมัติต่อ (manager_approval_status)
     const { data, error } = await sb.from('history')
-      .select('id, jig_name, line_name, insp_date, ts, approval_status, inspector, items')
+      .select('id, jig_name, line_name, insp_date, ts, approval_status, manager_approval_status, inspector, items')
+      .eq('approval_status', 'approved')
       .gte('insp_date', since)
       .order('ts', { ascending: false });
 
@@ -236,21 +237,21 @@
   function renderDashboard(rows) {
     const dash = document.getElementById('dashboard');
 
-    // จัดกลุ่มตาม Line นับ pending / approved
+    // จัดกลุ่มตาม Line นับ pending / approved (นับเฉพาะขั้นผู้จัดการฝ่ายผลิต)
     const byLine = new Map();
     rows.forEach(r => {
       const key = r.line_name || 'ไม่ระบุ Line';
       if (!byLine.has(key)) byLine.set(key, { pending: 0, approved: 0 });
       const g = byLine.get(key);
-      if (r.approval_status === 'approved') g.approved++; else g.pending++;
+      if (r.manager_approval_status === 'approved') g.approved++; else g.pending++;
     });
     // เรียง Line ที่มีรออนุมัติเยอะสุดไว้บนสุด (สำคัญที่สุดก่อน)
     const lineRows = Array.from(byLine.entries()).sort((a, b) => b[1].pending - a[1].pending);
 
-    const totalPending = rows.filter(r => r.approval_status !== 'approved').length;
+    const totalPending = rows.filter(r => r.manager_approval_status !== 'approved').length;
     const totalApproved = rows.length - totalPending;
 
-    const pendingList = rows.filter(r => r.approval_status !== 'approved')
+    const pendingList = rows.filter(r => r.manager_approval_status !== 'approved')
       .map(r => ({ ...r, ngCount: (r.items || []).filter(i => i.status === 'ng').length }));
 
     // จัดกลุ่มรายการรออนุมัติตาม Line — ภายในแต่ละ Line แยกเป็น "ไม่มี NG" (อนุมัติทีเดียวได้)
@@ -267,12 +268,12 @@
 
     dash.innerHTML = `
       <div class="card">
-        <div class="section-title">📊 ภาพรวมการอนุมัติของหัวหน้างาน (30 วันล่าสุด)</div>
+        <div class="section-title">📊 ภาพรวมการอนุมัติของผู้จัดการฝ่ายผลิต (30 วันล่าสุด)</div>
         <div class="kpi-row">
-          <div class="kpi kpi-pending"><b>${totalPending}</b><span>รอหัวหน้าอนุมัติ</span></div>
-          <div class="kpi kpi-ok"><b>${totalApproved}</b><span>ผ่านหัวหน้าแล้ว</span></div>
+          <div class="kpi kpi-pending"><b>${totalPending}</b><span>รอผู้จัดการอนุมัติ</span></div>
+          <div class="kpi kpi-ok"><b>${totalApproved}</b><span>อนุมัติครบแล้ว</span></div>
         </div>
-        <div style="font-size:11px;color:var(--muted);margin-top:6px;">ℹ️ หลังหัวหน้าอนุมัติแล้ว ยังต้องรอผู้จัดการฝ่ายผลิตอนุมัติต่อ (ขั้นที่ 2) ก่อนจะถือว่าสมบูรณ์</div>
+        <div style="font-size:11px;color:var(--muted);margin-top:6px;">ℹ️ รายการทั้งหมดที่นี่ผ่านหัวหน้างานอนุมัติแล้ว รอผู้จัดการฝ่ายผลิตอนุมัติขั้นสุดท้าย</div>
         ${lineRows.length ? `
         <table class="line-table">
           <thead><tr><th>Line</th><th>รออนุมัติ</th><th>อนุมัติแล้ว</th></tr></thead>
@@ -289,7 +290,7 @@
       </div>
 
       <div class="card">
-        <div class="section-title">🟡 รายการที่รออนุมัติ (${pendingList.length})</div>
+        <div class="section-title">🔵 รายการที่รอผู้จัดการฝ่ายผลิตอนุมัติ (${pendingList.length})</div>
         ${pendingLineEntries.length ? pendingLineEntries.map(([lineName, g]) => `
           <div class="pending-line-group">
             <div class="pending-line-header">🏭 ${esc(lineName)} <span class="pending-line-count">(${g.clean.length + g.ng.length})</span></div>
@@ -315,7 +316,7 @@
               <div class="pending-subgroup">
                 <div class="pending-subgroup-head"><span>🔴 มี NG — ต้องตรวจสอบทีละรายการ (${g.ng.length})</span></div>
                 ${g.ng.map(r => `
-                  <a class="pending-item" href="approve.html?id=${encodeURIComponent(r.id)}">
+                  <a class="pending-item" href="manager-approve.html?id=${encodeURIComponent(r.id)}">
                     <div>
                       <div class="pending-item-jig">${esc(r.jig_name)}</div>
                       <div class="pending-item-meta">${esc(r.insp_date)} · ผู้ตรวจ: ${esc(r.inspector)}</div>
@@ -342,7 +343,7 @@
 
   async function bulkApprove(lineName, ids, btn) {
     if (!ids.length) return;
-    const name = prompt(`ยืนยันอนุมัติทั้งหมด ${ids.length} รายการของ Line "${lineName}" (ไม่มี NG ทุกรายการ)\n\nกรุณาพิมพ์ชื่อผู้อนุมัติ:`);
+    const name = prompt(`ยืนยันอนุมัติทั้งหมด ${ids.length} รายการของ Line "${lineName}" (ไม่มี NG ทุกรายการ)\n\nกรุณาพิมพ์ชื่อผู้อนุมัติ (ผู้จัดการฝ่ายผลิต):`);
     if (!name || !name.trim()) return;
     const approverName = name.trim();
 
@@ -351,10 +352,9 @@
 
     const nowIso = new Date().toISOString();
     const { error } = await sb.from('history').update({
-      approval_status: 'approved',
-      approved_by: approverName,
-      approved_at: nowIso,
-      sig_supervisor: approverName,
+      manager_approval_status: 'approved',
+      manager_approved_by: approverName,
+      manager_approved_at: nowIso,
     }).in('id', ids);
 
     if (error) {
@@ -364,20 +364,19 @@
       return;
     }
 
-    notifyBulkManagerPending(lineName, ids.length, approverName);
+    notifyBulkFullyApproved(lineName, ids.length, approverName);
     loadDashboard();
     if (recordId && ids.includes(recordId)) loadReport(); // ถ้าหน้ารายละเอียดที่เปิดอยู่โดนอนุมัติไปด้วย ให้รีเฟรชตามด้วย
   }
 
-  // ── แจ้งผู้จัดการฝ่ายผลิตหลังหัวหน้างานอนุมัติแบบกลุ่ม — ยังต้องผ่านอนุมัติขั้นที่ 2 ทุกใบเช่นกัน ──
-  async function notifyBulkManagerPending(lineName, count, approverName) {
-    const managerDashUrl = window.location.href.replace(/approve\.html.*$/, '').replace(/\/?$/, '/') + `manager-approve.html`;
+  // ── แจ้งผลอนุมัติครบทุกขั้นตอนแล้ว (อนุมัติแบบกลุ่มโดยผู้จัดการฝ่ายผลิต) ──
+  async function notifyBulkFullyApproved(lineName, count, approverName) {
     const text = `
-🔵 *รอผู้จัดการฝ่ายผลิตอนุมัติ (ขั้นที่ 2) — อนุมัติแบบกลุ่ม*
+✅ *อนุมัติครบทุกขั้นตอนแล้ว — อนุมัติแบบกลุ่ม*
 ━━━━━━━━━━━━━━━━━━━━━━━━━
 🏭 Line: ${esc(lineName)}
 📦 จำนวน: ${count} รายการ (ผ่านทั้งหมด ไม่มี NG)
-✅ หัวหน้างานอนุมัติแล้วโดย: ${esc(approverName)}
+🏭 ผู้จัดการฝ่ายผลิตอนุมัติโดย: ${esc(approverName)}
 🕐 เมื่อ: ${new Date().toLocaleString('th-TH')}
 ━━━━━━━━━━━━━━━━━━━━━━━━━
 `;
@@ -385,13 +384,10 @@
       await fetch(TELEGRAM_FUNCTION_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` },
-        body: JSON.stringify({
-          text, chatId: MANAGER_NOTIFY_CHAT_ID,
-          buttonUrl: managerDashUrl, buttonText: '✅ เปิดรายการรออนุมัติ (ผู้จัดการฝ่ายผลิต)',
-        }),
+        body: JSON.stringify({ text, chatId: APPROVED_NOTIFY_CHAT_ID }),
       });
     } catch (e) {
-      console.error('notifyBulkManagerPending error:', e);
+      console.error('notifyBulkFullyApproved error:', e);
     }
   }
 
@@ -490,27 +486,32 @@
       return;
     }
 
-    if (stage.key === 'partial') {
-      // หัวหน้างานอนุมัติแล้ว — รอผู้จัดการฝ่ายผลิต (อนุมัติที่หน้า manager-approve.html)
+    if (stage.key === 'pending') {
+      // หัวหน้างานยังไม่อนุมัติ — ผู้จัดการฝ่ายผลิตยังอนุมัติที่นี่ไม่ได้
       box.innerHTML = `
-        <div class="section-title">✅ หัวหน้างานอนุมัติแล้ว</div>
-        <div class="partial-box">
-          👔 อนุมัติโดย <strong>${esc(row.approved_by)}</strong><br>
-          เมื่อ ${row.approved_at ? new Date(row.approved_at).toLocaleString('th-TH') : '-'}
-          ${row.supervisor_comment ? `<br><br>💬 ความเห็น: ${esc(row.supervisor_comment)}` : ''}
-          <br><br>🔵 ขั้นต่อไป: รอผู้จัดการฝ่ายผลิตอนุมัติผ่านลิงก์ที่ส่งให้ทาง Telegram
+        <div class="section-title">⏸️ ยังอนุมัติไม่ได้</div>
+        <div class="partial-box" style="background:var(--pending-bg);color:var(--pending);">
+          🟡 รายงานนี้ยังไม่ผ่านการอนุมัติจากหัวหน้างาน<br>
+          ต้องรอหัวหน้างานอนุมัติก่อน (ขั้นที่ 1) จึงจะอนุมัติขั้นที่ 2 ได้ครับ
         </div>
       `;
       return;
     }
 
+    // stage.key === 'partial' → หัวหน้างานอนุมัติแล้ว รอผู้จัดการฝ่ายผลิตอนุมัติที่นี่
     box.innerHTML = `
-      <div class="section-title">✍️ อนุมัติรายงานนี้</div>
-      <label class="field-label">ชื่อผู้อนุมัติ (หัวหน้างาน)</label>
+      <div class="section-title">✅ หัวหน้างานอนุมัติแล้ว</div>
+      <div class="partial-box">
+        👔 อนุมัติโดย <strong>${esc(row.approved_by)}</strong><br>
+        เมื่อ ${row.approved_at ? new Date(row.approved_at).toLocaleString('th-TH') : '-'}
+        ${row.supervisor_comment ? `<br><br>💬 ความเห็นหัวหน้างาน: ${esc(row.supervisor_comment)}` : ''}
+      </div>
+      <div class="section-title" style="margin-top:16px;">✍️ อนุมัติรายงานนี้ (ผู้จัดการฝ่ายผลิต)</div>
+      <label class="field-label">ชื่อผู้อนุมัติ (ผู้จัดการฝ่ายผลิต)</label>
       <input type="text" id="approver-name" placeholder="พิมพ์ชื่อ-นามสกุล">
       <label class="field-label">ความเห็นเพิ่มเติม (ถ้ามี)</label>
-      <textarea id="approver-comment" placeholder="เช่น รับทราบ NG แล้ว ให้ทีมซ่อมเข้าแก้ไขภายในวันนี้"></textarea>
-      <button class="btn btn-approve" id="btn-approve">✅ อนุมัติรายงานนี้</button>
+      <textarea id="approver-comment" placeholder="เช่น รับทราบ อนุมัติให้ดำเนินการต่อ"></textarea>
+      <button class="btn btn-approve" id="btn-approve">✅ อนุมัติรายงานนี้ (ขั้นสุดท้าย)</button>
       <div id="approve-msg" style="font-size:12px; color:var(--ng); margin-top:8px;"></div>
     `;
 
@@ -536,40 +537,39 @@
 
     const nowIso = new Date().toISOString();
     const { error } = await sb.from('history').update({
-      approval_status: 'approved',
-      approved_by: name,
-      approved_at: nowIso,
-      supervisor_comment: commentEl.value.trim() || null,
-      sig_supervisor: name, // ให้ชื่อผู้อนุมัติกลายเป็นลายเซ็นหัวหน้างานในรายงาน/PDF ด้วย
+      manager_approval_status: 'approved',
+      manager_approved_by: name,
+      manager_approved_at: nowIso,
+      manager_comment: commentEl.value.trim() || null,
     }).eq('id', row.id);
 
     if (error) {
       btn.disabled = false;
-      btn.textContent = '✅ อนุมัติรายงานนี้';
+      btn.textContent = '✅ อนุมัติรายงานนี้ (ขั้นสุดท้าย)';
       msgEl.textContent = 'บันทึกไม่สำเร็จ: ' + error.message;
       return;
     }
 
-    row.approval_status = 'approved';
-    row.approved_by = name;
-    row.approved_at = nowIso;
-    row.supervisor_comment = commentEl.value.trim() || null;
+    row.manager_approval_status = 'approved';
+    row.manager_approved_by = name;
+    row.manager_approved_at = nowIso;
+    row.manager_comment = commentEl.value.trim() || null;
     renderApprovalCard(row);
-    document.querySelector('.status-badge').outerHTML = `<span class="status-badge status-partial">🔵 รอผู้จัดการฝ่ายผลิตอนุมัติ</span>`;
+    document.querySelector('.status-badge').outerHTML = `<span class="status-badge status-approved">✅ อนุมัติครบแล้ว</span>`;
 
-    notifyManagerPending(row); // ยิงแจ้งเตือนไปหาผู้จัดการฝ่ายผลิต พร้อมลิงก์ไปอนุมัติขั้นที่ 2 — ไม่ต้องรอผล ไม่บล็อกหน้าจอ
+    notifyFullyApproved(row); // ยิงแจ้งเตือนไปกลุ่ม "อนุมัติครบทุกขั้นตอนแล้ว" — ไม่ต้องรอผล ไม่บล็อกหน้าจอ
     loadDashboard(); // รีเฟรชภาพรวมด้านบนให้ตัวเลขอัปเดตทันที ไม่ต้องรอ reload หน้า
   }
 
-  // ── แจ้งผู้จัดการฝ่ายผลิตให้เข้ามาอนุมัติต่อ (ขั้นที่ 2) หลังหัวหน้างานอนุมัติแล้ว ──
-  async function notifyManagerPending(row) {
+  // ── แจ้งผลอนุมัติครบทุกขั้นตอนแล้ว (หัวหน้างาน + ผู้จัดการฝ่ายผลิต) ──
+  async function notifyFullyApproved(row) {
     const items = row.items || [];
     const okCount = items.filter(i => i.status === 'ok' || i.status === 'fixed').length;
     const ngCount = items.filter(i => i.status === 'ng').length;
     const time = row.ts ? new Date(row.ts).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' }) : '';
 
     const text = `
-🔵 *รอผู้จัดการฝ่ายผลิตอนุมัติ (ขั้นที่ 2)*
+✅ *อนุมัติครบทุกขั้นตอนแล้ว*
 ━━━━━━━━━━━━━━━━━━━━━━━━━
 *${esc(row.jig_name)}*
 ${row.jig_doc_no ? `_${esc(row.jig_doc_no)}_` : ''}
@@ -578,15 +578,11 @@ ${row.jig_doc_no ? `_${esc(row.jig_doc_no)}_` : ''}
 👤 ผู้ตรวจ: ${esc(row.inspector)}
 🔍 ผ่าน (OK): ${okCount}  ❌ ไม่ผ่าน (NG): ${ngCount}
 
-✅ หัวหน้างานอนุมัติแล้วโดย: ${esc(row.approved_by)}
-🕐 เมื่อ: ${new Date(row.approved_at).toLocaleString('th-TH')}
-${row.supervisor_comment ? `💬 ความเห็น: ${esc(row.supervisor_comment)}` : ''}
+👔 หัวหน้างาน: ${esc(row.approved_by)} (${row.approved_at ? new Date(row.approved_at).toLocaleString('th-TH') : '-'})
+🏭 ผู้จัดการฝ่ายผลิต: ${esc(row.manager_approved_by)} (${new Date(row.manager_approved_at).toLocaleString('th-TH')})
+${row.manager_comment ? `💬 ความเห็น: ${esc(row.manager_comment)}` : ''}
 ━━━━━━━━━━━━━━━━━━━━━━━━━
 `;
-
-    // ลิงก์หน้าอนุมัติของผู้จัดการฝ่ายผลิต — ใช้ path เดียวกับที่ deploy อยู่จริง
-    const managerUrl = window.location.href.replace(/approve\.html.*$/, '').replace(/\/?$/, '/')
-      + `manager-approve.html?id=${encodeURIComponent(row.id)}`;
 
     try {
       await fetch(TELEGRAM_FUNCTION_URL, {
@@ -595,14 +591,11 @@ ${row.supervisor_comment ? `💬 ความเห็น: ${esc(row.supervisor_
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
         },
-        body: JSON.stringify({
-          text, chatId: MANAGER_NOTIFY_CHAT_ID,
-          buttonUrl: managerUrl, buttonText: '✅ เปิดเพื่ออนุมัติ (ผู้จัดการฝ่ายผลิต)',
-        }),
+        body: JSON.stringify({ text, chatId: APPROVED_NOTIFY_CHAT_ID }),
       });
     } catch (e) {
-      console.error('notifyManagerPending error:', e);
-      // ไม่ต้องโชว์ error ให้หัวหน้างานเห็น — การอนุมัติบันทึกลง DB สำเร็จแล้ว แค่แจ้งเตือนอาจพลาด
+      console.error('notifyFullyApproved error:', e);
+      // ไม่ต้องโชว์ error ให้ผู้จัดการเห็น — การอนุมัติบันทึกลง DB สำเร็จแล้ว แค่แจ้งเตือนอาจพลาด
     }
   }
 
