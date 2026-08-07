@@ -228,7 +228,7 @@
     const mgrApproved  = row.manager_approval_status === 'approved';
     if (supApproved && mgrApproved) return { key: 'approved', label: '✅ อนุมัติครบแล้ว' };
     if (supApproved && !mgrApproved) return { key: 'partial', label: '🔵 รอผู้จัดการฝ่ายผลิตอนุมัติ' };
-    return { key: 'pending', label: '🟡 รอหัวหน้างานอนุมัติ' };
+    return { key: 'pending', label: '🟡 รอหัวหน้างานตรวจสอบ' };
   }
 
   async function loadDashboard() {
@@ -242,7 +242,7 @@
     }
 
     const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
-    // หน้านี้ดูเฉพาะรายงานที่ "หัวหน้างานอนุมัติแล้ว" เท่านั้น (approval_status = 'approved')
+    // หน้านี้ดูเฉพาะรายงานที่ "หัวหน้างานตรวจสอบแล้ว" เท่านั้น (approval_status = 'approved')
     // ที่เหลือรอผู้จัดการฝ่ายผลิตอนุมัติต่อ (manager_approval_status)
     const { data, error } = await sb.from('history')
       .select('id, jig_name, line_name, insp_date, ts, approval_status, manager_approval_status, inspector, items')
@@ -296,7 +296,7 @@
           <div class="kpi kpi-pending"><b>${totalPending}</b><span>รอผู้จัดการอนุมัติ</span></div>
           <div class="kpi kpi-ok"><b>${totalApproved}</b><span>อนุมัติครบแล้ว</span></div>
         </div>
-        <div style="font-size:11px;color:var(--muted);margin-top:6px;">ℹ️ รายการทั้งหมดที่นี่ผ่านหัวหน้างานอนุมัติแล้ว รอผู้จัดการฝ่ายผลิตอนุมัติขั้นสุดท้าย</div>
+        <div style="font-size:11px;color:var(--muted);margin-top:6px;">ℹ️ รายการทั้งหมดที่นี่ผ่านหัวหน้างานตรวจสอบแล้ว รอผู้จัดการฝ่ายผลิตอนุมัติขั้นสุดท้าย</div>
         ${lineRows.length ? `
         <table class="line-table">
           <thead><tr><th>Line</th><th>รออนุมัติ</th><th>อนุมัติแล้ว</th></tr></thead>
@@ -514,22 +514,22 @@
     }
 
     if (stage.key === 'pending') {
-      // หัวหน้างานยังไม่อนุมัติ — ผู้จัดการฝ่ายผลิตยังอนุมัติที่นี่ไม่ได้
+      // หัวหน้างานยังไม่ตรวจสอบ — ผู้จัดการฝ่ายผลิตยังอนุมัติที่นี่ไม่ได้
       box.innerHTML = `
         <div class="section-title">⏸️ ยังอนุมัติไม่ได้</div>
         <div class="partial-box" style="background:var(--pending-bg);color:var(--pending);">
-          🟡 รายงานนี้ยังไม่ผ่านการอนุมัติจากหัวหน้างาน<br>
-          ต้องรอหัวหน้างานอนุมัติก่อน (ขั้นที่ 1) จึงจะอนุมัติขั้นที่ 2 ได้ครับ
+          🟡 รายงานนี้ยังไม่ผ่านการตรวจสอบจากหัวหน้างาน<br>
+          ต้องรอหัวหน้างานตรวจสอบก่อน (ขั้นที่ 1) จึงจะอนุมัติขั้นที่ 2 ได้ครับ
         </div>
       `;
       return;
     }
 
-    // stage.key === 'partial' → หัวหน้างานอนุมัติแล้ว รอผู้จัดการฝ่ายผลิตอนุมัติที่นี่
+    // stage.key === 'partial' → หัวหน้างานตรวจสอบแล้ว รอผู้จัดการฝ่ายผลิตอนุมัติที่นี่
     box.innerHTML = `
-      <div class="section-title">✅ หัวหน้างานอนุมัติแล้ว</div>
+      <div class="section-title">✅ หัวหน้างานตรวจสอบแล้ว</div>
       <div class="partial-box">
-        👔 อนุมัติโดย <strong>${esc(row.approved_by)}</strong><br>
+        👔 ตรวจสอบโดย <strong>${esc(row.approved_by)}</strong><br>
         เมื่อ ${row.approved_at ? new Date(row.approved_at).toLocaleString('th-TH') : '-'}
         ${row.supervisor_comment ? `<br><br>💬 ความเห็นหัวหน้างาน: ${esc(row.supervisor_comment)}` : ''}
       </div>

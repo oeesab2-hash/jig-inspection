@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
-<title>อนุมัติรายงานการตรวจ JIG</title>
+<title>ตรวจสอบรายงานการตรวจ JIG</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Thai:wght@400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -191,7 +191,7 @@
 </head>
 <body>
   <header>
-    <h1>📋 อนุมัติรายงานการตรวจ JIG — หัวหน้างาน (ขั้นที่ 1)</h1>
+    <h1>📋 ตรวจสอบรายงานการตรวจ JIG — หัวหน้างาน (ขั้นที่ 1)</h1>
     <p>บริษัท ซัมมิท โอโต บอดี้ อินดัสตรี จำกัด (สาขาอยุธยา)</p>
   </header>
 
@@ -207,7 +207,7 @@
   const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im90eXRwemltdXlhcWFndnh2ZXhmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ1MTMyMDEsImV4cCI6MjEwMDA4OTIwMX0.QQVIcDkIByAgyFTHrF7AmcZ-l-HfvLnbU8jh3Vnwyjw';
   const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
   const TELEGRAM_FUNCTION_URL = `${SUPABASE_URL}/functions/v1/send-telegram`;
-  const APPROVED_NOTIFY_CHAT_ID = '-5170940793'; // กลุ่ม Telegram ที่แจ้งผล "อนุมัติแล้ว" (แจ้งซ้ำตอนหัวหน้าอนุมัติ เพื่อให้ทุกคนตามงานได้)
+  const APPROVED_NOTIFY_CHAT_ID = '-5170940793'; // กลุ่ม Telegram ที่แจ้งผล "ตรวจสอบแล้ว" (แจ้งซ้ำตอนหัวหน้าตรวจสอบ เพื่อให้ทุกคนตามงานได้)
   // Telegram chat id ของกลุ่มผู้จัดการฝ่ายผลิต — แจ้งเตือนให้เข้ามาอนุมัติขั้นที่ 2
   const MANAGER_NOTIFY_CHAT_ID = '-5415757971'; // กลุ่ม Telegram แจ้งผู้จัดการฝ่ายผลิตให้เข้ามาอนุมัติขั้นที่ 2
 
@@ -230,16 +230,16 @@
     const mgrApproved  = row.manager_approval_status === 'approved';
     if (supApproved && mgrApproved) return { key: 'approved', label: '✅ อนุมัติครบแล้ว' };
     if (supApproved && !mgrApproved) return { key: 'partial', label: '🔵 รอผู้จัดการฝ่ายผลิตอนุมัติ' };
-    return { key: 'pending', label: '🟡 รอหัวหน้างานอนุมัติ' };
+    return { key: 'pending', label: '🟡 รอหัวหน้างานตรวจสอบ' };
   }
 
   async function loadDashboard() {
     const dash = document.getElementById('dashboard');
 
     // ถ้ากำลังดูรายงานเจาะจงอยู่ (มี id) ไม่ต้องโหลด/แสดงภาพรวมทั้งหมด — โชว์แค่ลิงก์กลับ
-    // เพื่อให้เห็นรายละเอียด + ปุ่มอนุมัติได้ทันทีโดยไม่ต้องเลื่อนผ่านภาพรวมยาวๆ
+    // เพื่อให้เห็นรายละเอียด + ปุ่มตรวจสอบได้ทันทีโดยไม่ต้องเลื่อนผ่านภาพรวมยาวๆ
     if (recordId) {
-      dash.innerHTML = `<a class="back-link" href="approve.html">← กลับไปหน้ารายการที่รออนุมัติ</a>`;
+      dash.innerHTML = `<a class="back-link" href="approve.html">← กลับไปหน้ารายการที่รอตรวจสอบ</a>`;
       return;
     }
 
@@ -250,7 +250,7 @@
       .order('ts', { ascending: false });
 
     if (error || !data) {
-      dash.innerHTML = `<div class="card"><div class="section-title">📊 ภาพรวมการอนุมัติ</div><div class="center-msg" style="padding:10px 0;">โหลดข้อมูลไม่สำเร็จ</div></div>`;
+      dash.innerHTML = `<div class="card"><div class="section-title">📊 ภาพรวมการตรวจสอบ</div><div class="center-msg" style="padding:10px 0;">โหลดข้อมูลไม่สำเร็จ</div></div>`;
       return;
     }
     renderDashboard(data);
@@ -267,7 +267,7 @@
       const g = byLine.get(key);
       if (r.approval_status === 'approved') g.approved++; else g.pending++;
     });
-    // เรียง Line ที่มีรออนุมัติเยอะสุดไว้บนสุด (สำคัญที่สุดก่อน)
+    // เรียง Line ที่มีรอตรวจสอบเยอะสุดไว้บนสุด (สำคัญที่สุดก่อน)
     const lineRows = Array.from(byLine.entries()).sort((a, b) => b[1].pending - a[1].pending);
 
     const totalPending = rows.filter(r => r.approval_status !== 'approved').length;
@@ -276,7 +276,7 @@
     const pendingList = rows.filter(r => r.approval_status !== 'approved')
       .map(r => ({ ...r, ngCount: (r.items || []).filter(i => i.status === 'ng').length }));
 
-    // จัดกลุ่มรายการรออนุมัติตาม Line — ภายในแต่ละ Line แยกเป็น "ไม่มี NG" (อนุมัติทีเดียวได้)
+    // จัดกลุ่มรายการรอตรวจสอบตาม Line — ภายในแต่ละ Line แยกเป็น "ไม่มี NG" (ตรวจสอบทีเดียวได้)
     // กับ "มี NG" (ต้องเปิดดูทีละรายการ)
     const pendingByLine = new Map();
     pendingList.forEach(r => {
@@ -284,21 +284,21 @@
       if (!pendingByLine.has(key)) pendingByLine.set(key, { clean: [], ng: [] });
       (r.ngCount === 0 ? pendingByLine.get(key).clean : pendingByLine.get(key).ng).push(r);
     });
-    // เรียง Line ที่มีรออนุมัติเยอะสุดไว้บนสุด
+    // เรียง Line ที่มีรอตรวจสอบเยอะสุดไว้บนสุด
     const pendingLineEntries = Array.from(pendingByLine.entries())
       .sort((a, b) => (b[1].clean.length + b[1].ng.length) - (a[1].clean.length + a[1].ng.length));
 
     dash.innerHTML = `
       <div class="card">
-        <div class="section-title">📊 ภาพรวมการอนุมัติของหัวหน้างาน (30 วันล่าสุด)</div>
+        <div class="section-title">📊 ภาพรวมการตรวจสอบของหัวหน้างาน (30 วันล่าสุด)</div>
         <div class="kpi-row">
-          <div class="kpi kpi-pending"><b>${totalPending}</b><span>รอหัวหน้าอนุมัติ</span></div>
+          <div class="kpi kpi-pending"><b>${totalPending}</b><span>รอหัวหน้าตรวจสอบ</span></div>
           <div class="kpi kpi-ok"><b>${totalApproved}</b><span>ผ่านหัวหน้าแล้ว</span></div>
         </div>
-        <div style="font-size:11px;color:var(--muted);margin-top:6px;">ℹ️ หลังหัวหน้าอนุมัติแล้ว ยังต้องรอผู้จัดการฝ่ายผลิตอนุมัติต่อ (ขั้นที่ 2) ก่อนจะถือว่าสมบูรณ์</div>
+        <div style="font-size:11px;color:var(--muted);margin-top:6px;">ℹ️ หลังหัวหน้าตรวจสอบแล้ว ยังต้องรอผู้จัดการฝ่ายผลิตอนุมัติต่อ (ขั้นที่ 2) ก่อนจะถือว่าสมบูรณ์</div>
         ${lineRows.length ? `
         <table class="line-table">
-          <thead><tr><th>Line</th><th>รออนุมัติ</th><th>อนุมัติแล้ว</th></tr></thead>
+          <thead><tr><th>Line</th><th>รอตรวจสอบ</th><th>ตรวจสอบแล้ว</th></tr></thead>
           <tbody>
             ${lineRows.map(([name, g]) => `
               <tr>
@@ -312,7 +312,7 @@
       </div>
 
       <div class="card">
-        <div class="section-title">🟡 รายการที่รออนุมัติ (${pendingList.length})</div>
+        <div class="section-title">🟡 รายการที่รอตรวจสอบ (${pendingList.length})</div>
         ${pendingLineEntries.length ? pendingLineEntries.map(([lineName, g]) => `
           <div class="pending-line-group">
             <div class="pending-line-header">🏭 ${esc(lineName)} <span class="pending-line-count">(${g.clean.length + g.ng.length})</span></div>
@@ -320,8 +320,8 @@
             ${g.clean.length ? `
               <div class="pending-subgroup">
                 <div class="pending-subgroup-head">
-                  <span>✅ ไม่มี NG — อนุมัติทีเดียวได้ (${g.clean.length})</span>
-                  <button class="btn-bulk" data-line="${escAttr(lineName)}" data-ids="${g.clean.map(r => r.id).join(',')}">อนุมัติทั้งหมด</button>
+                  <span>✅ ไม่มี NG — ตรวจสอบทีเดียวได้ (${g.clean.length})</span>
+                  <button class="btn-bulk" data-line="${escAttr(lineName)}" data-ids="${g.clean.map(r => r.id).join(',')}">ตรวจสอบทั้งหมด</button>
                 </div>
                 ${g.clean.map(r => `
                   <div class="pending-item" style="cursor:default;">
@@ -344,13 +344,13 @@
                       <div class="pending-item-meta">${esc(r.insp_date)} · ผู้ตรวจ: ${esc(r.inspector)}</div>
                     </div>
                     <span class="pending-item-badge">NG ${r.ngCount}</span>
-                    <span class="pending-item-cta">🔍 ตรวจสอบ &amp; อนุมัติ ›</span>
+                    <span class="pending-item-cta">🔍 ตรวจสอบ ›</span>
                   </a>
                 `).join('')}
               </div>
             ` : ''}
           </div>
-        `).join('') : `<div class="center-msg" style="padding:16px 0;">🎉 ไม่มีรายการค้างอนุมัติ</div>`}
+        `).join('') : `<div class="center-msg" style="padding:16px 0;">🎉 ไม่มีรายการค้างตรวจสอบ</div>`}
       </div>
     `;
 
@@ -365,7 +365,7 @@
 
   async function bulkApprove(lineName, ids, btn) {
     if (!ids.length) return;
-    const name = prompt(`ยืนยันอนุมัติทั้งหมด ${ids.length} รายการของ Line "${lineName}" (ไม่มี NG ทุกรายการ)\n\nกรุณาพิมพ์ชื่อผู้อนุมัติ:`);
+    const name = prompt(`ยืนยันตรวจสอบทั้งหมด ${ids.length} รายการของ Line "${lineName}" (ไม่มี NG ทุกรายการ)\n\nกรุณาพิมพ์ชื่อผู้ตรวจสอบ:`);
     if (!name || !name.trim()) return;
     const approverName = name.trim();
 
@@ -383,24 +383,24 @@
     if (error) {
       alert('บันทึกไม่สำเร็จ: ' + error.message);
       btn.disabled = false;
-      btn.textContent = 'อนุมัติทั้งหมด';
+      btn.textContent = 'ตรวจสอบทั้งหมด';
       return;
     }
 
     notifyBulkManagerPending(lineName, ids.length, approverName);
     loadDashboard();
-    if (recordId && ids.includes(recordId)) loadReport(); // ถ้าหน้ารายละเอียดที่เปิดอยู่โดนอนุมัติไปด้วย ให้รีเฟรชตามด้วย
+    if (recordId && ids.includes(recordId)) loadReport(); // ถ้าหน้ารายละเอียดที่เปิดอยู่โดนตรวจสอบไปด้วย ให้รีเฟรชตามด้วย
   }
 
-  // ── แจ้งผู้จัดการฝ่ายผลิตหลังหัวหน้างานอนุมัติแบบกลุ่ม — ยังต้องผ่านอนุมัติขั้นที่ 2 ทุกใบเช่นกัน ──
+  // ── แจ้งผู้จัดการฝ่ายผลิตหลังหัวหน้างานตรวจสอบแบบกลุ่ม — ยังต้องผ่านอนุมัติขั้นที่ 2 ทุกใบเช่นกัน ──
   async function notifyBulkManagerPending(lineName, count, approverName) {
     const managerDashUrl = window.location.href.replace(/approve\.html.*$/, '').replace(/\/?$/, '/') + `manager-approve.html`;
     const text = `
-🔵 *รอผู้จัดการฝ่ายผลิตอนุมัติ (ขั้นที่ 2) — อนุมัติแบบกลุ่ม*
+🔵 *รอผู้จัดการฝ่ายผลิตอนุมัติ (ขั้นที่ 2) — ตรวจสอบแบบกลุ่ม*
 ━━━━━━━━━━━━━━━━━━━━━━━━━
 🏭 Line: ${esc(lineName)}
 📦 จำนวน: ${count} รายการ (ผ่านทั้งหมด ไม่มี NG)
-✅ หัวหน้างานอนุมัติแล้วโดย: ${esc(approverName)}
+✅ หัวหน้างานตรวจสอบแล้วโดย: ${esc(approverName)}
 🕐 เมื่อ: ${new Date().toLocaleString('th-TH')}
 ━━━━━━━━━━━━━━━━━━━━━━━━━
 `;
@@ -518,11 +518,11 @@
     }
 
     if (stage.key === 'partial') {
-      // หัวหน้างานอนุมัติแล้ว — รอผู้จัดการฝ่ายผลิต (อนุมัติที่หน้า manager-approve.html)
+      // หัวหน้างานตรวจสอบแล้ว — รอผู้จัดการฝ่ายผลิต (อนุมัติที่หน้า manager-approve.html)
       box.innerHTML = `
-        <div class="section-title">✅ หัวหน้างานอนุมัติแล้ว</div>
+        <div class="section-title">✅ หัวหน้างานตรวจสอบแล้ว</div>
         <div class="partial-box">
-          👔 อนุมัติโดย <strong>${esc(row.approved_by)}</strong><br>
+          👔 ตรวจสอบโดย <strong>${esc(row.approved_by)}</strong><br>
           เมื่อ ${row.approved_at ? new Date(row.approved_at).toLocaleString('th-TH') : '-'}
           ${row.supervisor_comment ? `<br><br>💬 ความเห็น: ${esc(row.supervisor_comment)}` : ''}
           <br><br>🔵 ขั้นต่อไป: รอผู้จัดการฝ่ายผลิตอนุมัติผ่านลิงก์ที่ส่งให้ทาง Telegram
@@ -532,12 +532,12 @@
     }
 
     box.innerHTML = `
-      <div class="section-title">✍️ อนุมัติรายงานนี้</div>
-      <label class="field-label">ชื่อผู้อนุมัติ (หัวหน้างาน)</label>
+      <div class="section-title">✍️ ตรวจสอบรายงานนี้</div>
+      <label class="field-label">ชื่อผู้ตรวจสอบ (หัวหน้างาน)</label>
       <input type="text" id="approver-name" placeholder="พิมพ์ชื่อ-นามสกุล">
       <label class="field-label">ความเห็นเพิ่มเติม (ถ้ามี)</label>
       <textarea id="approver-comment" placeholder="เช่น รับทราบ NG แล้ว ให้ทีมซ่อมเข้าแก้ไขภายในวันนี้"></textarea>
-      <button class="btn btn-approve" id="btn-approve">✅ อนุมัติรายงานนี้</button>
+      <button class="btn btn-approve" id="btn-approve">✅ ตรวจสอบรายงานนี้</button>
       <div id="approve-msg" style="font-size:12px; color:var(--ng); margin-top:8px;"></div>
     `;
 
@@ -552,7 +552,7 @@
     const name = nameEl.value.trim();
 
     if (!name) {
-      msgEl.textContent = 'กรุณากรอกชื่อผู้อนุมัติก่อน';
+      msgEl.textContent = 'กรุณากรอกชื่อผู้ตรวจสอบก่อน';
       nameEl.focus();
       return;
     }
@@ -567,12 +567,12 @@
       approved_by: name,
       approved_at: nowIso,
       supervisor_comment: commentEl.value.trim() || null,
-      sig_supervisor: name, // ให้ชื่อผู้อนุมัติกลายเป็นลายเซ็นหัวหน้างานในรายงาน/PDF ด้วย
+      sig_supervisor: name, // ให้ชื่อผู้ตรวจสอบกลายเป็นลายเซ็นหัวหน้างานในรายงาน/PDF ด้วย
     }).eq('id', row.id);
 
     if (error) {
       btn.disabled = false;
-      btn.textContent = '✅ อนุมัติรายงานนี้';
+      btn.textContent = '✅ ตรวจสอบรายงานนี้';
       msgEl.textContent = 'บันทึกไม่สำเร็จ: ' + error.message;
       return;
     }
@@ -588,7 +588,7 @@
     loadDashboard(); // รีเฟรชภาพรวมด้านบนให้ตัวเลขอัปเดตทันที ไม่ต้องรอ reload หน้า
   }
 
-  // ── แจ้งผู้จัดการฝ่ายผลิตให้เข้ามาอนุมัติต่อ (ขั้นที่ 2) หลังหัวหน้างานอนุมัติแล้ว ──
+  // ── แจ้งผู้จัดการฝ่ายผลิตให้เข้ามาอนุมัติต่อ (ขั้นที่ 2) หลังหัวหน้างานตรวจสอบแล้ว ──
   async function notifyManagerPending(row) {
     const items = row.items || [];
     const okCount = items.filter(i => i.status === 'ok' || i.status === 'fixed').length;
@@ -605,7 +605,7 @@ ${row.jig_doc_no ? `_${esc(row.jig_doc_no)}_` : ''}
 👤 ผู้ตรวจ: ${esc(row.inspector)}
 🔍 ผ่าน (OK): ${okCount}  ❌ ไม่ผ่าน (NG): ${ngCount}
 
-✅ หัวหน้างานอนุมัติแล้วโดย: ${esc(row.approved_by)}
+✅ หัวหน้างานตรวจสอบแล้วโดย: ${esc(row.approved_by)}
 🕐 เมื่อ: ${new Date(row.approved_at).toLocaleString('th-TH')}
 ${row.supervisor_comment ? `💬 ความเห็น: ${esc(row.supervisor_comment)}` : ''}
 ━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -629,7 +629,7 @@ ${row.supervisor_comment ? `💬 ความเห็น: ${esc(row.supervisor_
       });
     } catch (e) {
       console.error('notifyManagerPending error:', e);
-      // ไม่ต้องโชว์ error ให้หัวหน้างานเห็น — การอนุมัติบันทึกลง DB สำเร็จแล้ว แค่แจ้งเตือนอาจพลาด
+      // ไม่ต้องโชว์ error ให้หัวหน้างานเห็น — การตรวจสอบบันทึกลง DB สำเร็จแล้ว แค่แจ้งเตือนอาจพลาด
     }
   }
 

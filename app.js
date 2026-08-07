@@ -1102,7 +1102,7 @@
       const body = { text: msg };
       if (buttonUrl) {
         body.buttonUrl = buttonUrl;
-        body.buttonText = buttonText || '✅ เปิดเพื่ออนุมัติ';
+        body.buttonText = buttonText || '✅ เปิดเพื่อตรวจสอบ';
       }
       const response = await fetch(TELEGRAM_FUNCTION_URL, {
         method: 'POST',
@@ -1175,12 +1175,12 @@
       items:      checkState.map(i => ({ id: i.id, label: i.label, status: i.status, note: i.note, photos: i.photos, value: i.value ?? null, unit: i.unit || '' })),
       sigInspector:  $('sig-inspector').value.trim(),
       sigSupervisor: $('sig-supervisor').value.trim(),
-      // ─── Approval Workflow — รอหัวหน้างานกดอนุมัติผ่าน Telegram ───
+      // ─── Approval Workflow — รอหัวหน้างานกดตรวจสอบผ่าน Telegram ───
       approvalStatus:     'pending',
       approvedBy:         null,
       approvedAt:         null,
       supervisorComment:  null,
-      // ─── Approval Workflow (Stage 2) — รอผู้จัดการฝ่ายผลิตกดอนุมัติต่อ หลังหัวหน้างานอนุมัติแล้ว ───
+      // ─── Approval Workflow (Stage 2) — รอผู้จัดการฝ่ายผลิตกดอนุมัติต่อ หลังหัวหน้างานตรวจสอบแล้ว ───
       managerApprovalStatus: 'pending',
       managerApprovedBy:     null,
       managerApprovedAt:     null,
@@ -1236,15 +1236,15 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
       telegramMsg += `
 📍 GPS: ${gpsData.latitude.toFixed(6)}, ${gpsData.longitude.toFixed(6)}
 
-🟡 สถานะ: รอหัวหน้างานอนุมัติ
+🟡 สถานะ: รอหัวหน้างานตรวจสอบ
 ━━━━━━━━━━━━━━━━━━━━━━━━━
 `;
 
-      // ลิงก์หน้าอนุมัติ — ใช้ path เดียวกับที่ deploy อยู่จริง (รองรับทั้ง root และ subpath)
+      // ลิงก์หน้าตรวจสอบ — ใช้ path เดียวกับที่ deploy อยู่จริง (รองรับทั้ง root และ subpath)
       const approveUrl = window.location.href.replace(/index\.html.*$/, '').replace(/\/?$/, '/')
         + `approve.html?id=${encodeURIComponent(record.id)}`;
 
-      await sendTelegramMessage(telegramMsg, approveUrl, '✅ เปิดเพื่ออนุมัติ');
+      await sendTelegramMessage(telegramMsg, approveUrl, '✅ เปิดเพื่อตรวจสอบ');
     }
   }
 
@@ -1279,7 +1279,7 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
           'ไม่ผ่าน (NG)': ngCount,
           'หมายเหตุ': h.notes || '',
           'สถานะอนุมัติ': approvalStage(h).label,
-          'หัวหน้างานอนุมัติโดย': h.approvedBy || '',
+          'หัวหน้างานตรวจสอบโดย': h.approvedBy || '',
           'ความเห็นหัวหน้างาน': h.supervisorComment || '',
           'ผู้จัดการฝ่ายผลิตอนุมัติโดย': h.managerApprovedBy || '',
           'ความเห็นผู้จัดการฝ่ายผลิต': h.managerComment || '',
@@ -2400,7 +2400,7 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
               const title = st.key === 'approved'
                 ? `หัวหน้างาน: ${escHtml(h.approvedBy || '')} · ผู้จัดการฝ่ายผลิต: ${escHtml(h.managerApprovedBy || '')} เมื่อ ${h.managerApprovedAt ? new Date(h.managerApprovedAt).toLocaleString('th-TH') : ''}`
                 : st.key === 'partial'
-                ? `หัวหน้างานอนุมัติโดย ${escHtml(h.approvedBy || '')} เมื่อ ${h.approvedAt ? new Date(h.approvedAt).toLocaleString('th-TH') : ''} — รอผู้จัดการฝ่ายผลิต`
+                ? `หัวหน้างานตรวจสอบโดย ${escHtml(h.approvedBy || '')} เมื่อ ${h.approvedAt ? new Date(h.approvedAt).toLocaleString('th-TH') : ''} — รอผู้จัดการฝ่ายผลิต`
                 : '';
               return `<span class="badge ${st.badgeClass}" title="${title}">${st.badge}</span>`;
             })()}
@@ -2467,7 +2467,7 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
     } else if (supApproved && !mgrApproved) {
       return { key: 'partial', label: 'รอผู้จัดการฝ่ายผลิตอนุมัติ', badge: '🔵 รอผู้จัดการฝ่ายผลิต', badgeClass: 'partial' };
     }
-    return { key: 'pending', label: 'รอหัวหน้างานอนุมัติ', badge: '🟡 รอหัวหน้างาน', badgeClass: 'pending' };
+    return { key: 'pending', label: 'รอหัวหน้างานตรวจสอบ', badge: '🟡 รอหัวหน้างาน', badgeClass: 'pending' };
   }
   function statusLabel(status) {
     return status === 'ok' ? 'ผ่าน (OK)'
@@ -2509,7 +2509,7 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
     const approvalText = stage.key === 'approved'
       ? `✅ Approved — หัวหน้างาน: ${escHtml(record.approvedBy || '')} / ผู้จัดการฝ่ายผลิต: ${escHtml(record.managerApprovedBy || '')} (${record.managerApprovedAt ? new Date(record.managerApprovedAt).toLocaleDateString('th-TH') : ''})`
       : stage.key === 'partial'
-      ? `🔵 หัวหน้างานอนุมัติแล้ว (${escHtml(record.approvedBy || '')}) — รอผู้จัดการฝ่ายผลิตอนุมัติ`
+      ? `🔵 หัวหน้างานตรวจสอบแล้ว (${escHtml(record.approvedBy || '')}) — รอผู้จัดการฝ่ายผลิตอนุมัติ`
       : '🟡 Pending Approval';
 
     // ── Table rows (ISO/IATF: include spec LSL/USL + Actual Value + Status Badge) ──
@@ -2665,7 +2665,7 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
             <div class="pdf-sig-name">${record.sigSupervisor ? escHtml(record.sigSupervisor) : '\u00A0'}</div>
             <div style="margin-top:4px">
               <span class="pdf-sig-approval-badge ${record.approvalStatus === 'approved' ? 'pdf-approval-approved' : 'pdf-approval-pending'}">
-                ${record.approvalStatus === 'approved' ? '✅ อนุมัติแล้ว' : '🟡 รออนุมัติ'}
+                ${record.approvalStatus === 'approved' ? '✅ ตรวจสอบแล้ว' : '🟡 รอตรวจสอบ'}
               </span>
             </div>
             <div style="font-size:8px;color:#6b7280;margin-top:2px">${record.approvalStatus === 'approved' ? sigDateTime(record.approvedAt) : '\u00A0'}</div>
