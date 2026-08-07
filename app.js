@@ -1519,8 +1519,6 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
         $('admin-login-modal').classList.remove('hidden');
         $('inp-admin-pass').value = '';
         $('inp-admin-pass').focus();
-        // ซ่อน hint "รหัสผ่านเริ่มต้น" ทันทีที่มีการตั้งรหัสผ่านใหม่แล้ว — กันข้อมูลเก่าค้างจอ
-        $('hint-default-pass').classList.toggle('hidden', !!localStorage.getItem('jig_admin_pass'));
       }
     });
     
