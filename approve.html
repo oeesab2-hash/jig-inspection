@@ -105,6 +105,10 @@
     flex: 0 0 auto; font-size: 10px; font-weight: 700; padding: 3px 8px;
     border-radius: 999px; background: var(--ng-bg); color: var(--ng);
   }
+  .pending-item-cta {
+    flex: 0 0 auto; font-size: 11px; font-weight: 700; color: #fff;
+    background: var(--navy); border-radius: 8px; padding: 6px 10px; white-space: nowrap;
+  }
 
   .pending-line-group { margin-bottom: 18px; }
   .pending-line-group:last-child { margin-bottom: 0; }
@@ -125,16 +129,6 @@
     cursor: pointer; font-family: inherit;
   }
   .btn-bulk:disabled { background: #9ca3af; cursor: default; }
-
-  .pending-item-link {
-    flex: 1 1 auto; min-width: 0; text-decoration: none; color: inherit; cursor: pointer;
-  }
-  .btn-inline-approve {
-    flex: 0 0 auto; background: var(--ok); color: #fff; border: none;
-    border-radius: 8px; padding: 6px 10px; font-size: 11px; font-weight: 700;
-    cursor: pointer; font-family: inherit; white-space: nowrap;
-  }
-  .btn-inline-approve:disabled { background: #9ca3af; cursor: default; }
 
   .item-row {
     display: flex; justify-content: space-between; gap: 10px;
@@ -243,8 +237,6 @@
     renderDashboard(data);
   }
 
-  const pendingRowsById = new Map(); // เก็บข้อมูล row เต็ม (มี items) ไว้ใช้ตอนกดปุ่มอนุมัติจากรายการ NG โดยตรง
-
   function renderDashboard(rows) {
     const dash = document.getElementById('dashboard');
 
@@ -264,9 +256,6 @@
 
     const pendingList = rows.filter(r => r.approval_status !== 'approved')
       .map(r => ({ ...r, ngCount: (r.items || []).filter(i => i.status === 'ng').length }));
-
-    pendingRowsById.clear();
-    pendingList.forEach(r => pendingRowsById.set(r.id, r));
 
     // จัดกลุ่มรายการรออนุมัติตาม Line — ภายในแต่ละ Line แยกเป็น "ไม่มี NG" (อนุมัติทีเดียวได้)
     // กับ "มี NG" (ต้องเปิดดูทีละรายการ)
@@ -330,14 +319,14 @@
               <div class="pending-subgroup">
                 <div class="pending-subgroup-head"><span>🔴 มี NG — ต้องตรวจสอบทีละรายการ (${g.ng.length})</span></div>
                 ${g.ng.map(r => `
-                  <div class="pending-item">
-                    <a class="pending-item-link" href="approve.html?id=${encodeURIComponent(r.id)}">
+                  <a class="pending-item" href="approve.html?id=${encodeURIComponent(r.id)}">
+                    <div>
                       <div class="pending-item-jig">${esc(r.jig_name)}</div>
                       <div class="pending-item-meta">${esc(r.insp_date)} · ผู้ตรวจ: ${esc(r.inspector)}</div>
-                    </a>
+                    </div>
                     <span class="pending-item-badge">NG ${r.ngCount}</span>
-                    <button class="btn-inline-approve" data-id="${escAttr(r.id)}">✅ อนุมัติ</button>
-                  </div>
+                    <span class="pending-item-cta">🔍 ตรวจสอบ &amp; อนุมัติ ›</span>
+                  </a>
                 `).join('')}
               </div>
             ` : ''}
@@ -348,12 +337,6 @@
 
     dash.querySelectorAll('.btn-bulk').forEach(btn => {
       btn.addEventListener('click', () => bulkApprove(btn.dataset.line, btn.dataset.ids.split(',').filter(Boolean), btn));
-    });
-    dash.querySelectorAll('.btn-inline-approve').forEach(btn => {
-      btn.addEventListener('click', (e) => {
-        e.preventDefault();
-        approveNgFromDashboard(btn.dataset.id, btn);
-      });
     });
   }
 
@@ -388,42 +371,6 @@
     notifyBulkManagerPending(lineName, ids.length, approverName);
     loadDashboard();
     if (recordId && ids.includes(recordId)) loadReport(); // ถ้าหน้ารายละเอียดที่เปิดอยู่โดนอนุมัติไปด้วย ให้รีเฟรชตามด้วย
-  }
-
-  // ── อนุมัติรายการที่มี NG ได้เลยจากหน้ารายการ (ไม่ต้องกดเข้าไปดูรายละเอียดก่อน) ──
-  async function approveNgFromDashboard(id, btn) {
-    const row = pendingRowsById.get(id);
-    if (!row) return;
-
-    const name = prompt(`ยืนยันอนุมัติรายการ "${row.jig_name}" (มี NG ${row.ngCount} รายการ)\n\nกรุณาพิมพ์ชื่อผู้อนุมัติ:`);
-    if (!name || !name.trim()) return;
-    const approverName = name.trim();
-
-    btn.disabled = true;
-    btn.textContent = 'กำลังบันทึก...';
-
-    const nowIso = new Date().toISOString();
-    const { error } = await sb.from('history').update({
-      approval_status: 'approved',
-      approved_by: approverName,
-      approved_at: nowIso,
-      sig_supervisor: approverName,
-    }).eq('id', id);
-
-    if (error) {
-      alert('บันทึกไม่สำเร็จ: ' + error.message);
-      btn.disabled = false;
-      btn.textContent = '✅ อนุมัติ';
-      return;
-    }
-
-    row.approval_status = 'approved';
-    row.approved_by = approverName;
-    row.approved_at = nowIso;
-
-    notifyManagerPending(row); // แจ้งเตือนผู้จัดการฝ่ายผลิตให้เข้ามาอนุมัติขั้นที่ 2 เหมือนอนุมัติผ่านหน้ารายละเอียด
-    loadDashboard();
-    if (recordId === id) loadReport(); // ถ้าหน้ารายละเอียดที่เปิดอยู่คือใบเดียวกัน ให้รีเฟรชตามด้วย
   }
 
   // ── แจ้งผู้จัดการฝ่ายผลิตหลังหัวหน้างานอนุมัติแบบกลุ่ม — ยังต้องผ่านอนุมัติขั้นที่ 2 ทุกใบเช่นกัน ──

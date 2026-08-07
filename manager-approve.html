@@ -105,6 +105,10 @@
     flex: 0 0 auto; font-size: 10px; font-weight: 700; padding: 3px 8px;
     border-radius: 999px; background: var(--ng-bg); color: var(--ng);
   }
+  .pending-item-cta {
+    flex: 0 0 auto; font-size: 11px; font-weight: 700; color: #fff;
+    background: var(--navy); border-radius: 8px; padding: 6px 10px; white-space: nowrap;
+  }
 
   .pending-line-group { margin-bottom: 18px; }
   .pending-line-group:last-child { margin-bottom: 0; }
@@ -322,7 +326,7 @@
                       <div class="pending-item-meta">${esc(r.insp_date)} · ผู้ตรวจ: ${esc(r.inspector)}</div>
                     </div>
                     <span class="pending-item-badge">NG ${r.ngCount}</span>
-                    <div class="pending-item-arrow">›</div>
+                    <span class="pending-item-cta">🔍 ตรวจสอบ &amp; อนุมัติ ›</span>
                   </a>
                 `).join('')}
               </div>
