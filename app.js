@@ -490,7 +490,7 @@
     } else if (etype === 'jig') {
       const j = catalog.jigs.find(x => x.id === id);
       if (!j) return;
-      const newName = prompt('แก้ไขชื่อ JIG:', j.name);
+      const newName = prompt('แก้ไขชื่อชิ้นงาน:', j.name);
       if (newName === null) return;
       if (!newName.trim()) { toast('ชื่อห้ามว่าง', 'ng'); return; }
       const newDocNo = prompt('แก้ไข Run No. (เลขประจำตัว JIG ตัวนี้ ตามเอกสารกระดาษเดิม เช่น SL-RG01-002 — ลบให้ว่างได้):', j.docNo || '');
@@ -1408,7 +1408,7 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
         'No.': i + 1,
         'แผนก': dept ? dept.name : '',
         'Line': line ? line.name : (j.lineId || ''),
-        'ชื่อ JIG': j.name,
+        'ชื่อชิ้นงาน': j.name,
         'รหัส JIG (Part No.)': j.id,
         'Run No.': j.docNo && j.docNo.trim() ? j.docNo.trim() : '⚠️ ยังไม่กำหนด',
         'จำนวนจุดตรวจ': (j.checkpoints || []).length,
@@ -1830,7 +1830,7 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
       const name   = $('adm-jig-name').value.trim();
       const docNo  = $('adm-jig-docno').value.trim(); // Run No. — เลขประจำตัว JIG ตัวนี้ตายตัว (ตามเอกสารกระดาษเดิม เช่น SL-RG01-002) กรอกเองอิสระ แก้ไข/ลบได้ตลอด
       if (!lineId) { toast('กรุณาเลือก Line', 'ng'); return; }
-      if (!id || !name) { toast('กรุณากรอกรหัสและชื่อ JIG', 'ng'); return; }
+      if (!id || !name) { toast('กรุณากรอกรหัสและชื่อชิ้นงาน', 'ng'); return; }
       if (catalog.jigs.find(j => j.id === id)) { toast(`รหัส ${id} มีแล้ว`, 'ng'); return; }
       catalog.jigs.push({ id, lineId, name, docNo, bgImage: null, checkpoints: [] });
       saveCatalog();
