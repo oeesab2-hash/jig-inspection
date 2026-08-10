@@ -126,7 +126,8 @@
         const { error } = await sb.from('jigs').upsert(
           cat.jigs.map(j => ({
             id: j.id, line_id: j.lineId, name: j.name, doc_no: j.docNo || j.id,
-            current_rev: j.currentRev || 1, bg_image: j.bgImage || null
+            current_rev: j.currentRev || 1, bg_image: j.bgImage || null,
+            pending_rev_id: j.pendingRevId || null, pending_rev_no: j.pendingRevNo || null
           })),
           { onConflict: 'id' }
         );
@@ -187,6 +188,8 @@
       const jigs = (j.data || []).map(row => ({
         id: row.id, lineId: row.line_id, name: row.name, docNo: row.doc_no,
         currentRev: row.current_rev || 1,
+        pendingRevId: row.pending_rev_id || null,
+        pendingRevNo: row.pending_rev_no || null,
         bgImage: row.bg_image || undefined,
         checkpoints: (cpByJig[row.id] || []).sort((a, b) => a.id - b.id),
       }));
@@ -215,7 +218,7 @@
         id: h.id, ts: h.timestamp,
         dept_id: h.deptId, dept_name: h.deptName,
         line_id: h.lineId, line_name: h.lineName,
-        jig_id: h.jigId, jig_name: h.jigName, jig_doc_no: h.jigDocNo,
+        jig_id: h.jigId, jig_name: h.jigName, jig_doc_no: h.jigDocNo, jig_rev: h.jigRev || null,
         insp_date: h.date, shift: h.shift, month: h.month,
         inspector: h.inspector, notes: h.notes, items: h.items || [],
         sig_inspector: h.sigInspector, sig_supervisor: h.sigSupervisor,
@@ -274,7 +277,7 @@
         id: row.id, timestamp: row.ts,
         deptId: row.dept_id, deptName: row.dept_name,
         lineId: row.line_id, lineName: row.line_name,
-        jigId: row.jig_id, jigName: row.jig_name, jigDocNo: row.jig_doc_no,
+        jigId: row.jig_id, jigName: row.jig_name, jigDocNo: row.jig_doc_no, jigRev: row.jig_rev || null,
         date: row.insp_date, shift: row.shift, month: row.month,
         inspector: row.inspector, notes: row.notes, items: row.items || [],
         sigInspector: row.sig_inspector, sigSupervisor: row.sig_supervisor,
@@ -640,12 +643,15 @@
     return `SUMMIT-JIG-${year}-${String(next).padStart(3, '0')}`;
   }
 
-  // ── บันทึกประวัติการแก้ checklist ลง jig_revisions + เพิ่มเลข Rev อัตโนมัติ (ขั้นที่ 3) ──
+  // ── บันทึกประวัติการแก้ checklist ลง jig_revisions เป็น "รออนุมัติ" (ขั้นที่ 4) ──
   // เรียกทุกครั้งที่ "เนื้อหา" checklist ของ JIG เปลี่ยนจริง: เพิ่ม/แก้/ลบหัวข้อ, นำเข้าเทมเพลต,
   // ตั้งค่าหัวข้อแบบตัวเลข — ไม่รวมการลากจัดตำแหน่งจุดบนแผนผัง หรือการเรียงลำดับขึ้น/ลง
   // เพราะ 2 อย่างนั้นไม่ได้เปลี่ยนเนื้อหาที่ตรวจจริง แค่จัดการแสดงผลเฉยๆ
-  // ยังไม่มีระบบอนุมัติ (ขั้นที่ 4) — Rev ใหม่ถือเป็นค่าที่ใช้งานได้ทันทีที่บันทึก
-  // คืนค่าเลข Rev ใหม่ (หรือ currentRev เดิมถ้าบันทึกไม่สำเร็จ กันไม่ให้ UI ค้าง)
+  //
+  // ⚠️ เปลี่ยนจากขั้นที่ 3: checkpoints ยังแก้ได้ทันที (หน้างานไม่สะดุด) แต่ "เลข Rev ทางการ"
+  // (jigs.current_rev) จะยังไม่ขยับจนกว่าผู้จัดการฝ่ายผลิตจะกดอนุมัติผ่าน revision-approve.html
+  // ถ้าโดนปฏิเสธ ระบบจะย้อน checkpoints กลับเป็นของ Rev ล่าสุดที่อนุมัติแล้วให้อัตโนมัติ
+  // คืนค่า { id, revNo } ของ revision ที่รออนุมัติ (หรือ null ถ้าบันทึกไม่สำเร็จ)
   async function recordJigRevision(jigId, changeNote) {
     const jig = catalog.jigs.find(j => j.id === jigId);
     if (!jig) return null;
@@ -659,16 +665,20 @@
           p_change_note: changeNote || null,
         });
         if (error) throw error;
-        jig.currentRev = data; // เลข Rev จริงจาก DB (atomic กันชนกับเครื่องอื่น)
-        return data;
+        jig.pendingRevId = data.id;
+        jig.pendingRevNo = data.rev_no;
+        toast(`บันทึกแล้ว — รอผู้จัดการฝ่ายผลิตอนุมัติ Rev.${data.rev_no}`, 'ok');
+        notifyManagerRevisionPending(jig, data.id, data.rev_no, changeNote); // ไม่ต้องรอผล ไม่บล็อกหน้าจอ
+        return { id: data.id, revNo: data.rev_no };
       } catch (err) {
         console.error('บันทึก jig_revisions ไม่สำเร็จ:', err);
         toast('บันทึกประวัติ Revision ไม่สำเร็จ (การแก้ไข checklist ยังบันทึกปกติ)', 'ng');
-        return jig.currentRev || 1;
+        return null;
       }
     }
 
-    // โหมด local (Supabase ต่อไม่ติด): เก็บ log ไว้ใน localStorage แยกตาม JIG — ใช้ได้เครื่องเดียว
+    // โหมด local (Supabase ต่อไม่ติด): ไม่มีผู้จัดการฝ่ายผลิตให้กดอนุมัติออนไลน์ — เก็บ log
+    // ไว้ใน localStorage แล้วถือว่าอนุมัติทันที (ใช้ได้เครื่องเดียว, best-effort เหมือนขั้นที่ 3 เดิม)
     try {
       const newRev = (jig.currentRev || 1) + 1;
       jig.currentRev = newRev;
@@ -680,11 +690,31 @@
         changed_at: new Date().toISOString(),
       });
       localStorage.setItem(key, JSON.stringify(log));
-      return newRev;
+      return { id: null, revNo: newRev };
     } catch (err) {
       console.error('บันทึก revision local ไม่สำเร็จ:', err);
-      return jig.currentRev || 1;
+      return null;
     }
+  }
+
+  // ── แจ้งผู้จัดการฝ่ายผลิตให้เข้ามาอนุมัติ Revision ใหม่ (ขั้นที่ 4) ──
+  // ใช้ sendTelegramMessage ตัวเดียวกับที่ใช้แจ้งตอนสร้างรายงานตรวจ (ไปช่องทางเดียวกัน
+  // ที่ตั้งค่าไว้ฝั่ง Edge Function) — ถ้าพี่บีอยากแยกช่องสำหรับ Revision โดยเฉพาะ บอกได้เลย
+  // ค่อยเพิ่ม chatId แยกทีหลัง
+  async function notifyManagerRevisionPending(jig, revId, revNo, changeNote) {
+    const text = `
+🟣 *มี Revision ใหม่รออนุมัติ*
+━━━━━━━━━━━━━━━━━━━━━━━━━
+*${escHtml(jig.name)}*
+${jig.docNo ? `_${escHtml(jig.docNo)}_` : ''}
+
+📌 Rev.${revNo} (จาก Rev.${jig.currentRev || 1})
+📝 การแก้ไข: ${escHtml(changeNote || '-')}
+━━━━━━━━━━━━━━━━━━━━━━━━━
+`;
+    const revUrl = window.location.href.replace(/index\.html.*$/, '').replace(/\/?$/, '/')
+      + `revision-approve.html?id=${encodeURIComponent(revId)}`;
+    await sendTelegramMessage(text, revUrl, '✅ เปิดเพื่ออนุมัติ Revision');
   }
 
   /* ══════════════════════════════════════
@@ -818,7 +848,10 @@
       const dept = catalog.depts.find(d => d.id === selection.deptId);
       if (jig) {
         $('sb-jig-name').textContent = `${jig.name}`;
-        $('sb-jig-meta').textContent = `${jig.docNo || jig.id}  ·  ${dept ? dept.name : ''}  >  ${line ? line.name : ''}`;
+        const revNote = jig.pendingRevNo
+          ? `  ·  Rev.${jig.currentRev || 1} (🟡 รออนุมัติ Rev.${jig.pendingRevNo})`
+          : `  ·  Rev.${jig.currentRev || 1}`;
+        $('sb-jig-meta').textContent = `${jig.docNo || jig.id}  ·  ${dept ? dept.name : ''}  >  ${line ? line.name : ''}${revNote}`;
         banner.classList.remove('hidden');
         $('svg-jig-label').textContent = `${jig.name} — ${jig.docNo || jig.id}`;
         $('header-sub').textContent = `${jig.docNo || jig.id}  ·  ${dept ? dept.name : ''}  /  ${line ? line.name : ''}`;
@@ -1234,6 +1267,9 @@
       jigId:      selection.jigId,
       jigName:    jig  ? jig.name  : '',
       jigDocNo:   jig  ? (jig.docNo || jig.id) : '',
+      // Snapshot เลข Rev ที่อนุมัติแล้ว ณ ตอนตรวจจริง (ขั้นที่ 5) — กันไม่ให้ PDF/รายงาน
+      // ย้อนหลังเปลี่ยนไปตาม Rev ปัจจุบันของ JIG ถ้าต่อมามีการแก้ Rev ใหม่อีก
+      jigRev:     jig  ? (jig.currentRev || 1) : 1,
       date:       $('inp-date').value,
       shift:      $('inp-shift').value,
       month:      $('inp-month').value,
@@ -1422,7 +1458,7 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
         'Line': line ? line.name : (j.lineId || ''),
         'ชื่อ JIG': j.name,
         'Doc No. / Part No.': j.docNo || j.id,
-        'Rev. Level': 'Rev.01', // ระบบยังไม่มีระบบคุม revision ต่อ JIG — ใช้ค่าเดียวกับที่ขึ้นใน PDF ทุกใบตอนนี้
+        'Rev. Level': 'Rev.' + String(j.currentRev || 1).padStart(2, '0'), // Rev ทางการล่าสุดที่อนุมัติแล้ว (ขั้นที่ 5)
         'จำนวนจุดตรวจ': (j.checkpoints || []).length,
       };
     });
@@ -1528,6 +1564,8 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
         lineId: j.lineId || j.line_id,  // Support both formats
         docNo: j.docNo || j.doc_no || '',
         currentRev: j.currentRev || j.current_rev || 1,
+        pendingRevId: j.pendingRevId || j.pending_rev_id || null,
+        pendingRevNo: j.pendingRevNo || j.pending_rev_no || null,
         bgImage: j.bgImage || j.bg_image || null,
         checkpoints: (j.checkpoints || []).map(cp => ({
           id: cp.id,
@@ -1582,6 +1620,8 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
               name: j.name, 
               doc_no: j.docNo, 
               current_rev: j.currentRev || 1,
+              pending_rev_id: j.pendingRevId || null,
+              pending_rev_no: j.pendingRevNo || null,
               bg_image: j.bgImage 
             })),
             { onConflict: 'id' }
@@ -1617,7 +1657,7 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
             dept_id: h.deptId || h.dept_id || '', dept_name: h.deptName || h.dept_name || '',
             line_id: h.lineId || h.line_id || '', line_name: h.lineName || h.line_name || '',
             jig_id: h.jigId || h.jig_id || '', jig_name: h.jigName || h.jig_name || '',
-            jig_doc_no: h.jigDocNo || h.jig_doc_no || '',
+            jig_doc_no: h.jigDocNo || h.jig_doc_no || '', jig_rev: h.jigRev || h.jig_rev || null,
             insp_date: h.date || h.insp_date || '', shift: h.shift || '',
             month: h.month || '', inspector: h.inspector || '', notes: h.notes || '',
             items: h.items || [],
@@ -2618,7 +2658,9 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
     // ── Document No. (คงที่ตาม JIG — ไม่เปลี่ยนไปตามรอบตรวจ) + Report No. (unique ต่อรายงานแต่ละใบ เพื่อ traceability) ──
     const docId    = record.jigDocNo || record.jigId || '—';
     const reportNo = 'RPT-' + (record.id || '').toString().slice(-8).toUpperCase();
-    const revLevel = 'Rev.01';
+    // ดึง Rev จาก snapshot ที่บันทึกไว้ตอนตรวจจริง (ขั้นที่ 5) — รายงานเก่าที่ยังไม่มีค่านี้
+    // (บันทึกก่อน step 5) จะ fallback เป็น Rev.01 เหมือนเดิม
+    const revLevel = 'Rev.' + String(record.jigRev || 1).padStart(2, '0');
     const docDate  = new Date(record.timestamp).toLocaleDateString('th-TH', { year:'numeric', month:'2-digit', day:'2-digit' });
     const docTime  = new Date(record.timestamp).toLocaleTimeString('th-TH', { hour:'2-digit', minute:'2-digit' });
 
