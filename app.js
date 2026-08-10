@@ -859,7 +859,7 @@
         $('sb-jig-name').textContent = `${jig.name}`;
         $('sb-jig-meta').textContent = `${jig.docNo || jig.id}  ·  ${dept ? dept.name : ''}  >  ${line ? line.name : ''}`;
         banner.classList.remove('hidden');
-        $('svg-jig-label').textContent = `${jig.name} — ${jig.docNo || jig.id}`;
+        $('svg-jig-label').textContent = `${jig.name} — ${jig.id}${jig.docNo ? '  ·  ' + jig.docNo : ''}`;
         $('header-sub').textContent = `${jig.docNo || jig.id}  ·  ${dept ? dept.name : ''}  /  ${line ? line.name : ''}`;
       }
     } else {
