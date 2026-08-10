@@ -657,18 +657,23 @@
     if (!jig) return null;
     const snapshot = JSON.parse(JSON.stringify(jig.checkpoints || []));
 
+    // ✅ Bug #1 Fix: ดึงชื่อ Admin ที่ login อยู่ส่งเป็น changed_by
+    const changedBy = localStorage.getItem('jig_admin_user') || 'admin';
+
     if (sb) {
       try {
         const { data, error } = await sb.rpc('record_jig_revision', {
-          p_jig_id: jigId,
-          p_checklist: snapshot,
+          p_jig_id:      jigId,
+          p_checklist:   snapshot,
           p_change_note: changeNote || null,
+          p_changed_by:  changedBy,   // ✅ ส่งชื่อผู้แก้ไขขึ้น DB
         });
         if (error) throw error;
         jig.pendingRevId = data.id;
         jig.pendingRevNo = data.rev_no;
         toast(`บันทึกแล้ว — รอผู้จัดการฝ่ายผลิตอนุมัติ Rev.${data.rev_no}`, 'ok');
-        notifyManagerRevisionPending(jig, data.id, data.rev_no, changeNote); // ไม่ต้องรอผล ไม่บล็อกหน้าจอ
+        // data.current_rev = Rev ก่อน increment (Bug #3 fix จาก SQL function)
+        notifyManagerRevisionPending(jig, data.id, data.rev_no, data.current_rev ?? (data.rev_no - 1), changeNote);
         return { id: data.id, revNo: data.rev_no };
       } catch (err) {
         console.error('บันทึก jig_revisions ไม่สำเร็จ:', err);
@@ -701,14 +706,18 @@
   // ใช้ sendTelegramMessage ตัวเดียวกับที่ใช้แจ้งตอนสร้างรายงานตรวจ (ไปช่องทางเดียวกัน
   // ที่ตั้งค่าไว้ฝั่ง Edge Function) — ถ้าพี่บีอยากแยกช่องสำหรับ Revision โดยเฉพาะ บอกได้เลย
   // ค่อยเพิ่ม chatId แยกทีหลัง
-  async function notifyManagerRevisionPending(jig, revId, revNo, changeNote) {
+  // ✅ Bug #3 Fix: รับ currentRevBefore แยกต่างหาก ไม่ใช้ jig.currentRev ที่อาจยังค้าง pending
+  async function notifyManagerRevisionPending(jig, revId, revNo, currentRevBefore, changeNote) {
+    const fromRev = currentRevBefore ?? (jig.currentRev || 1);
+    const changedBy = localStorage.getItem('jig_admin_user') || 'admin';
     const text = `
 🟣 *มี Revision ใหม่รออนุมัติ*
 ━━━━━━━━━━━━━━━━━━━━━━━━━
 *${escHtml(jig.name)}*
-${jig.docNo ? `_${escHtml(jig.docNo)}_` : ''}
+${jig.docNo ? `_Doc No. ${escHtml(jig.docNo)}_` : ''}
 
-📌 Rev.${revNo} (จาก Rev.${jig.currentRev || 1})
+📌 Rev.${String(revNo).padStart(2,'0')} (จาก Rev.${String(fromRev).padStart(2,'0')})
+✏️ แก้ไขโดย: ${escHtml(changedBy)}
 📝 การแก้ไข: ${escHtml(changeNote || '-')}
 ━━━━━━━━━━━━━━━━━━━━━━━━━
 `;
