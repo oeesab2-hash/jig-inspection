@@ -439,7 +439,7 @@
     app.innerHTML = `
       <div class="card">
         <div class="jig-title">${esc(row.jig_name)}</div>
-        <div class="jig-sub">${esc(row.jig_doc_no || '')} · ${esc(row.dept_name)} &gt; ${esc(row.line_name)}</div>
+        <div class="jig-sub">${esc(row.jig_id || '')}${row.jig_doc_no ? ' · ' + esc(row.jig_doc_no) : ''} · ${esc(row.dept_name)} &gt; ${esc(row.line_name)}</div>
 
         <div class="meta-grid">
           <div><span>วันที่:</span> ${esc(row.insp_date)}</div>
