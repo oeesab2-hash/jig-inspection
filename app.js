@@ -125,7 +125,8 @@
       if (cat.jigs?.length) {
         const { error } = await sb.from('jigs').upsert(
           cat.jigs.map(j => ({
-            id: j.id, line_id: j.lineId, name: j.name, doc_no: j.docNo || j.id, bg_image: j.bgImage || null
+            id: j.id, line_id: j.lineId, name: j.name, doc_no: j.docNo || '', bg_image: j.bgImage || null
+            // หมายเหตุ: ไม่ fallback ไปใช้ j.id แล้ว — Doc No. ต้องเป็นเลขคุมเอกสารจริงที่ Admin กรอกเองเท่านั้น เว้นว่างได้ถ้ายังไม่กำหนด
           })),
           { onConflict: 'id' }
         );
@@ -443,7 +444,7 @@
       const newName = prompt('แก้ไขชื่อ JIG:', j.name);
       if (newName === null) return;
       if (!newName.trim()) { toast('ชื่อห้ามว่าง', 'ng'); return; }
-      const newDocNo = prompt('แก้ไขรหัส/Part No. (เว้นว่างได้):', j.docNo || '');
+      const newDocNo = prompt('แก้ไข Doc No. (เลขคุมเอกสารจริง เช่น DDM4-2-002 — เว้นว่างได้):', j.docNo || '');
       if (newDocNo === null) return;
       j.name = newName.trim();
       j.docNo = newDocNo.trim();
@@ -1166,7 +1167,7 @@
       lineName:   line ? line.name : '',
       jigId:      selection.jigId,
       jigName:    jig  ? jig.name  : '',
-      jigDocNo:   jig  ? (jig.docNo || jig.id) : '',
+      jigDocNo:   jig  ? (jig.docNo || '') : '', // ไม่ fallback ไปใช้รหัส JIG (jig.id) แล้ว — ถ้ายังไม่กำหนด Doc No. ให้เว้นว่างไว้ เพื่อไม่ให้สับสนกับเลขคุมเอกสารจริง
       date:       $('inp-date').value,
       shift:      $('inp-shift').value,
       month:      $('inp-month').value,
@@ -1354,7 +1355,8 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
         'แผนก': dept ? dept.name : '',
         'Line': line ? line.name : (j.lineId || ''),
         'ชื่อ JIG': j.name,
-        'Doc No. / Part No.': j.docNo || j.id,
+        'รหัส JIG (Part No.)': j.id,
+        'Doc No.': j.docNo && j.docNo.trim() ? j.docNo.trim() : '⚠️ ยังไม่กำหนด',
         'Rev. Level': 'Rev.01', // ระบบยังไม่มีระบบคุม revision ต่อ JIG — ใช้ค่าเดียวกับที่ขึ้นใน PDF ทุกใบตอนนี้
         'จำนวนจุดตรวจ': (j.checkpoints || []).length,
       };
@@ -1362,7 +1364,7 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
 
     const wb = XLSX.utils.book_new();
     const ws = XLSX.utils.json_to_sheet(rows);
-    ws['!cols'] = [{wch:5},{wch:14},{wch:16},{wch:30},{wch:22},{wch:10},{wch:12}];
+    ws['!cols'] = [{wch:5},{wch:14},{wch:16},{wch:30},{wch:16},{wch:18},{wch:10},{wch:12}];
     XLSX.utils.book_append_sheet(wb, ws, 'Master List');
 
     const stamp = new Date().toISOString().slice(0, 10);
@@ -1767,14 +1769,15 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
       const lineId = $('adm-jig-line').value;
       const id     = $('adm-jig-id').value.trim().toUpperCase();
       const name   = $('adm-jig-name').value.trim();
+      const docNo  = $('adm-jig-docno').value.trim(); // Doc No. คุมเอกสารจริงของบริษัท (เช่น DDM4-2-002) — กรอกเองอิสระ ไม่ auto จากรหัส JIG แล้ว
       if (!lineId) { toast('กรุณาเลือก Line', 'ng'); return; }
       if (!id || !name) { toast('กรุณากรอกรหัสและชื่อ JIG', 'ng'); return; }
       if (catalog.jigs.find(j => j.id === id)) { toast(`รหัส ${id} มีแล้ว`, 'ng'); return; }
-      catalog.jigs.push({ id, lineId, name, docNo: id, bgImage: null, checkpoints: [] });
+      catalog.jigs.push({ id, lineId, name, docNo, bgImage: null, checkpoints: [] });
       saveCatalog();
-      $('adm-jig-id').value = ''; $('adm-jig-name').value = '';
+      $('adm-jig-id').value = ''; $('adm-jig-name').value = ''; $('adm-jig-docno').value = '';
       renderAdminLists(); renderFilter();
-      toast(`เพิ่ม JIG "${name}" สำเร็จ`, 'ok');
+      toast(`เพิ่ม JIG "${name}" สำเร็จ${docNo ? '' : ' — อย่าลืมกำหนด Doc No. ทีหลัง'}`, 'ok');
     });
 
     /* JIG line filter on dept change */
@@ -2462,9 +2465,10 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
           </div>`).join('')}
         </div>` : ''}
         ${photos.length  ? `<div class="hi-photos">${photos.slice(0,4).map(p=>`<img src="${escHtml(p)}" class="hi-photo" data-src="${escHtml(p)}">`).join('')}</div>` : ''}
-        ${(h.sigInspector||h.sigSupervisor) ? `<div class="hi-sigs" style="font-size:11px; color:var(--text-main); margin-top:6px; display:flex; gap:16px;">
+        ${(h.sigInspector||h.approvedBy||h.managerApprovedBy) ? `<div class="hi-sigs" style="font-size:11px; color:var(--text-main); margin-top:6px; display:flex; gap:16px; flex-wrap:wrap;">
           ${h.sigInspector?`<div><strong>ผู้ตรวจ:</strong> ${escHtml(h.sigInspector)}</div>`:''}
-          ${h.sigSupervisor?`<div><strong>หัวหน้า:</strong> ${escHtml(h.sigSupervisor)}</div>`:''}
+          ${h.approvedBy?`<div><strong>หัวหน้า:</strong> ${escHtml(h.approvedBy)}</div>`:''}
+          ${h.managerApprovedBy?`<div><strong>ผู้จัดการ:</strong> ${escHtml(h.managerApprovedBy)}</div>`:''}
         </div>` : ''}
         <div class="hi-actions">
           <button class="hi-btn" data-pdf="${escHtml(h.id)}">📄 PDF</button>
@@ -2529,7 +2533,10 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
 
   function buildPdfReportHtml(record) {
     // ── Document No. (คงที่ตาม JIG — ไม่เปลี่ยนไปตามรอบตรวจ) + Report No. (unique ต่อรายงานแต่ละใบ เพื่อ traceability) ──
-    const docId    = record.jigDocNo || record.jigId || '—';
+    // ── Document No. (คงที่ตาม JIG — ไม่เปลี่ยนไปตามรอบตรวจ) + Report No. (unique ต่อรายงานแต่ละใบ เพื่อ traceability) ──
+    // หมายเหตุ: ไม่ fallback ไปใช้รหัส JIG (jigId) แล้ว เพราะ Doc No. คือเลขคุมเอกสารจริงของบริษัท (เช่น DDM4-2-002)
+    // ซึ่งเป็นคนละอย่างกับรหัส/Part No. ของ JIG — ถ้า Admin ยังไม่ได้กำหนด Doc No. ให้โชว์คำเตือนแทนการเดาใส่
+    const docId    = (record.jigDocNo && record.jigDocNo.trim()) ? record.jigDocNo.trim() : null;
     const reportNo = 'RPT-' + (record.id || '').toString().slice(-8).toUpperCase();
     const revLevel = 'Rev.01';
     const docDate  = new Date(record.timestamp).toLocaleDateString('th-TH', { year:'numeric', month:'2-digit', day:'2-digit' });
@@ -2606,7 +2613,7 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
           <div class="pdf-header-doc-cell">
             <div class="pdf-doc-row">
               <span class="pdf-doc-label">Doc No.</span>
-              <span class="pdf-doc-value">${escHtml(docId)}</span>
+              <span class="pdf-doc-value">${docId ? escHtml(docId) : '<span style="color:#dc2626;font-weight:700">⚠️ ยังไม่กำหนด Doc No.</span>'}</span>
             </div>
             <div class="pdf-doc-row">
               <span class="pdf-doc-label">Report No.</span>
