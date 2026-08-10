@@ -1330,7 +1330,8 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
           'แผนก': h.deptName || '',
           'Line': h.lineName || '',
           'JIG': h.jigName || '',
-          'รหัส JIG': h.jigDocNo || '',
+          'รหัส JIG (Part No.)': h.jigId || '',
+          'Run No.': h.jigDocNo || '',
           'ผู้ตรวจสอบ': h.inspector || '',
           'จุดตรวจทั้งหมด': (h.items || []).length,
           'ผ่าน (OK)': okCount,
@@ -2733,7 +2734,7 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
           </div>
           <div class="pdf-scope-cell">
             <div class="pdf-scope-label">JIG ID / Part Number</div>
-            <div class="pdf-scope-value">${escHtml(record.jigDocNo || record.jigId)} — ${escHtml(record.jigName || '—')}</div>
+            <div class="pdf-scope-value">${escHtml(record.jigId || '—')} — ${escHtml(record.jigName || '—')}</div>
           </div>
         </div>
 
