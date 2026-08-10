@@ -641,7 +641,7 @@ h1, h2, h3, h4, label, button, input, select, textarea, p, span, div {
 }
 .note-area:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-dim); }
 
-.sig-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.sig-row { display: grid; grid-template-columns: 1fr; gap: 12px; }
 .sig-block { border: 1px solid var(--border-card); border-radius: 10px; overflow: hidden; }
 .sig-header {
   display: flex; align-items: center; justify-content: space-between;

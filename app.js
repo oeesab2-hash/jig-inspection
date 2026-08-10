@@ -1179,7 +1179,7 @@
         value: i.value ?? null, unit: i.unit || '',
       })),
       sigInspector:  $('sig-inspector').value.trim(),
-      sigSupervisor: $('sig-supervisor').value.trim(),
+      // หมายเหตุ: ตัด sigSupervisor ออกแล้ว — ชื่อหัวหน้างานจะถูกบันทึกตอนกดอนุมัติจริงผ่าน Telegram (ดู approvedBy ด้านล่าง) ไม่ต้องพิมพ์ซ้ำตรงนี้
       // ─── Approval Workflow — รอหัวหน้างานกดตรวจสอบผ่าน Telegram ───
       approvalStatus:     'pending',
       approvedBy:         null,
@@ -2673,7 +2673,7 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
           </div>
           <div class="pdf-sig-cell">
             <div class="pdf-sig-role">Supervisor / หัวหน้างาน</div>
-            <div class="pdf-sig-name">${record.sigSupervisor ? escHtml(record.sigSupervisor) : '\u00A0'}</div>
+            <div class="pdf-sig-name">${record.approvedBy ? escHtml(record.approvedBy) : '\u00A0'}</div>
             <div style="margin-top:4px">
               <span class="pdf-sig-approval-badge ${record.approvalStatus === 'approved' ? 'pdf-approval-approved' : 'pdf-approval-pending'}">
                 ${record.approvalStatus === 'approved' ? '✅ ตรวจสอบแล้ว' : '🟡 รอตรวจสอบ'}
@@ -2822,7 +2822,6 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
       $('inp-month').value = currentThaiMonthAbbr();
       $('report-notes').value = '';
       $('sig-inspector').value = '';
-      $('sig-supervisor').value = '';
       toast('เริ่มต้นใหม่เรียบร้อย', 'ok');
     });
     // SVG points (bound after inspection cards shown)
