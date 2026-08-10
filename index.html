@@ -424,6 +424,19 @@
       <div class="admin-list admin-list-scroll" id="adm-line-list"></div>
     </div>
 
+    <!-- Document Settings (ค่ากลางทั้งระบบ ตาม ISO — Doc No. เดียวทั้งบริษัท) -->
+    <div class="admin-section">
+      <div class="admin-section-title">📄 ตั้งค่าเอกสารกลาง (ตามระบบ ISO)</div>
+      <div style="font-size:11px; color:var(--text-muted); margin-bottom:8px;">
+        ⚠️ Doc No. คือเลขคุมเอกสารแบบฟอร์มตรวจ JIG — <strong>มีค่าเดียวทั้งบริษัท</strong> ไม่ผูกกับ JIG ตัวไหน ควรเปลี่ยนเมื่อฝ่าย ISO อนุมัติ Document Change เท่านั้น
+      </div>
+      <div class="admin-input-row">
+        <input type="text" id="adm-doc-no" placeholder="Doc No. (เช่น DDM4-2-002)">
+        <input type="text" id="adm-rev-level" placeholder="Rev. Level (เช่น Rev.01)">
+        <button class="btn-adm-add" id="btn-save-app-settings">บันทึก</button>
+      </div>
+    </div>
+
     <!-- Add JIG -->
     <div class="admin-section">
       <div class="admin-section-title">🔧 เพิ่ม JIG</div>
@@ -432,6 +445,7 @@
         <select id="adm-jig-line" class="adm-sel"><option value="">Line</option></select>
         <input type="text" id="adm-jig-id" placeholder="รหัส JIG (เช่น JRG01)">
         <input type="text" id="adm-jig-name" placeholder="ชื่อ JIG">
+        <input type="text" id="adm-jig-docno" placeholder="Run No. (เช่น SL-RG01-002) — เว้นว่างได้">
         <button class="btn-adm-add" id="btn-adm-jig">เพิ่ม</button>
       </div>
       <div class="admin-search-row">
@@ -439,7 +453,7 @@
         <span id="adm-jig-count" class="admin-search-count"></span>
       </div>
       <div class="admin-list admin-list-scroll" id="adm-jig-list" style="max-height:340px"></div>
-      <button id="btn-export-master-list" class="btn-sec" style="width:100%; margin-top:8px;">📋 Export Master List (Doc No. ทั้งหมด) เป็น Excel</button>
+      <button id="btn-export-master-list" class="btn-sec" style="width:100%; margin-top:8px;">📋 Export Master List (Run No. ทั้งหมด) เป็น Excel</button>
     </div>
 
     <!-- Manage Checkpoints -->

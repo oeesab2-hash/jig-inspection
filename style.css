@@ -1485,7 +1485,7 @@ h1, h2, h3, h4, label, button, input, select, textarea, p, span, div {
 .pdf-title { font-size: 16px; font-weight: 800; color: #111827; }
 .pdf-subtitle { font-size: 10px; color: #374151; margin-top: 2px; }
 .pdf-header-doc-cell {
-  display: grid; grid-template-rows: 1fr 1fr 1fr;
+  display: grid; grid-template-rows: repeat(5, 1fr);
   font-size: 9.5px;
 }
 .pdf-doc-row {

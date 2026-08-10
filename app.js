@@ -14,6 +14,7 @@
   const SK = {
     catalog:  'jig_catalog_v2',   // { depts, lines, jigs }
     history:  'jig_history_v2',   // array of report records
+    settings: 'jig_app_settings_v1', // { docNo, revLevel } — ค่ากลางทั้งระบบ (cache ไว้ใช้ offline)
   };
 
   // โลโก้บริษัท (embed เป็น base64 ไว้ในไฟล์เลย จะได้ไม่ต้องพึ่งไฟล์แยกตอน deploy/print PDF)
@@ -386,6 +387,8 @@
      STATE
   ══════════════════════════════════════ */
   let catalog = { depts: [], lines: [], jigs: [], templates: [] };
+  // ── ค่ากลางทั้งระบบ (ตาม ISO — Doc No. ของแบบฟอร์มตรวจ JIG มีค่าเดียวทั้งบริษัท ไม่ผูกกับ JIG ตัวไหน) ──
+  let appSettings = { docNo: 'DDM4-2-002', revLevel: 'Rev.01' };
   let selection = { deptId: null, lineId: null, jigId: null };
   let jigSearchTerm = ''; // filters the Level-3 JIG chip list
   let checkState = [];  // current inspection items
@@ -410,6 +413,52 @@
       toast('พื้นที่จัดเก็บเต็ม — รูปภาพอาจไม่ถูกบันทึก ลองลบรูปพื้นหลังบาง JIG ออก', 'ng');
     }
     debouncedPush('catalog', () => pushCatalogToSupabase(catalog));
+  }
+
+  // ── โหลด/บันทึก ค่ากลางทั้งระบบ (Doc No. / Rev. Level) ──
+  function loadAppSettings() {
+    try {
+      const raw = localStorage.getItem(SK.settings);
+      if (raw) appSettings = { ...appSettings, ...JSON.parse(raw) };
+    } catch (e) { /* ใช้ค่า default ต่อไปถ้า parse ไม่ได้ */ }
+  }
+  function saveAppSettingsLocal() {
+    try { localStorage.setItem(SK.settings, JSON.stringify(appSettings)); }
+    catch (e) { console.error('saveAppSettingsLocal error:', e); }
+  }
+  async function pullAppSettingsFromSupabase() {
+    if (!sb) return;
+    try {
+      const { data, error } = await sb.from('app_settings').select('key, value');
+      if (error) throw error; // ตาราง app_settings ยังไม่มี (ยังไม่ได้รัน SQL migration) — ใช้ค่า default/cache local ต่อไป
+      (data || []).forEach(row => {
+        if (row.key === 'doc_no') appSettings.docNo = row.value;
+        if (row.key === 'rev_level') appSettings.revLevel = row.value;
+      });
+      saveAppSettingsLocal();
+      renderAppSettingsForm();
+    } catch (e) {
+      console.error('pullAppSettingsFromSupabase error (ตรวจสอบว่ารัน SQL migration app_settings แล้วหรือยัง):', e);
+    }
+  }
+  async function saveAppSettingsToSupabase() {
+    if (!sb) { toast('ไม่ได้เชื่อมต่อ Supabase — บันทึกแค่ในเครื่องนี้', 'ng'); return; }
+    try {
+      const { error } = await sb.from('app_settings').upsert([
+        { key: 'doc_no', value: appSettings.docNo },
+        { key: 'rev_level', value: appSettings.revLevel },
+      ], { onConflict: 'key' });
+      if (error) throw error;
+      toast('✅ บันทึกค่าเอกสารกลางสำเร็จ — มีผลกับ PDF ทุกใบทันที', 'ok');
+    } catch (e) {
+      console.error('saveAppSettingsToSupabase error:', e);
+      toast('บันทึกไม่สำเร็จ — ตรวจสอบว่ารัน SQL migration app_settings แล้วหรือยัง', 'ng');
+    }
+  }
+  function renderAppSettingsForm() {
+    const docEl = $('adm-doc-no'), revEl = $('adm-rev-level');
+    if (docEl) docEl.value = appSettings.docNo || '';
+    if (revEl) revEl.value = appSettings.revLevel || '';
   }
 
   /* ══════════════════════════════════════
@@ -444,7 +493,7 @@
       const newName = prompt('แก้ไขชื่อ JIG:', j.name);
       if (newName === null) return;
       if (!newName.trim()) { toast('ชื่อห้ามว่าง', 'ng'); return; }
-      const newDocNo = prompt('แก้ไข Doc No. (เลขคุมเอกสารจริง เช่น DDM4-2-002 — เว้นว่างได้):', j.docNo || '');
+      const newDocNo = prompt('แก้ไข Run No. (เลขประจำตัว JIG ตัวนี้ ตามเอกสารกระดาษเดิม เช่น SL-RG01-002 — ลบให้ว่างได้):', j.docNo || '');
       if (newDocNo === null) return;
       j.name = newName.trim();
       j.docNo = newDocNo.trim();
@@ -635,6 +684,9 @@
     if (remoteCat) localStorage.setItem(SK.catalog, JSON.stringify(remoteCat));
     if (remoteHist) localStorage.setItem(SK.history, JSON.stringify(remoteHist));
     loadCatalog();
+    loadAppSettings();               // ใช้ค่า cache/default ไปก่อนระหว่างรอ Supabase
+    renderAppSettingsForm();
+    pullAppSettingsFromSupabase();   // แล้วอัปเดตให้ล่าสุดทันทีที่ดึงเสร็จ (ไม่บล็อกหน้าจอ)
     $('inp-date').value = new Date().toISOString().slice(0, 10);
     $('inp-month').value = currentThaiMonthAbbr();
 
@@ -1332,8 +1384,9 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
     }
   }
 
-  // ── Export Master List: รวม Doc No. (Part No.) ของ JIG ทุกตัวในระบบ จัดกลุ่มตามแผนก/Line ──
+  // ── Export Master List: รวม Run No. ของ JIG ทุกตัวในระบบ จัดกลุ่มตามแผนก/Line ──
   // ใช้สำหรับ Document Control ตามระบบ ISO/IATF — ดึงจาก catalog สดเสมอ (ไม่ใช่จากประวัติการตรวจ)
+  // หมายเหตุ: Doc No. ของแบบฟอร์มตรวจ JIG มีค่าเดียวทั้งบริษัท (ตั้งค่าที่ "ตั้งค่าเอกสารกลาง") เลยไม่ใส่ในตารางนี้ต่อแถว
   function exportMasterListToExcel() {
     if (!window.XLSX) { toast('โหลด Excel library ไม่สำเร็จ', 'ng'); return; }
     if (!catalog.jigs.length) { toast('ยังไม่มี JIG ในระบบ', 'ng'); return; }
@@ -1356,19 +1409,24 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
         'Line': line ? line.name : (j.lineId || ''),
         'ชื่อ JIG': j.name,
         'รหัส JIG (Part No.)': j.id,
-        'Doc No.': j.docNo && j.docNo.trim() ? j.docNo.trim() : '⚠️ ยังไม่กำหนด',
-        'Rev. Level': 'Rev.01', // ระบบยังไม่มีระบบคุม revision ต่อ JIG — ใช้ค่าเดียวกับที่ขึ้นใน PDF ทุกใบตอนนี้
+        'Run No.': j.docNo && j.docNo.trim() ? j.docNo.trim() : '⚠️ ยังไม่กำหนด',
         'จำนวนจุดตรวจ': (j.checkpoints || []).length,
       };
     });
 
     const wb = XLSX.utils.book_new();
-    const ws = XLSX.utils.json_to_sheet(rows);
-    ws['!cols'] = [{wch:5},{wch:14},{wch:16},{wch:30},{wch:16},{wch:18},{wch:10},{wch:12}];
+    // แถวหัวกระดาษ: Doc No. กลาง — เพื่อให้เห็นชัดว่าทุก JIG ใช้แบบฟอร์มเดียวกันนี้
+    const headerRows = [
+      [`Doc No. (แบบฟอร์มตรวจ JIG ทั้งบริษัท): ${appSettings.docNo || '—'}    Rev. Level: ${appSettings.revLevel || '—'}`],
+      [],
+    ];
+    const ws = XLSX.utils.aoa_to_sheet(headerRows);
+    XLSX.utils.sheet_add_json(ws, rows, { origin: -1 });
+    ws['!cols'] = [{wch:5},{wch:14},{wch:16},{wch:30},{wch:16},{wch:18},{wch:12}];
     XLSX.utils.book_append_sheet(wb, ws, 'Master List');
 
     const stamp = new Date().toISOString().slice(0, 10);
-    XLSX.writeFile(wb, `jig-master-list-doc-no-${stamp}.xlsx`);
+    XLSX.writeFile(wb, `jig-master-list-run-no-${stamp}.xlsx`);
     toast(`✅ Export Master List สำเร็จ — ${rows.length} รายการ`, 'ok');
   }
 
@@ -1769,7 +1827,7 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
       const lineId = $('adm-jig-line').value;
       const id     = $('adm-jig-id').value.trim().toUpperCase();
       const name   = $('adm-jig-name').value.trim();
-      const docNo  = $('adm-jig-docno').value.trim(); // Doc No. คุมเอกสารจริงของบริษัท (เช่น DDM4-2-002) — กรอกเองอิสระ ไม่ auto จากรหัส JIG แล้ว
+      const docNo  = $('adm-jig-docno').value.trim(); // Run No. — เลขประจำตัว JIG ตัวนี้ตายตัว (ตามเอกสารกระดาษเดิม เช่น SL-RG01-002) กรอกเองอิสระ แก้ไข/ลบได้ตลอด
       if (!lineId) { toast('กรุณาเลือก Line', 'ng'); return; }
       if (!id || !name) { toast('กรุณากรอกรหัสและชื่อ JIG', 'ng'); return; }
       if (catalog.jigs.find(j => j.id === id)) { toast(`รหัส ${id} มีแล้ว`, 'ng'); return; }
@@ -1777,7 +1835,7 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
       saveCatalog();
       $('adm-jig-id').value = ''; $('adm-jig-name').value = ''; $('adm-jig-docno').value = '';
       renderAdminLists(); renderFilter();
-      toast(`เพิ่ม JIG "${name}" สำเร็จ${docNo ? '' : ' — อย่าลืมกำหนด Doc No. ทีหลัง'}`, 'ok');
+      toast(`เพิ่ม JIG "${name}" สำเร็จ${docNo ? '' : ' — อย่าลืมกำหนด Run No. ทีหลัง'}`, 'ok');
     });
 
     /* JIG line filter on dept change */
@@ -1920,6 +1978,15 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
     });
     $('btn-export-excel').addEventListener('click', exportHistoryToExcel);
     $('btn-export-master-list').addEventListener('click', exportMasterListToExcel);
+    $('btn-save-app-settings').addEventListener('click', () => {
+      const newDocNo = $('adm-doc-no').value.trim();
+      const newRev   = $('adm-rev-level').value.trim();
+      if (!newDocNo) { toast('กรุณากรอก Doc No.', 'ng'); return; }
+      appSettings.docNo = newDocNo;
+      appSettings.revLevel = newRev || 'Rev.01';
+      saveAppSettingsLocal();
+      saveAppSettingsToSupabase();
+    });
 
     /* Save All — ยืนยันการบันทึกอีกครั้ง (ข้อมูลถูก auto-save ทุกครั้งที่กด "เพิ่ม" อยู่แล้ว
        ปุ่มนี้เพิ่มมาเพื่อความมั่นใจของผู้ใช้ และตรวจสอบ round-trip ผ่าน localStorage จริง) */
@@ -2532,13 +2599,13 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
   }
 
   function buildPdfReportHtml(record) {
-    // ── Document No. (คงที่ตาม JIG — ไม่เปลี่ยนไปตามรอบตรวจ) + Report No. (unique ต่อรายงานแต่ละใบ เพื่อ traceability) ──
-    // ── Document No. (คงที่ตาม JIG — ไม่เปลี่ยนไปตามรอบตรวจ) + Report No. (unique ต่อรายงานแต่ละใบ เพื่อ traceability) ──
-    // หมายเหตุ: ไม่ fallback ไปใช้รหัส JIG (jigId) แล้ว เพราะ Doc No. คือเลขคุมเอกสารจริงของบริษัท (เช่น DDM4-2-002)
-    // ซึ่งเป็นคนละอย่างกับรหัส/Part No. ของ JIG — ถ้า Admin ยังไม่ได้กำหนด Doc No. ให้โชว์คำเตือนแทนการเดาใส่
-    const docId    = (record.jigDocNo && record.jigDocNo.trim()) ? record.jigDocNo.trim() : null;
+    // ── Doc No. (ค่าเดียวทั้งบริษัท ตามที่ฝ่าย ISO ยืนยัน — ไม่ผูกกับ JIG ตัวไหน) ──
+    // ── Run No. (เลขประจำตัว JIG ตัวนี้ตายตัว ตามเอกสารกระดาษเดิม เช่น SL-RG01-002) ──
+    // ── Report No. (unique ต่อรายงานแต่ละใบ เพื่อ traceability ของการตรวจแต่ละรอบ) ──
+    const docId    = appSettings.docNo || null;
+    const revLevel = appSettings.revLevel || 'Rev.01';
+    const runNo    = (record.jigDocNo && record.jigDocNo.trim()) ? record.jigDocNo.trim() : null;
     const reportNo = 'RPT-' + (record.id || '').toString().slice(-8).toUpperCase();
-    const revLevel = 'Rev.01';
     const docDate  = new Date(record.timestamp).toLocaleDateString('th-TH', { year:'numeric', month:'2-digit', day:'2-digit' });
     const docTime  = new Date(record.timestamp).toLocaleTimeString('th-TH', { hour:'2-digit', minute:'2-digit' });
 
@@ -2613,7 +2680,11 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
           <div class="pdf-header-doc-cell">
             <div class="pdf-doc-row">
               <span class="pdf-doc-label">Doc No.</span>
-              <span class="pdf-doc-value">${docId ? escHtml(docId) : '<span style="color:#dc2626;font-weight:700">⚠️ ยังไม่กำหนด Doc No.</span>'}</span>
+              <span class="pdf-doc-value">${docId ? escHtml(docId) : '<span style="color:#dc2626;font-weight:700">⚠️ ยังไม่กำหนด</span>'}</span>
+            </div>
+            <div class="pdf-doc-row">
+              <span class="pdf-doc-label">Run No.</span>
+              <span class="pdf-doc-value">${runNo ? escHtml(runNo) : '<span style="color:#dc2626;font-weight:700">⚠️ ยังไม่กำหนด</span>'}</span>
             </div>
             <div class="pdf-doc-row">
               <span class="pdf-doc-label">Report No.</span>
