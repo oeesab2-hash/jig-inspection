@@ -125,9 +125,7 @@
       if (cat.jigs?.length) {
         const { error } = await sb.from('jigs').upsert(
           cat.jigs.map(j => ({
-            id: j.id, line_id: j.lineId, name: j.name, doc_no: j.docNo || j.id,
-            current_rev: j.currentRev || 1, bg_image: j.bgImage || null,
-            pending_rev_id: j.pendingRevId || null, pending_rev_no: j.pendingRevNo || null
+            id: j.id, line_id: j.lineId, name: j.name, doc_no: j.docNo || j.id, bg_image: j.bgImage || null
           })),
           { onConflict: 'id' }
         );
@@ -187,9 +185,6 @@
       });
       const jigs = (j.data || []).map(row => ({
         id: row.id, lineId: row.line_id, name: row.name, docNo: row.doc_no,
-        currentRev: row.current_rev || 1,
-        pendingRevId: row.pending_rev_id || null,
-        pendingRevNo: row.pending_rev_no || null,
         bgImage: row.bg_image || undefined,
         checkpoints: (cpByJig[row.id] || []).sort((a, b) => a.id - b.id),
       }));
@@ -218,7 +213,7 @@
         id: h.id, ts: h.timestamp,
         dept_id: h.deptId, dept_name: h.deptName,
         line_id: h.lineId, line_name: h.lineName,
-        jig_id: h.jigId, jig_name: h.jigName, jig_doc_no: h.jigDocNo, jig_rev: h.jigRev || null,
+        jig_id: h.jigId, jig_name: h.jigName, jig_doc_no: h.jigDocNo,
         insp_date: h.date, shift: h.shift, month: h.month,
         inspector: h.inspector, notes: h.notes, items: h.items || [],
         sig_inspector: h.sigInspector, sig_supervisor: h.sigSupervisor,
@@ -277,7 +272,7 @@
         id: row.id, timestamp: row.ts,
         deptId: row.dept_id, deptName: row.dept_name,
         lineId: row.line_id, lineName: row.line_name,
-        jigId: row.jig_id, jigName: row.jig_name, jigDocNo: row.jig_doc_no, jigRev: row.jig_rev || null,
+        jigId: row.jig_id, jigName: row.jig_name, jigDocNo: row.jig_doc_no,
         date: row.insp_date, shift: row.shift, month: row.month,
         inspector: row.inspector, notes: row.notes, items: row.items || [],
         sigInspector: row.sig_inspector, sigSupervisor: row.sig_supervisor,
@@ -625,107 +620,6 @@
     return `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
   }
 
-  // Auto-gen Doc No. รูปแบบ SUMMIT-JIG-{ปี}-{เลขรัน 3 หลัก} เช่น SUMMIT-JIG-2026-001
-  // - โหมด Supabase: เรียก RPC get_next_doc_no() ซึ่ง atomic ฝั่ง DB กันเลขชนกัน
-  //   แม้มีคนกดสร้าง JIG พร้อมกันหลายเครื่อง (ดู step2-doc-no-function.sql)
-  // - โหมด local (Supabase ต่อไม่ติด): ใช้ localStorage นับแทน — ใช้ได้แค่เครื่องเดียว
-  //   เพราะไม่มีที่กลางให้ล็อกเลขรันร่วมกัน แต่ยังกันเลขซ้ำในเครื่องเดียวกันได้
-  async function genNextDocNo() {
-    const year = new Date().getFullYear();
-    if (sb) {
-      const { data, error } = await sb.rpc('get_next_doc_no', { p_year: year });
-      if (error) throw error;
-      return data;
-    }
-    const key = `jig_docno_counter_${year}`;
-    const next = parseInt(localStorage.getItem(key) || '0', 10) + 1;
-    localStorage.setItem(key, String(next));
-    return `SUMMIT-JIG-${year}-${String(next).padStart(3, '0')}`;
-  }
-
-  // ── บันทึกประวัติการแก้ checklist ลง jig_revisions เป็น "รออนุมัติ" (ขั้นที่ 4) ──
-  // เรียกทุกครั้งที่ "เนื้อหา" checklist ของ JIG เปลี่ยนจริง: เพิ่ม/แก้/ลบหัวข้อ, นำเข้าเทมเพลต,
-  // ตั้งค่าหัวข้อแบบตัวเลข — ไม่รวมการลากจัดตำแหน่งจุดบนแผนผัง หรือการเรียงลำดับขึ้น/ลง
-  // เพราะ 2 อย่างนั้นไม่ได้เปลี่ยนเนื้อหาที่ตรวจจริง แค่จัดการแสดงผลเฉยๆ
-  //
-  // ⚠️ เปลี่ยนจากขั้นที่ 3: checkpoints ยังแก้ได้ทันที (หน้างานไม่สะดุด) แต่ "เลข Rev ทางการ"
-  // (jigs.current_rev) จะยังไม่ขยับจนกว่าผู้จัดการฝ่ายผลิตจะกดอนุมัติผ่าน revision-approve.html
-  // ถ้าโดนปฏิเสธ ระบบจะย้อน checkpoints กลับเป็นของ Rev ล่าสุดที่อนุมัติแล้วให้อัตโนมัติ
-  // คืนค่า { id, revNo } ของ revision ที่รออนุมัติ (หรือ null ถ้าบันทึกไม่สำเร็จ)
-  async function recordJigRevision(jigId, changeNote) {
-    const jig = catalog.jigs.find(j => j.id === jigId);
-    if (!jig) return null;
-    const snapshot = JSON.parse(JSON.stringify(jig.checkpoints || []));
-
-    // ✅ Bug #1 Fix: ดึงชื่อ Admin ที่ login อยู่ส่งเป็น changed_by
-    const changedBy = localStorage.getItem('jig_admin_user') || 'admin';
-
-    if (sb) {
-      try {
-        const { data, error } = await sb.rpc('record_jig_revision', {
-          p_jig_id:      jigId,
-          p_checklist:   snapshot,
-          p_change_note: changeNote || null,
-          p_changed_by:  changedBy,   // ✅ ส่งชื่อผู้แก้ไขขึ้น DB
-        });
-        if (error) throw error;
-        jig.pendingRevId = data.id;
-        jig.pendingRevNo = data.rev_no;
-        toast(`บันทึกแล้ว — รอผู้จัดการฝ่ายผลิตอนุมัติ Rev.${data.rev_no}`, 'ok');
-        // data.current_rev = Rev ก่อน increment (Bug #3 fix จาก SQL function)
-        notifyManagerRevisionPending(jig, data.id, data.rev_no, data.current_rev ?? (data.rev_no - 1), changeNote);
-        return { id: data.id, revNo: data.rev_no };
-      } catch (err) {
-        console.error('บันทึก jig_revisions ไม่สำเร็จ:', err);
-        toast('บันทึกประวัติ Revision ไม่สำเร็จ (การแก้ไข checklist ยังบันทึกปกติ)', 'ng');
-        return null;
-      }
-    }
-
-    // โหมด local (Supabase ต่อไม่ติด): ไม่มีผู้จัดการฝ่ายผลิตให้กดอนุมัติออนไลน์ — เก็บ log
-    // ไว้ใน localStorage แล้วถือว่าอนุมัติทันที (ใช้ได้เครื่องเดียว, best-effort เหมือนขั้นที่ 3 เดิม)
-    try {
-      const newRev = (jig.currentRev || 1) + 1;
-      jig.currentRev = newRev;
-      const key = `jig_revisions_local_${jigId}`;
-      const log = JSON.parse(localStorage.getItem(key) || '[]');
-      log.push({
-        rev_no: newRev, doc_no: jig.docNo || jig.id,
-        checklist_snapshot: snapshot, change_note: changeNote || null,
-        changed_at: new Date().toISOString(),
-      });
-      localStorage.setItem(key, JSON.stringify(log));
-      return { id: null, revNo: newRev };
-    } catch (err) {
-      console.error('บันทึก revision local ไม่สำเร็จ:', err);
-      return null;
-    }
-  }
-
-  // ── แจ้งผู้จัดการฝ่ายผลิตให้เข้ามาอนุมัติ Revision ใหม่ (ขั้นที่ 4) ──
-  // ใช้ sendTelegramMessage ตัวเดียวกับที่ใช้แจ้งตอนสร้างรายงานตรวจ (ไปช่องทางเดียวกัน
-  // ที่ตั้งค่าไว้ฝั่ง Edge Function) — ถ้าพี่บีอยากแยกช่องสำหรับ Revision โดยเฉพาะ บอกได้เลย
-  // ค่อยเพิ่ม chatId แยกทีหลัง
-  // ✅ Bug #3 Fix: รับ currentRevBefore แยกต่างหาก ไม่ใช้ jig.currentRev ที่อาจยังค้าง pending
-  async function notifyManagerRevisionPending(jig, revId, revNo, currentRevBefore, changeNote) {
-    const fromRev = currentRevBefore ?? (jig.currentRev || 1);
-    const changedBy = localStorage.getItem('jig_admin_user') || 'admin';
-    const text = `
-🟣 *มี Revision ใหม่รออนุมัติ*
-━━━━━━━━━━━━━━━━━━━━━━━━━
-*${escHtml(jig.name)}*
-${jig.docNo ? `_Doc No. ${escHtml(jig.docNo)}_` : ''}
-
-📌 Rev.${String(revNo).padStart(2,'0')} (จาก Rev.${String(fromRev).padStart(2,'0')})
-✏️ แก้ไขโดย: ${escHtml(changedBy)}
-📝 การแก้ไข: ${escHtml(changeNote || '-')}
-━━━━━━━━━━━━━━━━━━━━━━━━━
-`;
-    const revUrl = window.location.href.replace(/index\.html.*$/, '').replace(/\/?$/, '/')
-      + `revision-approve.html?id=${encodeURIComponent(revId)}`;
-    await sendTelegramMessage(text, revUrl, '✅ เปิดเพื่ออนุมัติ Revision');
-  }
-
   /* ══════════════════════════════════════
      INIT
   ══════════════════════════════════════ */
@@ -857,10 +751,7 @@ ${jig.docNo ? `_Doc No. ${escHtml(jig.docNo)}_` : ''}
       const dept = catalog.depts.find(d => d.id === selection.deptId);
       if (jig) {
         $('sb-jig-name').textContent = `${jig.name}`;
-        const revNote = jig.pendingRevNo
-          ? `  ·  Rev.${jig.currentRev || 1} (🟡 รออนุมัติ Rev.${jig.pendingRevNo})`
-          : `  ·  Rev.${jig.currentRev || 1}`;
-        $('sb-jig-meta').textContent = `${jig.docNo || jig.id}  ·  ${dept ? dept.name : ''}  >  ${line ? line.name : ''}${revNote}`;
+        $('sb-jig-meta').textContent = `${jig.docNo || jig.id}  ·  ${dept ? dept.name : ''}  >  ${line ? line.name : ''}`;
         banner.classList.remove('hidden');
         $('svg-jig-label').textContent = `${jig.name} — ${jig.docNo || jig.id}`;
         $('header-sub').textContent = `${jig.docNo || jig.id}  ·  ${dept ? dept.name : ''}  /  ${line ? line.name : ''}`;
@@ -1276,9 +1167,6 @@ ${jig.docNo ? `_Doc No. ${escHtml(jig.docNo)}_` : ''}
       jigId:      selection.jigId,
       jigName:    jig  ? jig.name  : '',
       jigDocNo:   jig  ? (jig.docNo || jig.id) : '',
-      // Snapshot เลข Rev ที่อนุมัติแล้ว ณ ตอนตรวจจริง (ขั้นที่ 5) — กันไม่ให้ PDF/รายงาน
-      // ย้อนหลังเปลี่ยนไปตาม Rev ปัจจุบันของ JIG ถ้าต่อมามีการแก้ Rev ใหม่อีก
-      jigRev:     jig  ? (jig.currentRev || 1) : 1,
       date:       $('inp-date').value,
       shift:      $('inp-shift').value,
       month:      $('inp-month').value,
@@ -1467,7 +1355,7 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
         'Line': line ? line.name : (j.lineId || ''),
         'ชื่อ JIG': j.name,
         'Doc No. / Part No.': j.docNo || j.id,
-        'Rev. Level': 'Rev.' + String(j.currentRev || 1).padStart(2, '0'), // Rev ทางการล่าสุดที่อนุมัติแล้ว (ขั้นที่ 5)
+        'Rev. Level': 'Rev.01', // ระบบยังไม่มีระบบคุม revision ต่อ JIG — ใช้ค่าเดียวกับที่ขึ้นใน PDF ทุกใบตอนนี้
         'จำนวนจุดตรวจ': (j.checkpoints || []).length,
       };
     });
@@ -1572,9 +1460,6 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
         name: j.name,
         lineId: j.lineId || j.line_id,  // Support both formats
         docNo: j.docNo || j.doc_no || '',
-        currentRev: j.currentRev || j.current_rev || 1,
-        pendingRevId: j.pendingRevId || j.pending_rev_id || null,
-        pendingRevNo: j.pendingRevNo || j.pending_rev_no || null,
         bgImage: j.bgImage || j.bg_image || null,
         checkpoints: (j.checkpoints || []).map(cp => ({
           id: cp.id,
@@ -1628,9 +1513,6 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
               line_id: j.lineId,  // Now using normalized camelCase
               name: j.name, 
               doc_no: j.docNo, 
-              current_rev: j.currentRev || 1,
-              pending_rev_id: j.pendingRevId || null,
-              pending_rev_no: j.pendingRevNo || null,
               bg_image: j.bgImage 
             })),
             { onConflict: 'id' }
@@ -1666,7 +1548,7 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
             dept_id: h.deptId || h.dept_id || '', dept_name: h.deptName || h.dept_name || '',
             line_id: h.lineId || h.line_id || '', line_name: h.lineName || h.line_name || '',
             jig_id: h.jigId || h.jig_id || '', jig_name: h.jigName || h.jig_name || '',
-            jig_doc_no: h.jigDocNo || h.jig_doc_no || '', jig_rev: h.jigRev || h.jig_rev || null,
+            jig_doc_no: h.jigDocNo || h.jig_doc_no || '',
             insp_date: h.date || h.insp_date || '', shift: h.shift || '',
             month: h.month || '', inspector: h.inspector || '', notes: h.notes || '',
             items: h.items || [],
@@ -1880,7 +1762,7 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
     });
 
     /* Add JIG */
-    $('btn-adm-jig').addEventListener('click', async () => {
+    $('btn-adm-jig').addEventListener('click', () => {
       const deptId = $('adm-jig-dept').value;
       const lineId = $('adm-jig-line').value;
       const id     = $('adm-jig-id').value.trim().toUpperCase();
@@ -1888,23 +1770,11 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
       if (!lineId) { toast('กรุณาเลือก Line', 'ng'); return; }
       if (!id || !name) { toast('กรุณากรอกรหัสและชื่อ JIG', 'ng'); return; }
       if (catalog.jigs.find(j => j.id === id)) { toast(`รหัส ${id} มีแล้ว`, 'ng'); return; }
-
-      let docNo;
-      try {
-        docNo = await genNextDocNo();
-      } catch (err) {
-        // RPC ล่ม (เช่น step2-doc-no-function.sql ยังไม่ได้รัน) — ไม่บล็อกการสร้าง JIG
-        // ใช้รหัส JIG แทนไปก่อนเหมือนพฤติกรรมเดิม แล้วแจ้งเตือนให้รู้ว่า auto-gen ไม่ทำงาน
-        console.error('genNextDocNo error:', err);
-        toast('สร้างเลข Doc No. อัตโนมัติไม่สำเร็จ — ใช้รหัส JIG แทนไปก่อน (เช็ค RPC บน Supabase)', 'ng');
-        docNo = id;
-      }
-
-      catalog.jigs.push({ id, lineId, name, docNo, currentRev: 1, bgImage: null, checkpoints: [] });
+      catalog.jigs.push({ id, lineId, name, docNo: id, bgImage: null, checkpoints: [] });
       saveCatalog();
       $('adm-jig-id').value = ''; $('adm-jig-name').value = '';
       renderAdminLists(); renderFilter();
-      toast(`เพิ่ม JIG "${name}" สำเร็จ — Doc No. ${docNo}`, 'ok');
+      toast(`เพิ่ม JIG "${name}" สำเร็จ`, 'ok');
     });
 
     /* JIG line filter on dept change */
@@ -1917,7 +1787,7 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
 
     /* Checkpoint Management — extracted to bindCpJigDropdown() so it can be re-called */
     bindCpJigDropdown();
-    $('btn-adm-cp').addEventListener('click', async () => {
+    $('btn-adm-cp').addEventListener('click', () => {
       const jid = $('adm-cp-jig').value;
       if (!jid) return;
       const jig = catalog.jigs.find(j => j.id === jid);
@@ -1931,12 +1801,11 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
       const x = 300 + Math.round(Math.random() * 60 - 30);
       const y = 170 + Math.round(Math.random() * 60 - 30);
       jig.checkpoints.push({ id: newId, label, sub, method, x, y });
-
+      
       // ตั้ง _syncing = true ระหว่างเพิ่มจุด เพื่อไม่ให้ realtime event echo มาแทรก
       // (ถ้าปล่อยให้ realtime event มา จะเรียก renderAdminLists() แล้ว dropdown รีเซ็ต 
       //  ทำให้ user ต้องเลือก JIG ใหม่อีกครั้ง)
       _syncing = true;
-      await recordJigRevision(jid, `เพิ่มจุดตรวจ "${label}"`);
       saveCatalog();
       // ปกติ saveCatalog ส่งขึ้น Supabase เป็น debounce 500ms ผลจะมาบ้านประมาณ 1-2 วินาที
       // ตั้ง _syncing = false หลังจากนั้นพอ ให้เวลาเพียงพอให้ realtime event ถูกเพิกเฉย
@@ -1960,7 +1829,7 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
       updateTplPreviewCount();
     });
 
-    $('btn-tpl-apply').addEventListener('click', async () => {
+    $('btn-tpl-apply').addEventListener('click', () => {
       const jid = cpEditJigId;
       if (!jid) return;
       const tplId = $('adm-tpl-select').value;
@@ -1981,7 +1850,6 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
         const y = 100 + row * 60 + Math.round(Math.random() * 10 - 5);
         jig.checkpoints.push({ id: nextId++, label: item.label, sub: item.sub, method: item.method, x, y });
       });
-      await recordJigRevision(jid, `นำเข้า ${selectedItems.length} หัวข้อจากเทมเพลต "${tpl.name}"`);
       saveCatalog();
       renderAdmCpMap(jid);
       renderCpList(jid);
@@ -2176,11 +2044,10 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
       </div>`).join('') : '<div style="font-size:11px;color:var(--text-muted)">ยังไม่มีจุดตรวจ ใช้ค่าเริ่มต้น (10 จุด)</div>';
 
     document.querySelectorAll('.btn-del-cp').forEach(btn => {
-      btn.addEventListener('click', async () => {
+      btn.addEventListener('click', () => {
         const j = catalog.jigs.find(x => x.id === btn.dataset.jid);
         const removed = j.checkpoints[btn.dataset.idx];
         j.checkpoints.splice(btn.dataset.idx, 1);
-        await recordJigRevision(btn.dataset.jid, `ลบจุดตรวจ "${removed ? removed.label : ''}"`);
         saveCatalog();
         // ⚠️ FIX: pushCatalogToSupabase ใช้ upsert (ไม่ลบ) — ต้องลบแถวนี้ออกจาก Supabase ตรงๆ
         // ไม่งั้นแถวเดิมจะยังค้างอยู่ใน DB แล้วโดน sync กลับมา "เด้งคืน" เหมือนไม่เคยลบ
@@ -2211,7 +2078,7 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
   }
 
   /* ── แก้ไขชื่อ/เกณฑ์/วิธีตรวจของจุดตรวจที่มีอยู่แล้ว (ไม่ต้องลบแล้วเพิ่มใหม่ ตำแหน่ง X,Y ยังอยู่เหมือนเดิม) ── */
-  async function editCheckpoint(jid, idx) {
+  function editCheckpoint(jid, idx) {
     const jig = catalog.jigs.find(j => j.id === jid);
     const p = jig.checkpoints[idx];
     if (!p) return;
@@ -2225,7 +2092,6 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
     if (method === null) return;
 
     p.label = label.trim(); p.sub = sub.trim(); p.method = method.trim();
-    await recordJigRevision(jid, `แก้ไขจุดตรวจ "${p.label}"`);
     saveCatalog();
     renderCpList(jid);
     renderAdmCpMap(jid);
@@ -2254,7 +2120,7 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
 
   /* ── ตั้งค่าหัวข้อตรวจให้เป็นแบบ "กรอกค่าตัวเลข" พร้อมช่วงที่ยอมรับได้ (min-max)
      แทนการกดปุ่ม ✔/✖/🔧 ปกติ — ใช้กับหัวข้อวัดค่า เช่น แรงดันลม, แรงบิด, ระยะห่าง ── */
-  async function configureNumericCheckpoint(jid, idx) {
+  function configureNumericCheckpoint(jid, idx) {
     const jig = catalog.jigs.find(j => j.id === jid);
     const p = jig.checkpoints[idx];
     if (!p) return;
@@ -2262,7 +2128,6 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
     if (p.type === 'numeric') {
       if (!confirm(`เปลี่ยน "${p.label}" กลับเป็นแบบ ปกติ/ไม่ปกติ (Pass/Fail) แทนการกรอกตัวเลขหรือไม่?`)) return;
       delete p.type; delete p.min; delete p.max; delete p.unit;
-      await recordJigRevision(jid, `เปลี่ยน "${p.label}" กลับเป็นแบบ Pass/Fail`);
       saveCatalog();
       renderCpList(jid);
       toast(`เปลี่ยน "${p.label}" กลับเป็นแบบ Pass/Fail แล้ว`, 'ok');
@@ -2281,7 +2146,6 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
     if (min > max) { toast('ค่าต่ำสุดต้องไม่มากกว่าค่าสูงสุด', 'ng'); return; }
 
     p.type = 'numeric'; p.min = min; p.max = max; p.unit = unit.trim();
-    await recordJigRevision(jid, `ตั้งค่า "${p.label}" เป็นหัวข้อกรอกตัวเลข (${min}-${max}${unit.trim() ? ' ' + unit.trim() : ''})`);
     saveCatalog();
     renderCpList(jid);
     toast(`ตั้งค่า "${p.label}" เป็นหัวข้อกรอกตัวเลข (${min}-${max}${unit.trim() ? ' ' + unit.trim() : ''}) แล้ว`, 'ok');
@@ -2667,9 +2531,7 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
     // ── Document No. (คงที่ตาม JIG — ไม่เปลี่ยนไปตามรอบตรวจ) + Report No. (unique ต่อรายงานแต่ละใบ เพื่อ traceability) ──
     const docId    = record.jigDocNo || record.jigId || '—';
     const reportNo = 'RPT-' + (record.id || '').toString().slice(-8).toUpperCase();
-    // ดึง Rev จาก snapshot ที่บันทึกไว้ตอนตรวจจริง (ขั้นที่ 5) — รายงานเก่าที่ยังไม่มีค่านี้
-    // (บันทึกก่อน step 5) จะ fallback เป็น Rev.01 เหมือนเดิม
-    const revLevel = 'Rev.' + String(record.jigRev || 1).padStart(2, '0');
+    const revLevel = 'Rev.01';
     const docDate  = new Date(record.timestamp).toLocaleDateString('th-TH', { year:'numeric', month:'2-digit', day:'2-digit' });
     const docTime  = new Date(record.timestamp).toLocaleTimeString('th-TH', { hour:'2-digit', minute:'2-digit' });
 
