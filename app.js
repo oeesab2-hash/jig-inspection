@@ -1331,6 +1331,45 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
     }
   }
 
+  // ── Export Master List: รวม Doc No. (Part No.) ของ JIG ทุกตัวในระบบ จัดกลุ่มตามแผนก/Line ──
+  // ใช้สำหรับ Document Control ตามระบบ ISO/IATF — ดึงจาก catalog สดเสมอ (ไม่ใช่จากประวัติการตรวจ)
+  function exportMasterListToExcel() {
+    if (!window.XLSX) { toast('โหลด Excel library ไม่สำเร็จ', 'ng'); return; }
+    if (!catalog.jigs.length) { toast('ยังไม่มี JIG ในระบบ', 'ng'); return; }
+
+    const jigsSorted = [...catalog.jigs].sort((a, b) => {
+      const la = catalog.lines.find(l => l.id === a.lineId);
+      const lb = catalog.lines.find(l => l.id === b.lineId);
+      const da = catalog.depts.find(d => d.id === (la && la.deptId));
+      const db = catalog.depts.find(d => d.id === (lb && lb.deptId));
+      return `${da ? da.name : ''}${la ? la.name : ''}`.localeCompare(`${db ? db.name : ''}${lb ? lb.name : ''}`, 'th')
+          || a.name.localeCompare(b.name, 'th');
+    });
+
+    const rows = jigsSorted.map((j, i) => {
+      const line = catalog.lines.find(l => l.id === j.lineId);
+      const dept = catalog.depts.find(d => d.id === (line && line.deptId));
+      return {
+        'No.': i + 1,
+        'แผนก': dept ? dept.name : '',
+        'Line': line ? line.name : (j.lineId || ''),
+        'ชื่อ JIG': j.name,
+        'Doc No. / Part No.': j.docNo || j.id,
+        'Rev. Level': 'Rev.01', // ระบบยังไม่มีระบบคุม revision ต่อ JIG — ใช้ค่าเดียวกับที่ขึ้นใน PDF ทุกใบตอนนี้
+        'จำนวนจุดตรวจ': (j.checkpoints || []).length,
+      };
+    });
+
+    const wb = XLSX.utils.book_new();
+    const ws = XLSX.utils.json_to_sheet(rows);
+    ws['!cols'] = [{wch:5},{wch:14},{wch:16},{wch:30},{wch:22},{wch:10},{wch:12}];
+    XLSX.utils.book_append_sheet(wb, ws, 'Master List');
+
+    const stamp = new Date().toISOString().slice(0, 10);
+    XLSX.writeFile(wb, `jig-master-list-doc-no-${stamp}.xlsx`);
+    toast(`✅ Export Master List สำเร็จ — ${rows.length} รายการ`, 'ok');
+  }
+
   async function exportAllData() {
     if (!sb) { toast('ไม่ได้เชื่อมต่อ Supabase', 'ng'); return; }
     toast('กำลังดึงข้อมูลจาก Supabase...', 'ok');
@@ -1877,6 +1916,7 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
       e.target.value = '';
     });
     $('btn-export-excel').addEventListener('click', exportHistoryToExcel);
+    $('btn-export-master-list').addEventListener('click', exportMasterListToExcel);
 
     /* Save All — ยืนยันการบันทึกอีกครั้ง (ข้อมูลถูก auto-save ทุกครั้งที่กด "เพิ่ม" อยู่แล้ว
        ปุ่มนี้เพิ่มมาเพื่อความมั่นใจของผู้ใช้ และตรวจสอบ round-trip ผ่าน localStorage จริง) */
@@ -2488,8 +2528,9 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
   }
 
   function buildPdfReportHtml(record) {
-    // ── Document ID (ISO requirement: unique traceable ID) ──
-    const docId = 'RPT-' + (record.id || '').toString().slice(-8).toUpperCase();
+    // ── Document No. (คงที่ตาม JIG — ไม่เปลี่ยนไปตามรอบตรวจ) + Report No. (unique ต่อรายงานแต่ละใบ เพื่อ traceability) ──
+    const docId    = record.jigDocNo || record.jigId || '—';
+    const reportNo = 'RPT-' + (record.id || '').toString().slice(-8).toUpperCase();
     const revLevel = 'Rev.01';
     const docDate  = new Date(record.timestamp).toLocaleDateString('th-TH', { year:'numeric', month:'2-digit', day:'2-digit' });
     const docTime  = new Date(record.timestamp).toLocaleTimeString('th-TH', { hour:'2-digit', minute:'2-digit' });
@@ -2566,6 +2607,10 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
             <div class="pdf-doc-row">
               <span class="pdf-doc-label">Doc No.</span>
               <span class="pdf-doc-value">${escHtml(docId)}</span>
+            </div>
+            <div class="pdf-doc-row">
+              <span class="pdf-doc-label">Report No.</span>
+              <span class="pdf-doc-value">${escHtml(reportNo)}</span>
             </div>
             <div class="pdf-doc-row">
               <span class="pdf-doc-label">Rev. Level</span>
@@ -2700,7 +2745,7 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
         <div class="pdf-footer-block">
           <span class="pdf-footer-std">📋 ISO 9001:2015 | IATF 16949:2016 — Quality Management System</span>
           <span class="pdf-footer-gps">📍 GPS: ${gpsText}</span>
-          <span class="pdf-footer-page">Doc: ${escHtml(docId)} | ${docDate}</span>
+          <span class="pdf-footer-page">Report: ${escHtml(reportNo)} | ${docDate}</span>
         </div>
 
       </div>`;
@@ -2714,10 +2759,10 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
 
     toast('⏳ กำลังสร้าง PDF (ISO/IATF format)...', 'ok');
 
-    // ── ISO Document ID ──
-    const docId   = 'RPT-' + (record.id || '').toString().slice(-8).toUpperCase();
+    // ── Report No. (unique ต่อรายงานแต่ละใบ — ใช้ตั้งชื่อไฟล์ให้ไม่ซ้ำกัน) ──
+    const reportNo = 'RPT-' + (record.id || '').toString().slice(-8).toUpperCase();
     const stamp   = record.date || new Date().toISOString().slice(0, 10);
-    const filename = `JIG-RPT_${docId}_${escHtml(record.jigId)}_${stamp}_${escHtml(record.shift)}.pdf`;
+    const filename = `JIG-RPT_${reportNo}_${escHtml(record.jigId)}_${stamp}_${escHtml(record.shift)}.pdf`;
 
     const container = document.createElement('div');
     container.className = 'pdf-export-root';
