@@ -599,6 +599,7 @@
 🔵 *รอผู้จัดการฝ่ายผลิตอนุมัติ (ขั้นที่ 2)*
 ━━━━━━━━━━━━━━━━━━━━━━━━━
 *${esc(row.jig_name)}*
+${esc(row.jig_id || '')}
 ${row.jig_doc_no ? `_${esc(row.jig_doc_no)}_` : ''}
 
 📅 วันที่ตรวจ: ${esc(row.insp_date)} เวลา ${esc(time)}

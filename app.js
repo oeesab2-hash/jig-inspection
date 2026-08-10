@@ -1322,6 +1322,7 @@
 📊 *JIG Inspection Report*
 ━━━━━━━━━━━━━━━━━━━━━━━━━
 *${escHtml(record.jigName)}*
+${escHtml(record.jigId)}
 ${record.jigDocNo ? `_${escHtml(record.jigDocNo)}_` : ''}
 
 📅 วันที่: ${record.date}
