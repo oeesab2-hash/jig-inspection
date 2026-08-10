@@ -1172,7 +1172,12 @@
       month:      $('inp-month').value,
       inspector:  $('inp-inspector').value.trim(),
       notes:      $('report-notes').value,
-      items:      checkState.map(i => ({ id: i.id, label: i.label, status: i.status, note: i.note, photos: i.photos, value: i.value ?? null, unit: i.unit || '' })),
+      items:      checkState.map(i => ({
+        id: i.id, label: i.label, sub: i.sub || '', method: i.method || '',
+        status: i.status, note: i.note, photos: i.photos,
+        type: i.type || null, min: i.min ?? null, max: i.max ?? null,
+        value: i.value ?? null, unit: i.unit || '',
+      })),
       sigInspector:  $('sig-inspector').value.trim(),
       sigSupervisor: $('sig-supervisor').value.trim(),
       // ─── Approval Workflow — รอหัวหน้างานกดตรวจสอบผ่าน Telegram ───
