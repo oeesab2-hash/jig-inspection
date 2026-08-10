@@ -1569,6 +1569,8 @@ h1, h2, h3, h4, label, button, input, select, textarea, p, span, div {
 .pdf-value-cell  { text-align: center; font-family: 'Outfit', monospace; font-size: 10px; font-weight: 700; }
 .pdf-value-ok    { color: #15803d; }
 .pdf-value-ng    { color: #dc2626; }
+.pdf-value-na    { color: #cbd5e1; font-weight: 400; font-size: 12px; }
+.pdf-value-icon  { font-size: 14px; font-weight: 700; }
 
 /* ─── SUMMARY / RESULT BLOCK ────────────────────────────── */
 .pdf-result-block {

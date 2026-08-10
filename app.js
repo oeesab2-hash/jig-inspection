@@ -2523,8 +2523,12 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
       const specStr  = hasSpec
         ? `${item.min ?? '—'} ~ ${item.max ?? '—'}${item.unit ? ' ' + escHtml(item.unit) : ''}`
         : (item.sub ? escHtml(item.sub) : '—'); // หัวข้อแบบ Pass-Fail ไม่มีตัวเลข ใช้เกณฑ์ตรวจ (sub) แทน
-      const valueStr = item.value != null ? `${item.value}${item.unit ? ' ' + escHtml(item.unit) : ''}` : '—';
-      const valueClass = item.value != null
+      const valueStr = item.value != null
+        ? `${item.value}${item.unit ? ' ' + escHtml(item.unit) : ''}`
+        : (item.status === 'ok' || item.status === 'fixed') ? '<span class="pdf-value-icon">✓</span>'
+        : item.status === 'ng' ? '<span class="pdf-value-icon">✗</span>'
+        : `<span class="pdf-value-na">–</span>`; // ยังไม่ตรวจ — ไม่มีทั้งค่าตัวเลขและผลตรวจ
+      const valueClass = item.value != null || item.status === 'ok' || item.status === 'fixed' || item.status === 'ng'
         ? (item.status === 'ok' || item.status === 'fixed' ? 'pdf-value-ok' : 'pdf-value-ng')
         : '';
       const badge = item.status === 'ok'    ? '<span class="pdf-status-badge pdf-badge-ok">OK</span>'
