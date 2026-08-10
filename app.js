@@ -2520,7 +2520,9 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
     // ── Table rows (ISO/IATF: include spec LSL/USL + Actual Value + Status Badge) ──
     const rows = record.items.map((item, i) => {
       const hasSpec  = item.type === 'numeric' || (item.min != null && item.max != null);
-      const specStr  = hasSpec ? `${item.min ?? '—'} ~ ${item.max ?? '—'}${item.unit ? ' ' + escHtml(item.unit) : ''}` : '—';
+      const specStr  = hasSpec
+        ? `${item.min ?? '—'} ~ ${item.max ?? '—'}${item.unit ? ' ' + escHtml(item.unit) : ''}`
+        : (item.sub ? escHtml(item.sub) : '—'); // หัวข้อแบบ Pass-Fail ไม่มีตัวเลข ใช้เกณฑ์ตรวจ (sub) แทน
       const valueStr = item.value != null ? `${item.value}${item.unit ? ' ' + escHtml(item.unit) : ''}` : '—';
       const valueClass = item.value != null
         ? (item.status === 'ok' || item.status === 'fixed' ? 'pdf-value-ok' : 'pdf-value-ng')
@@ -2533,7 +2535,7 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
       return `
         <tr class="${rowCls}">
           <td style="text-align:center;font-weight:700">${i + 1}</td>
-          <td>${escHtml(item.label)}<br><span style="font-size:8.5px;color:#6b7280">${escHtml(item.sub || '')}</span></td>
+          <td>${escHtml(item.label)}</td>
           <td style="text-align:center;font-size:9px;color:#475569">${escHtml(item.method || '—')}</td>
           <td class="pdf-spec-cell">${specStr}</td>
           <td class="pdf-value-cell ${valueClass}">${valueStr}</td>
