@@ -490,17 +490,70 @@
     } else if (etype === 'jig') {
       const j = catalog.jigs.find(x => x.id === id);
       if (!j) return;
+
+      // ── รหัส JIG (id) ── แก้ได้แล้ว แต่ต้อง validate ซ้ำ + normalize แบบเดียวกับตอนเพิ่มใหม่
+      const newId = prompt('แก้ไขรหัส JIG (เช่น JRG01):', j.id);
+      if (newId === null) return;
+      const newIdNorm = newId.trim().toUpperCase();
+      if (!newIdNorm) { toast('รหัสห้ามว่าง', 'ng'); return; }
+      if (newIdNorm !== j.id && catalog.jigs.find(x => x.id === newIdNorm)) {
+        toast(`รหัส ${newIdNorm} มีแล้ว`, 'ng'); return;
+      }
+
       const newName = prompt('แก้ไขชื่อชิ้นงาน:', j.name);
       if (newName === null) return;
       if (!newName.trim()) { toast('ชื่อห้ามว่าง', 'ng'); return; }
       const newDocNo = prompt('แก้ไข Run No. (เลขประจำตัว JIG ตัวนี้ ตามเอกสารกระดาษเดิม เช่น SL-RG01-002 — ลบให้ว่างได้):', j.docNo || '');
       if (newDocNo === null) return;
+
+      const oldId = j.id;
+      j.id = newIdNorm;
       j.name = newName.trim();
       j.docNo = newDocNo.trim();
+
+      saveCatalog(); renderAdminLists(); renderFilter();
+      // ถ้าเปลี่ยนรหัส JIG ต้องย้าย checkpoints/history บน Supabase ตามไปด้วย กันข้อมูลเดิมหลุด/กำพร้า
+      if (oldId !== newIdNorm) renameJigIdInSupabase(oldId, newIdNorm, j);
+      toast('แก้ไขสำเร็จ', 'ok');
+      return;
     }
     
     saveCatalog(); renderAdminLists(); renderFilter();
     toast('แก้ไขสำเร็จ', 'ok');
+  }
+
+  // ── เปลี่ยนรหัส (id) ของ JIG บน Supabase อย่างปลอดภัย ──
+  // ทำแบบ "สร้างแถวใหม่ก่อน → ย้าย checkpoints/history มาอ้างอิงรหัสใหม่ → ค่อยลบแถวเก่า"
+  // เพื่อไม่ให้ FK ของ checkpoints/history หลุดลอย หรือถูกลบทิ้งไปพร้อมแถว jig เดิม
+  // ไม่ว่า schema จะตั้ง cascade ไว้หรือไม่ก็ตาม (ทำเองตรงๆ ปลอดภัยกว่า)
+  async function renameJigIdInSupabase(oldId, newId, jigData) {
+    if (!sb) return;
+    _syncing = true;
+    try {
+      // 1) สร้าง/upsert แถว jig รหัสใหม่ก่อน (คัดลอกข้อมูลปัจจุบันทั้งหมด)
+      const { error: insErr } = await sb.from('jigs').upsert([{
+        id: newId, line_id: jigData.lineId, name: jigData.name,
+        doc_no: jigData.docNo || '', bg_image: jigData.bgImage || null,
+      }], { onConflict: 'id' });
+      if (insErr) throw insErr;
+
+      // 2) ย้าย checkpoints ทั้งหมดของ jig เดิม ไปอ้างอิงรหัสใหม่
+      const { error: cpErr } = await sb.from('checkpoints').update({ jig_id: newId }).eq('jig_id', oldId);
+      if (cpErr) throw cpErr;
+
+      // 3) ย้าย history (ผลตรวจเก่าทั้งหมด) ไปอ้างอิงรหัสใหม่ — ข้อมูลเดิมไม่หาย แค่เปลี่ยนรหัสอ้างอิง
+      const { error: hErr } = await sb.from('history').update({ jig_id: newId }).eq('jig_id', oldId);
+      if (hErr) throw hErr;
+
+      // 4) ลบแถว jig รหัสเดิมทิ้ง (ตอนนี้ไม่มีอะไรอ้างอิงแล้ว)
+      const { error: delErr } = await sb.from('jigs').delete().eq('id', oldId);
+      if (delErr) throw delErr;
+    } catch (e) {
+      console.error('renameJigIdInSupabase error:', e);
+      toast('เปลี่ยนรหัส JIG บน Supabase ไม่สำเร็จบางส่วน — ลอง sync ใหม่อีกครั้ง หรือแจ้ง Admin', 'ng');
+    } finally {
+      setTimeout(() => { _syncing = false; }, 1500);
+    }
   }
 
   // ── ลบ catalog item ออกจาก Supabase จริงๆ ──
