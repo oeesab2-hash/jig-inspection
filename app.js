@@ -2422,9 +2422,14 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
         }
         const searchText = `${j.name} ${j.id} ${j.docNo || ''} ${line ? line.name : ''}`.toLowerCase();
         html += `<div class="adm-item" data-group="${escHtml(groupKey)}" data-search="${escHtml(searchText)}">
-          <div class="adm-item-info">
-            <div>🔧 ${escHtml(j.name)}</div>
-            <div class="adm-item-code">${escHtml(j.id)}${j.docNo ? ' · ' + escHtml(j.docNo) : ''} · ${escHtml(line ? line.name : j.lineId)}</div>
+          <div class="adm-item-main">
+            <div class="adm-item-thumb">${j.bgImage
+              ? `<img src="${escHtml(j.bgImage)}" alt="${escHtml(j.name)}">`
+              : `<svg class="adm-item-thumb-empty" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>`}</div>
+            <div class="adm-item-info">
+              <div>🔧 ${escHtml(j.name)}</div>
+              <div class="adm-item-code">${escHtml(j.id)}${j.docNo ? ' · ' + escHtml(j.docNo) : ''} · ${escHtml(line ? line.name : j.lineId)}</div>
+            </div>
           </div>
           <button class="adm-item-edit" data-etype="jig" data-id="${escHtml(j.id)}">✏️</button>
           <button class="adm-item-del" data-dtype="jig" data-id="${escHtml(j.id)}">🗑</button>
