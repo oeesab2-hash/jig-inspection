@@ -729,6 +729,10 @@
   async function init() {
     ensureLocalAdminPassBootstrap();
 
+    // ─── โลโก้บริษัท (ใช้ base64 ตัวเดียวกับ PDF Report) ───
+    const brandLogoImg = $('brand-logo-img');
+    if (brandLogoImg) brandLogoImg.src = SUMMIT_LOGO_B64;
+
     // ─── ตรวจสอบ GPS Status ───
     await checkGPSStatusOnLoad();
     
