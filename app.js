@@ -454,7 +454,7 @@
       toast('✅ บันทึกค่าเอกสารกลางสำเร็จ — มีผลกับ PDF ทุกใบทันที', 'ok');
     } catch (e) {
       console.error('saveAppSettingsToSupabase error:', e);
-      toast('บันทึกไม่สำเร็จ — ตรวจสอบว่ารัน SQL migration app_settings แล้วหรือยัง', 'ng');
+      toast(`บันทึกไม่สำเร็จ: ${e.message || e.code || 'ดู Console (F12) เพื่อดูรายละเอียด'}`, 'ng');
     }
   }
   function renderAppSettingsForm() {
