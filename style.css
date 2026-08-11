@@ -592,6 +592,9 @@ h1, h2, h3, h4, label, button, input, select, textarea, p, span, div {
 .rbtn.ok.active    { background: var(--ok-bg);    border-color: var(--ok);    color: var(--ok); }
 .rbtn.ng.active    { background: var(--ng-bg);    border-color: var(--ng);    color: var(--ng); }
 .rbtn.fixed.active { background: var(--fixed-bg); border-color: var(--fixed); color: var(--fixed); }
+.rbtn:disabled { opacity: 0.35; cursor: not-allowed; }
+.rbtn:disabled:hover { border-color: var(--border-input); }
+.check-numeric-input.needs-value { border-color: var(--ng, #e05252); }
 
 /* NG Detail Zone */
 .ng-zone {

@@ -1061,8 +1061,23 @@
       }
 
       div.querySelectorAll('.rbtn').forEach(btn => {
-        btn.addEventListener('click', () => setStatus(btn.dataset.v));
+        btn.addEventListener('click', () => {
+          // บังคับกรอกค่าก่อนสำหรับหัวข้อที่เป็นตัวเลข — กันกดติ๊กผ่าน/ไม่ผ่านทั้งที่ยังไม่ได้วัดค่าจริง
+          if (isNumeric && (checkState[idx].value === null || checkState[idx].value === undefined)) {
+            toast('กรุณากรอกค่าที่วัดได้ก่อน', 'ng');
+            const inputEl = $(`numval-${idx}`);
+            if (inputEl) { inputEl.focus(); inputEl.classList.add('needs-value'); setTimeout(() => inputEl.classList.remove('needs-value'), 900); }
+            return;
+          }
+          setStatus(btn.dataset.v);
+        });
       });
+
+      // หัวข้อตัวเลข: ปิดปุ่มติ๊กไว้ก่อนจนกว่าจะกรอกค่า (กันข้ามการวัดค่าจริงไปติ๊กผ่านเฉยๆ)
+      if (isNumeric) {
+        const hasValue = checkState[idx].value !== null && checkState[idx].value !== undefined;
+        div.querySelectorAll('.rbtn').forEach(b => { b.disabled = !hasValue; });
+      }
 
       // หัวข้อกรอกค่าตัวเลข: กรอกค่าแล้วระบบตัดสิน ผ่าน/ไม่ผ่าน อัตโนมัติจากช่วงเกณฑ์ที่ตั้งไว้
       // (ยังสามารถกดปุ่ม 🔧 "แก้ไขแล้ว" ทับได้ภายหลัง ถ้าแก้ไขปัญหาแล้วแต่ค่าที่วัดยังไม่อยู่ในช่วง)
@@ -1072,7 +1087,7 @@
           if (raw === '') {
             checkState[idx].value = null;
             checkState[idx].status = '';
-            div.querySelectorAll('.rbtn').forEach(b => b.classList.remove('active'));
+            div.querySelectorAll('.rbtn').forEach(b => { b.classList.remove('active'); b.disabled = true; });
             $(`ng-zone-${idx}`).classList.remove('show');
             updateSvgPoint(item.id, '');
             updateStats();
@@ -1081,6 +1096,7 @@
           const val = parseFloat(raw);
           if (isNaN(val)) return;
           checkState[idx].value = val;
+          div.querySelectorAll('.rbtn').forEach(b => { b.disabled = false; });
           const inRange = (item.min == null || val >= item.min) && (item.max == null || val <= item.max);
           setStatus(inRange ? 'ok' : 'ng');
         });
