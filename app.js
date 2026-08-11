@@ -388,7 +388,7 @@
   ══════════════════════════════════════ */
   let catalog = { depts: [], lines: [], jigs: [], templates: [] };
   // ── ค่ากลางทั้งระบบ (ตาม ISO — Doc No. ของแบบฟอร์มตรวจ JIG มีค่าเดียวทั้งบริษัท ไม่ผูกกับ JIG ตัวไหน) ──
-  let appSettings = { docNo: 'DDM4-2-002', revLevel: 'Rev.01' };
+  let appSettings = { docNo: 'DDM4-2-002', revLevel: 'Rev.01', issueDate: '' };
   let selection = { deptId: null, lineId: null, jigId: null };
   let jigSearchTerm = ''; // filters the Level-3 JIG chip list
   let checkState = [];  // current inspection items
@@ -434,6 +434,7 @@
       (data || []).forEach(row => {
         if (row.key === 'doc_no') appSettings.docNo = row.value;
         if (row.key === 'rev_level') appSettings.revLevel = row.value;
+        if (row.key === 'issue_date') appSettings.issueDate = row.value;
       });
       saveAppSettingsLocal();
       renderAppSettingsForm();
@@ -447,6 +448,7 @@
       const { error } = await sb.from('app_settings').upsert([
         { key: 'doc_no', value: appSettings.docNo },
         { key: 'rev_level', value: appSettings.revLevel },
+        { key: 'issue_date', value: appSettings.issueDate || '' },
       ], { onConflict: 'key' });
       if (error) throw error;
       toast('✅ บันทึกค่าเอกสารกลางสำเร็จ — มีผลกับ PDF ทุกใบทันที', 'ok');
@@ -456,9 +458,10 @@
     }
   }
   function renderAppSettingsForm() {
-    const docEl = $('adm-doc-no'), revEl = $('adm-rev-level');
+    const docEl = $('adm-doc-no'), revEl = $('adm-rev-level'), issueEl = $('adm-issue-date');
     if (docEl) docEl.value = appSettings.docNo || '';
     if (revEl) revEl.value = appSettings.revLevel || '';
+    if (issueEl) issueEl.value = appSettings.issueDate || '';
   }
 
   /* ══════════════════════════════════════
@@ -2057,9 +2060,11 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
     $('btn-save-app-settings').addEventListener('click', () => {
       const newDocNo = $('adm-doc-no').value.trim();
       const newRev   = $('adm-rev-level').value.trim();
+      const newIssue = $('adm-issue-date') ? $('adm-issue-date').value : '';
       if (!newDocNo) { toast('กรุณากรอก Doc No.', 'ng'); return; }
       appSettings.docNo = newDocNo;
       appSettings.revLevel = newRev || 'Rev.01';
+      appSettings.issueDate = newIssue || '';
       saveAppSettingsLocal();
       saveAppSettingsToSupabase();
     });
@@ -2687,8 +2692,14 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
     const revLevel = appSettings.revLevel || 'Rev.01';
     const runNo    = (record.jigDocNo && record.jigDocNo.trim()) ? record.jigDocNo.trim() : null;
     const reportNo = 'RPT-' + (record.id || '').toString().slice(-8).toUpperCase();
-    const docDate  = new Date(record.timestamp).toLocaleDateString('th-TH', { year:'numeric', month:'2-digit', day:'2-digit' });
-    const docTime  = new Date(record.timestamp).toLocaleTimeString('th-TH', { hour:'2-digit', minute:'2-digit' });
+    // Issue Date = วันที่ออกแบบฟอร์มฉบับนี้ (ค่าเดียวทั้งบริษัท ตั้งใน Settings คู่กับ Doc No./Rev. Level)
+    // ไม่ใช่วันที่ตรวจของรายงานแต่ละใบ (อันนั้นอยู่แยกในบล็อก Inspector/วันที่ตรวจสอบด้านล่าง)
+    const docDate  = appSettings.issueDate
+      ? new Date(appSettings.issueDate).toLocaleDateString('th-TH', { year:'numeric', month:'2-digit', day:'2-digit' })
+      : '<span style="color:#dc2626;font-weight:700">⚠️ ยังไม่กำหนด</span>';
+    const docDatePlain = appSettings.issueDate
+      ? new Date(appSettings.issueDate).toLocaleDateString('th-TH', { year:'numeric', month:'2-digit', day:'2-digit' })
+      : '—';
 
     // ── Result Summary ──
     const okCount    = record.items.filter(i => i.status === 'ok' || i.status === 'fixed').length;
@@ -2777,7 +2788,7 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
             </div>
             <div class="pdf-doc-row">
               <span class="pdf-doc-label">Issue Date</span>
-              <span class="pdf-doc-value">${docDate} ${docTime}</span>
+              <span class="pdf-doc-value">${docDate}</span>
             </div>
           </div>
         </div>
@@ -2904,7 +2915,7 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
         <div class="pdf-footer-block">
           <span class="pdf-footer-std">📋 ISO 9001:2015 | IATF 16949:2016 — Quality Management System</span>
           <span class="pdf-footer-gps">📍 GPS: ${gpsText}</span>
-          <span class="pdf-footer-page">Report: ${escHtml(reportNo)} | ${docDate}</span>
+          <span class="pdf-footer-page">Report: ${escHtml(reportNo)} | ${docDatePlain}</span>
         </div>
 
       </div>`;
