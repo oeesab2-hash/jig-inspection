@@ -2420,11 +2420,11 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
           html += `<div class="adm-group-header" data-group="${escHtml(groupKey)}">📍 ${escHtml(line ? line.name : 'ไม่ระบุ Line')}</div>`;
           lastLineId = groupKey;
         }
-        const searchText = `${j.name} ${j.id} ${line ? line.name : ''}`.toLowerCase();
+        const searchText = `${j.name} ${j.id} ${j.docNo || ''} ${line ? line.name : ''}`.toLowerCase();
         html += `<div class="adm-item" data-group="${escHtml(groupKey)}" data-search="${escHtml(searchText)}">
           <div class="adm-item-info">
             <div>🔧 ${escHtml(j.name)}</div>
-            <div class="adm-item-code">${escHtml(j.id)} · ${escHtml(line ? line.name : j.lineId)}</div>
+            <div class="adm-item-code">${escHtml(j.id)}${j.docNo ? ' · ' + escHtml(j.docNo) : ''} · ${escHtml(line ? line.name : j.lineId)}</div>
           </div>
           <button class="adm-item-edit" data-etype="jig" data-id="${escHtml(j.id)}">✏️</button>
           <button class="adm-item-del" data-dtype="jig" data-id="${escHtml(j.id)}">🗑</button>
