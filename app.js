@@ -746,6 +746,7 @@
     pullAppSettingsFromSupabase();   // แล้วอัปเดตให้ล่าสุดทันทีที่ดึงเสร็จ (ไม่บล็อกหน้าจอ)
     $('inp-date').value = new Date().toISOString().slice(0, 10);
     $('inp-month').value = currentThaiMonthAbbr();
+    $('inp-shift').value = 'กะ 1'; // ตั้งค่าเริ่มต้นเป็นกะ 1 ทุกครั้งที่เข้าโปรแกรม แต่ยังเลือกเปลี่ยนเป็นกะอื่นได้ตามปกติ
 
     renderFilter();
     bindJigSearch();
@@ -3021,7 +3022,7 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
       updateStats();
       $('inp-inspector').value = '';
       $('inp-date').value = new Date().toISOString().slice(0, 10);
-      $('inp-shift').value = '';
+      $('inp-shift').value = 'กะ 1';
       $('inp-month').value = currentThaiMonthAbbr();
       $('report-notes').value = '';
       $('sig-inspector').value = '';

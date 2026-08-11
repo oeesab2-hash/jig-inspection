@@ -604,7 +604,8 @@ ${row.jig_doc_no ? `_${esc(row.jig_doc_no)}_` : ''}
 
 📅 วันที่ตรวจ: ${esc(row.insp_date)} เวลา ${esc(time)}
 👤 ผู้ตรวจ: ${esc(row.inspector)}
-🔍 ผ่าน (OK): ${okCount}  ❌ ไม่ผ่าน (NG): ${ngCount}
+🔍 จุดเช็คทั้งหมด: ${items.length} จุด
+✅ ผ่าน (OK): ${okCount}  ❌ ไม่ผ่าน (NG): ${ngCount}
 
 👔 หัวหน้างาน: ${esc(row.approved_by)} (${row.approved_at ? new Date(row.approved_at).toLocaleString('th-TH') : '-'})
 🏭 ผู้จัดการฝ่ายผลิต: ${esc(row.manager_approved_by)} (${new Date(row.manager_approved_at).toLocaleString('th-TH')})
