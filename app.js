@@ -102,48 +102,32 @@
     return rows;
   }
 
-  // ── ส่ง Catalog ขึ้น Supabase (แยกเป็น 5 ตารางจริง) ──
-  // ✅ SAFE: ใช้ UPSERT แทน DELETE ป้องกันข้อมูลหาย
+  // ── ส่ง Catalog ขึ้น Supabase ──
+  // ✅ SECURITY: เขียนผ่าน RPC 'sync_catalog' เท่านั้น (เช็ค password ฝั่ง DB
+  // ก่อนเขียนทุกครั้ง) แทนการ upsert ตรงจาก client — ตารางเหล่านี้ปิด
+  // insert/update ให้ anon ทาง RLS แล้ว ดู 01_lockdown_rls_and_rpc.sql
   async function pushCatalogToSupabase(cat) {
     if (!sb) return;
+    const pass = getAdminPass();
+    if (!pass) { toast('ต้องกรอกรหัสผ่าน Admin เพื่อบันทึกขึ้น Supabase', 'ng'); return; }
     _syncing = true;
     try {
-      // ✅ SAFE: ใช้ upsert แทน delete - ถ้า ID มี update, ถ้าไม่มี insert
-      if (cat.depts?.length) {
-        const { error } = await sb.from('departments').upsert(
-          cat.depts.map(d => ({ id: d.id, name: d.name })),
-          { onConflict: 'id' }
-        );
-        if (error) throw error;
-      }
-      if (cat.lines?.length) {
-        const { error } = await sb.from('lines').upsert(
-          cat.lines.map(l => ({ id: l.id, dept_id: l.deptId, name: l.name })),
-          { onConflict: 'id' }
-        );
-        if (error) throw error;
-      }
-      if (cat.jigs?.length) {
-        const { error } = await sb.from('jigs').upsert(
-          cat.jigs.map(j => ({
-            id: j.id, line_id: j.lineId, name: j.name, doc_no: j.docNo || '', bg_image: j.bgImage || null
-            // หมายเหตุ: ไม่ fallback ไปใช้ j.id แล้ว — Doc No. ต้องเป็นเลขคุมเอกสารจริงที่ Admin กรอกเองเท่านั้น เว้นว่างได้ถ้ายังไม่กำหนด
-          })),
-          { onConflict: 'id' }
-        );
-        if (error) throw error;
-        const cpRows = flattenCheckpoints(cat.jigs);
-        if (cpRows.length) {
-          const { error: cpErr } = await sb.from('checkpoints').upsert(cpRows, { onConflict: 'jig_id,item_id' });
-          if (cpErr) throw cpErr;
-        }
-      }
-      if (cat.templates?.length) {
-        const { error } = await sb.from('templates').upsert(
-          cat.templates.map(t => ({ id: t.id, name: t.name, items: t.items || [] })),
-          { onConflict: 'id' }
-        );
-        if (error) throw error;
+      const payload = {
+        p_password: pass,
+        p_departments: cat.depts?.length ? cat.depts.map(d => ({ id: d.id, name: d.name })) : null,
+        p_lines: cat.lines?.length ? cat.lines.map(l => ({ id: l.id, deptId: l.deptId, name: l.name })) : null,
+        p_jigs: cat.jigs?.length ? cat.jigs.map(j => ({
+          id: j.id, lineId: j.lineId, name: j.name, docNo: j.docNo || '', bgImage: j.bgImage || null
+          // หมายเหตุ: ไม่ fallback ไปใช้ j.id แล้ว — Doc No. ต้องเป็นเลขคุมเอกสารจริงที่ Admin กรอกเองเท่านั้น เว้นว่างได้ถ้ายังไม่กำหนด
+        })) : null,
+        p_checkpoints: cat.jigs?.length ? flattenCheckpoints(cat.jigs) : null,
+        p_templates: cat.templates?.length ? cat.templates.map(t => ({ id: t.id, name: t.name, items: t.items || [] })) : null,
+      };
+      const { data: ok, error } = await sb.rpc('sync_catalog', payload);
+      if (error) throw error;
+      if (!ok) {
+        _adminSessionPass = null; // รหัสผ่านที่เก็บไว้ผิด/หมดอายุ — ล้างทิ้งให้ถามใหม่รอบหน้า
+        toast('รหัสผ่าน Admin ไม่ถูกต้อง — บันทึกขึ้น Supabase ไม่สำเร็จ', 'ng');
       }
     } catch (e) {
       console.error('pushCatalogToSupabase error:', e);
@@ -250,12 +234,20 @@
   }
 
   // ── ลบ history รายการเดียวออกจาก Supabase (ใช้ตอนกดลบใน History Panel) ──
+  // ✅ SECURITY: RLS ปิด DELETE ตรงบน history ไว้แล้ว (ดู migration SQL) —
+  // ต้องผ่าน RPC 'admin_delete_history' ที่เช็ค password admin เท่านั้น
   async function deleteHistoryFromSupabase(id) {
     if (!sb) return;
+    const pass = getAdminPass();
+    if (!pass) { toast('ต้องกรอกรหัสผ่าน Admin เพื่อลบประวัติ', 'ng'); return; }
     _syncing = true;
     try {
-      const { error } = await sb.from('history').delete().eq('id', id);
+      const { data: ok, error } = await sb.rpc('admin_delete_history', { p_password: pass, p_id: id });
       if (error) throw error;
+      if (!ok) {
+        _adminSessionPass = null;
+        toast('รหัสผ่าน Admin ไม่ถูกต้อง — ลบไม่สำเร็จ (รายการนี้ยังอยู่บน Supabase)', 'ng');
+      }
     } catch (e) {
       console.error('deleteHistoryFromSupabase error:', e);
     } finally {
@@ -442,15 +434,24 @@
       console.error('pullAppSettingsFromSupabase error (ตรวจสอบว่ารัน SQL migration app_settings แล้วหรือยัง):', e);
     }
   }
+  // ✅ SECURITY: เขียนผ่าน RPC 'save_app_settings' (เช็ค password ฝั่ง DB)
   async function saveAppSettingsToSupabase() {
     if (!sb) { toast('ไม่ได้เชื่อมต่อ Supabase — บันทึกแค่ในเครื่องนี้', 'ng'); return; }
+    const pass = getAdminPass();
+    if (!pass) { toast('ต้องกรอกรหัสผ่าน Admin เพื่อบันทึก', 'ng'); return; }
     try {
-      const { error } = await sb.from('app_settings').upsert([
-        { key: 'doc_no', value: appSettings.docNo },
-        { key: 'rev_level', value: appSettings.revLevel },
-        { key: 'issue_date', value: appSettings.issueDate || '' },
-      ], { onConflict: 'key' });
+      const { data: ok, error } = await sb.rpc('save_app_settings', {
+        p_password: pass,
+        p_doc_no: appSettings.docNo,
+        p_rev_level: appSettings.revLevel,
+        p_issue_date: appSettings.issueDate || '',
+      });
       if (error) throw error;
+      if (!ok) {
+        _adminSessionPass = null;
+        toast('รหัสผ่าน Admin ไม่ถูกต้อง — บันทึกไม่สำเร็จ', 'ng');
+        return;
+      }
       toast('✅ บันทึกค่าเอกสารกลางสำเร็จ — มีผลกับ PDF ทุกใบทันที', 'ok');
     } catch (e) {
       console.error('saveAppSettingsToSupabase error:', e);
@@ -529,28 +530,25 @@
   // ทำแบบ "สร้างแถวใหม่ก่อน → ย้าย checkpoints/history มาอ้างอิงรหัสใหม่ → ค่อยลบแถวเก่า"
   // เพื่อไม่ให้ FK ของ checkpoints/history หลุดลอย หรือถูกลบทิ้งไปพร้อมแถว jig เดิม
   // ไม่ว่า schema จะตั้ง cascade ไว้หรือไม่ก็ตาม (ทำเองตรงๆ ปลอดภัยกว่า)
+  // ✅ SECURITY: ทำทั้งหมดใน RPC เดียว 'rename_jig_id' (เช็ค password ฝั่ง DB
+  // และรันเป็น transaction เดียวในฝั่ง server แทนการยิง 4 request แยกจาก client)
   async function renameJigIdInSupabase(oldId, newId, jigData) {
     if (!sb) return;
+    const pass = getAdminPass();
+    if (!pass) { toast('ต้องกรอกรหัสผ่าน Admin เพื่อเปลี่ยนรหัส JIG', 'ng'); return; }
     _syncing = true;
     try {
-      // 1) สร้าง/upsert แถว jig รหัสใหม่ก่อน (คัดลอกข้อมูลปัจจุบันทั้งหมด)
-      const { error: insErr } = await sb.from('jigs').upsert([{
-        id: newId, line_id: jigData.lineId, name: jigData.name,
-        doc_no: jigData.docNo || '', bg_image: jigData.bgImage || null,
-      }], { onConflict: 'id' });
-      if (insErr) throw insErr;
-
-      // 2) ย้าย checkpoints ทั้งหมดของ jig เดิม ไปอ้างอิงรหัสใหม่
-      const { error: cpErr } = await sb.from('checkpoints').update({ jig_id: newId }).eq('jig_id', oldId);
-      if (cpErr) throw cpErr;
-
-      // 3) ย้าย history (ผลตรวจเก่าทั้งหมด) ไปอ้างอิงรหัสใหม่ — ข้อมูลเดิมไม่หาย แค่เปลี่ยนรหัสอ้างอิง
-      const { error: hErr } = await sb.from('history').update({ jig_id: newId }).eq('jig_id', oldId);
-      if (hErr) throw hErr;
-
-      // 4) ลบแถว jig รหัสเดิมทิ้ง (ตอนนี้ไม่มีอะไรอ้างอิงแล้ว)
-      const { error: delErr } = await sb.from('jigs').delete().eq('id', oldId);
-      if (delErr) throw delErr;
+      const { data: ok, error } = await sb.rpc('rename_jig_id', {
+        p_password: pass,
+        p_old_id: oldId,
+        p_new_id: newId,
+        p_jig_data: { lineId: jigData.lineId, name: jigData.name, docNo: jigData.docNo || '', bgImage: jigData.bgImage || null },
+      });
+      if (error) throw error;
+      if (!ok) {
+        _adminSessionPass = null;
+        toast('รหัสผ่าน Admin ไม่ถูกต้อง — เปลี่ยนรหัส JIG ไม่สำเร็จ', 'ng');
+      }
     } catch (e) {
       console.error('renameJigIdInSupabase error:', e);
       toast('เปลี่ยนรหัส JIG บน Supabase ไม่สำเร็จบางส่วน — ลอง sync ใหม่อีกครั้ง หรือแจ้ง Admin', 'ng');
@@ -565,40 +563,23 @@
   // localStorage เท่านั้น — แถวเดิมยังค้างอยู่ใน Supabase แล้วโดน pull กลับมาทีหลัง
   // (ตอนเปิดแอปใหม่ / realtime sync) ทำให้ของที่ลบไป "เด้งกลับมา" เหมือนไม่เคยลบ
   // ฟังก์ชันนี้ลบแถวออกจาก Supabase ตรงๆ ให้คู่กับการลบ local ทุกครั้ง
+  // ✅ SECURITY: ลบผ่าน RPC 'delete_catalog_item' — cascade logic (dept→line→jig→checkpoints)
+  // ทำอยู่ฝั่ง DB ทั้งหมดแล้ว (ดู 01_lockdown_rls_and_rpc.sql) เช็ค password ก่อนลบทุกครั้ง
   async function deleteCatalogItemFromSupabase(dtype, id) {
     if (!sb) return;
+    const pass = getAdminPass();
+    if (!pass) { toast('ต้องกรอกรหัสผ่าน Admin เพื่อลบข้อมูล', 'ng'); return; }
     _syncing = true;
     try {
-      if (dtype === 'jig') {
-        // ลบ checkpoints ของ jig นี้ก่อน (กันเหนียว เผื่อ FK cascade ยังไม่ครอบคลุม) แล้วค่อยลบตัว jig
-        await sb.from('checkpoints').delete().eq('jig_id', id);
-        const { error } = await sb.from('jigs').delete().eq('id', id);
-        if (error) throw error;
-      } else if (dtype === 'line') {
-        // ลบ jig + checkpoints ทั้งหมดที่อยู่ใต้ line นี้ก่อน แล้วค่อยลบตัว line
-        const { data: jigsUnder } = await sb.from('jigs').select('id').eq('line_id', id);
-        const jigIds = (jigsUnder || []).map(j => j.id);
-        if (jigIds.length) {
-          await sb.from('checkpoints').delete().in('jig_id', jigIds);
-          await sb.from('jigs').delete().in('id', jigIds);
-        }
-        const { error } = await sb.from('lines').delete().eq('id', id);
-        if (error) throw error;
-      } else if (dtype === 'dept') {
-        // ลบทั้งสาย: checkpoints → jigs → lines → dept
-        const { data: linesUnder } = await sb.from('lines').select('id').eq('dept_id', id);
-        const lineIds = (linesUnder || []).map(l => l.id);
-        if (lineIds.length) {
-          const { data: jigsUnder } = await sb.from('jigs').select('id').in('line_id', lineIds);
-          const jigIds = (jigsUnder || []).map(j => j.id);
-          if (jigIds.length) {
-            await sb.from('checkpoints').delete().in('jig_id', jigIds);
-            await sb.from('jigs').delete().in('id', jigIds);
-          }
-          await sb.from('lines').delete().in('id', lineIds);
-        }
-        const { error } = await sb.from('departments').delete().eq('id', id);
-        if (error) throw error;
+      const { data: ok, error } = await sb.rpc('delete_catalog_item', {
+        p_password: pass,
+        p_dtype: dtype,
+        p_id: id,
+      });
+      if (error) throw error;
+      if (!ok) {
+        _adminSessionPass = null;
+        toast('รหัสผ่าน Admin ไม่ถูกต้อง — ลบไม่สำเร็จ', 'ng');
       }
     } catch (e) {
       console.error(`deleteCatalogItemFromSupabase(${dtype}) error:`, e);
@@ -1724,6 +1705,20 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
      ADMIN PANEL & LOGIN
   ══════════════════════════════════════ */
   let admLoggedIn = false;
+  // ✅ SECURITY: เก็บรหัสผ่าน admin ไว้ใน memory (ไม่ localStorage) หลัง login
+  // สำเร็จ เพื่อแนบไปกับทุก RPC call ที่ต้องเช็คสิทธิ์ฝั่ง DB (sync_catalog,
+  // delete_catalog_item, save_app_settings, admin_delete_history ฯลฯ)
+  // ตัวแปรนี้จะหายไปเองเมื่อ refresh หน้า (ไม่ persist)
+  let _adminSessionPass = null;
+  // เผื่อกรณี RPC ถูกเรียกตอนที่ _adminSessionPass ยังไม่ถูกตั้ง (เช่น
+  // เปิดมาแล้วไม่ได้ login ผ่าน flow ปกติ) — จะ prompt ถามรหัสผ่านอีกที
+  // RPC ฝั่ง DB จะเป็นคนตัดสินสุดท้ายว่ารหัสถูกหรือไม่ ไม่ใช่ฝั่ง client
+  function getAdminPass() {
+    if (_adminSessionPass) return _adminSessionPass;
+    const p = prompt('กรุณากรอกรหัสผ่าน Admin เพื่อยืนยันการทำรายการนี้');
+    if (p) _adminSessionPass = p;
+    return p;
+  }
 
   // แยก checkpoint dropdown binding ออกมา เพื่อให้ re-bind ได้หลายครั้ง
   // (renderAdminLists อาจ rebuild dropdown หลายครั้ง เมื่อ realtime sync เกิดขึ้น)
@@ -1773,6 +1768,7 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
         const localPass = localStorage.getItem('jig_admin_pass');
         if (pass === localPass) {
           admLoggedIn = true;
+          _adminSessionPass = pass; // เก็บไว้ใน memory ใช้แนบ RPC (โหมด local ไม่มี RPC จริงอยู่แล้ว แต่ตั้งไว้ให้ครบ flow)
           $('admin-login-modal').classList.add('hidden');
           openPanel('admin-panel');
           toast('เข้าสู่ระบบสำเร็จ (local mode)', 'ok');
@@ -1803,6 +1799,7 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
 
         if (ok) {
           admLoggedIn = true;
+          _adminSessionPass = pass; // เก็บรหัสผ่านไว้ใน memory เพื่อแนบไปกับ RPC เขียนข้อมูลต่อจากนี้
           localStorage.setItem('jig_admin_user', username);
           $('admin-login-modal').classList.add('hidden');
           openPanel('admin-panel');
@@ -1836,6 +1833,7 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
         const localPass = localStorage.getItem('jig_admin_pass');
         if (oldPass !== localPass) { toast('รหัสผ่านเดิมไม่ถูกต้อง', 'ng'); return; }
         localStorage.setItem('jig_admin_pass', newPass);
+        _adminSessionPass = newPass;
         $('adm-old-pass').value = ''; $('adm-new-pass').value = '';
         toast('เปลี่ยนรหัสผ่าน Admin แล้ว (local mode)', 'ok');
         return;
@@ -1861,6 +1859,7 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
           return;
         }
 
+        _adminSessionPass = newPass;
         $('adm-old-pass').value = ''; $('adm-new-pass').value = '';
         toast('เปลี่ยนรหัสผ่าน Admin แล้ว', 'ok');
       } catch (e) {
@@ -2160,10 +2159,14 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
         if (!confirm(`ลบเทมเพลต "${t.name}" หรือไม่? (ไม่กระทบหัวข้อที่นำเข้าไปยัง JIG ต่างๆ แล้ว)`)) return;
         catalog.templates = catalog.templates.filter(x => x.id !== t.id);
         saveCatalog();
-        if (sb) { // ลบออกจาก Supabase ตรงๆ ด้วย — กันเด้งกลับมาเหมือนบั๊ก JIG/Line/Dept ก่อนหน้า
-          sb.from('templates').delete().eq('id', t.id).then(({ error }) => {
-            if (error) console.error('delete template error:', error);
-          });
+        if (sb) { // ✅ SECURITY: ผ่าน RPC 'delete_template' (เช็ค password admin) แทนการลบตรง
+          const pass = getAdminPass();
+          if (pass) {
+            sb.rpc('delete_template', { p_password: pass, p_id: t.id }).then(({ data: ok, error }) => {
+              if (error) console.error('delete template error:', error);
+              else if (!ok) { _adminSessionPass = null; toast('รหัสผ่าน Admin ไม่ถูกต้อง — ลบเทมเพลตบน Supabase ไม่สำเร็จ', 'ng'); }
+            });
+          }
         }
         renderTplSelect();
         renderTplPreview();
@@ -2202,9 +2205,15 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
         saveCatalog();
         // ⚠️ FIX: pushCatalogToSupabase ใช้ upsert (ไม่ลบ) — ต้องลบแถวนี้ออกจาก Supabase ตรงๆ
         // ไม่งั้นแถวเดิมจะยังค้างอยู่ใน DB แล้วโดน sync กลับมา "เด้งคืน" เหมือนไม่เคยลบ
-        if (sb && removed) {
-          sb.from('checkpoints').delete().eq('jig_id', btn.dataset.jid).eq('item_id', removed.id)
-            .then(({ error }) => { if (error) console.error('delete checkpoint error:', error); });
+        if (sb && removed) { // ✅ SECURITY: ผ่าน RPC 'delete_checkpoint' (เช็ค password admin)
+          const pass = getAdminPass();
+          if (pass) {
+            sb.rpc('delete_checkpoint', { p_password: pass, p_jig_id: btn.dataset.jid, p_item_id: removed.id })
+              .then(({ data: ok, error }) => {
+                if (error) console.error('delete checkpoint error:', error);
+                else if (!ok) { _adminSessionPass = null; toast('รหัสผ่าน Admin ไม่ถูกต้อง — ลบจุดตรวจบน Supabase ไม่สำเร็จ', 'ng'); }
+              });
+          }
         }
         renderCpList(btn.dataset.jid);
         renderAdmCpMap(btn.dataset.jid);
@@ -3945,15 +3954,23 @@ ${JSON.stringify(summary, null, 2)}
   }
 
   // ✅ ฟังก์ชัน: ลบ history เก่า
+  // ✅ SECURITY: ผ่าน RPC 'admin_purge_old_history' (เช็ค password admin) แทนการ delete ตรง
   async function deleteOldHistory(daysOld = 30) {
     if (!sb) return;
+    const pass = getAdminPass();
+    if (!pass) { toast('ต้องกรอกรหัสผ่าน Admin เพื่อลบประวัติเก่า', 'ng'); return; }
     try {
       const cutoffDate = new Date();
       cutoffDate.setDate(cutoffDate.getDate() - daysOld);
       const cutoffISO = cutoffDate.toISOString();
-      const { error } = await sb.from('history').delete().lt('ts', cutoffISO);
+      const { data: count, error } = await sb.rpc('admin_purge_old_history', { p_password: pass, p_cutoff: cutoffISO });
       if (error) throw error;
-      toast(`✅ Deleted history older than ${daysOld} days`, 'ok');
+      if (count === -1) {
+        _adminSessionPass = null;
+        toast('รหัสผ่าน Admin ไม่ถูกต้อง — ลบไม่สำเร็จ', 'ng');
+        return;
+      }
+      toast(`✅ Deleted ${count} history rows older than ${daysOld} days`, 'ok');
       renderStorageStatus();
     } catch (error) {
       console.error('❌ Error deleting old history:', error);
