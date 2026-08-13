@@ -369,19 +369,25 @@
     const name = prompt(`ยืนยันอนุมัติทั้งหมด ${ids.length} รายการของ Line "${lineName}" (ไม่มี NG ทุกรายการ)\n\nกรุณาพิมพ์ชื่อผู้อนุมัติ (ผู้จัดการฝ่ายผลิต):`);
     if (!name || !name.trim()) return;
     const approverName = name.trim();
+    // ✅ SECURITY: ต้องกรอก PIN ผู้จัดการก่อนอนุมัติได้ — เช็คฝั่ง Supabase (RPC) เท่านั้น
+    const pin = prompt('กรุณากรอก PIN ผู้จัดการฝ่ายผลิต เพื่อยืนยันการอนุมัติ:');
+    if (!pin) return;
 
     btn.disabled = true;
     btn.textContent = 'กำลังบันทึก...';
 
-    const nowIso = new Date().toISOString();
-    const { error } = await sb.from('history').update({
-      manager_approval_status: 'approved',
-      manager_approved_by: approverName,
-      manager_approved_at: nowIso,
-    }).in('id', ids);
+    const { data: count, error } = await sb.rpc('bulk_approve_manager', {
+      p_ids: ids, p_pin: pin, p_name: approverName,
+    });
 
     if (error) {
       alert('บันทึกไม่สำเร็จ: ' + error.message);
+      btn.disabled = false;
+      btn.textContent = 'อนุมัติทั้งหมด';
+      return;
+    }
+    if (count === -1) {
+      alert('PIN ไม่ถูกต้อง — บันทึกไม่สำเร็จ');
       btn.disabled = false;
       btn.textContent = 'อนุมัติทั้งหมด';
       return;
@@ -536,6 +542,8 @@
       <div class="section-title" style="margin-top:16px;">✍️ อนุมัติรายงานนี้ (ผู้จัดการฝ่ายผลิต)</div>
       <label class="field-label">ชื่อผู้อนุมัติ (ผู้จัดการฝ่ายผลิต)</label>
       <input type="text" id="approver-name" placeholder="พิมพ์ชื่อ-นามสกุล">
+      <label class="field-label">PIN ผู้จัดการฝ่ายผลิต</label>
+      <input type="password" id="approver-pin" placeholder="กรอก PIN เพื่อยืนยันตัวตน" inputmode="numeric">
       <label class="field-label">ความเห็นเพิ่มเติม (ถ้ามี)</label>
       <textarea id="approver-comment" placeholder="เช่น รับทราบ อนุมัติให้ดำเนินการต่อ"></textarea>
       <button class="btn btn-approve" id="btn-approve">✅ อนุมัติรายงานนี้ (ขั้นสุดท้าย)</button>
@@ -547,14 +555,21 @@
 
   async function approveReport(row) {
     const nameEl = document.getElementById('approver-name');
+    const pinEl = document.getElementById('approver-pin');
     const commentEl = document.getElementById('approver-comment');
     const msgEl = document.getElementById('approve-msg');
     const btn = document.getElementById('btn-approve');
     const name = nameEl.value.trim();
+    const pin = pinEl.value.trim();
 
     if (!name) {
       msgEl.textContent = 'กรุณากรอกชื่อผู้อนุมัติก่อน';
       nameEl.focus();
+      return;
+    }
+    if (!pin) {
+      msgEl.textContent = 'กรุณากรอก PIN ผู้จัดการก่อน';
+      pinEl.focus();
       return;
     }
 
@@ -562,13 +577,9 @@
     btn.textContent = 'กำลังบันทึก...';
     msgEl.textContent = '';
 
-    const nowIso = new Date().toISOString();
-    const { error } = await sb.from('history').update({
-      manager_approval_status: 'approved',
-      manager_approved_by: name,
-      manager_approved_at: nowIso,
-      manager_comment: commentEl.value.trim() || null,
-    }).eq('id', row.id);
+    const { data: ok, error } = await sb.rpc('approve_history_manager', {
+      p_id: row.id, p_pin: pin, p_name: name, p_comment: commentEl.value.trim() || null,
+    });
 
     if (error) {
       btn.disabled = false;
@@ -576,10 +587,18 @@
       msgEl.textContent = 'บันทึกไม่สำเร็จ: ' + error.message;
       return;
     }
+    if (!ok) {
+      btn.disabled = false;
+      btn.textContent = '✅ อนุมัติรายงานนี้ (ขั้นสุดท้าย)';
+      msgEl.textContent = 'PIN ไม่ถูกต้อง — บันทึกไม่สำเร็จ';
+      pinEl.value = '';
+      pinEl.focus();
+      return;
+    }
 
     row.manager_approval_status = 'approved';
     row.manager_approved_by = name;
-    row.manager_approved_at = nowIso;
+    row.manager_approved_at = new Date().toISOString();
     row.manager_comment = commentEl.value.trim() || null;
     renderApprovalCard(row);
     document.querySelector('.status-badge').outerHTML = `<span class="status-badge status-approved">✅ อนุมัติครบแล้ว</span>`;

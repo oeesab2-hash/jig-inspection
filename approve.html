@@ -368,20 +368,25 @@
     const name = prompt(`ยืนยันตรวจสอบทั้งหมด ${ids.length} รายการของ Line "${lineName}" (ไม่มี NG ทุกรายการ)\n\nกรุณาพิมพ์ชื่อผู้ตรวจสอบ:`);
     if (!name || !name.trim()) return;
     const approverName = name.trim();
+    // ✅ SECURITY: ต้องกรอก PIN หัวหน้างานก่อนอนุมัติได้ — เช็คฝั่ง Supabase (RPC) เท่านั้น
+    const pin = prompt('กรุณากรอก PIN หัวหน้างาน เพื่อยืนยันการอนุมัติ:');
+    if (!pin) return;
 
     btn.disabled = true;
     btn.textContent = 'กำลังบันทึก...';
 
-    const nowIso = new Date().toISOString();
-    const { error } = await sb.from('history').update({
-      approval_status: 'approved',
-      approved_by: approverName,
-      approved_at: nowIso,
-      sig_supervisor: approverName,
-    }).in('id', ids);
+    const { data: count, error } = await sb.rpc('bulk_approve_supervisor', {
+      p_ids: ids, p_pin: pin, p_name: approverName,
+    });
 
     if (error) {
       alert('บันทึกไม่สำเร็จ: ' + error.message);
+      btn.disabled = false;
+      btn.textContent = 'ตรวจสอบทั้งหมด';
+      return;
+    }
+    if (count === -1) {
+      alert('PIN ไม่ถูกต้อง — บันทึกไม่สำเร็จ');
       btn.disabled = false;
       btn.textContent = 'ตรวจสอบทั้งหมด';
       return;
@@ -535,6 +540,8 @@
       <div class="section-title">✍️ ตรวจสอบรายงานนี้</div>
       <label class="field-label">ชื่อผู้ตรวจสอบ (หัวหน้างาน)</label>
       <input type="text" id="approver-name" placeholder="พิมพ์ชื่อ-นามสกุล">
+      <label class="field-label">PIN หัวหน้างาน</label>
+      <input type="password" id="approver-pin" placeholder="กรอก PIN เพื่อยืนยันตัวตน" inputmode="numeric">
       <label class="field-label">ความเห็นเพิ่มเติม (ถ้ามี)</label>
       <textarea id="approver-comment" placeholder="เช่น รับทราบ NG แล้ว ให้ทีมซ่อมเข้าแก้ไขภายในวันนี้"></textarea>
       <button class="btn btn-approve" id="btn-approve">✅ ตรวจสอบรายงานนี้</button>
@@ -546,14 +553,21 @@
 
   async function approveReport(row) {
     const nameEl = document.getElementById('approver-name');
+    const pinEl = document.getElementById('approver-pin');
     const commentEl = document.getElementById('approver-comment');
     const msgEl = document.getElementById('approve-msg');
     const btn = document.getElementById('btn-approve');
     const name = nameEl.value.trim();
+    const pin = pinEl.value.trim();
 
     if (!name) {
       msgEl.textContent = 'กรุณากรอกชื่อผู้ตรวจสอบก่อน';
       nameEl.focus();
+      return;
+    }
+    if (!pin) {
+      msgEl.textContent = 'กรุณากรอก PIN หัวหน้างานก่อน';
+      pinEl.focus();
       return;
     }
 
@@ -561,14 +575,9 @@
     btn.textContent = 'กำลังบันทึก...';
     msgEl.textContent = '';
 
-    const nowIso = new Date().toISOString();
-    const { error } = await sb.from('history').update({
-      approval_status: 'approved',
-      approved_by: name,
-      approved_at: nowIso,
-      supervisor_comment: commentEl.value.trim() || null,
-      sig_supervisor: name, // ให้ชื่อผู้ตรวจสอบกลายเป็นลายเซ็นหัวหน้างานในรายงาน/PDF ด้วย
-    }).eq('id', row.id);
+    const { data: ok, error } = await sb.rpc('approve_history_supervisor', {
+      p_id: row.id, p_pin: pin, p_name: name, p_comment: commentEl.value.trim() || null,
+    });
 
     if (error) {
       btn.disabled = false;
@@ -576,10 +585,18 @@
       msgEl.textContent = 'บันทึกไม่สำเร็จ: ' + error.message;
       return;
     }
+    if (!ok) {
+      btn.disabled = false;
+      btn.textContent = '✅ ตรวจสอบรายงานนี้';
+      msgEl.textContent = 'PIN ไม่ถูกต้อง — บันทึกไม่สำเร็จ';
+      pinEl.value = '';
+      pinEl.focus();
+      return;
+    }
 
     row.approval_status = 'approved';
     row.approved_by = name;
-    row.approved_at = nowIso;
+    row.approved_at = new Date().toISOString();
     row.supervisor_comment = commentEl.value.trim() || null;
     renderApprovalCard(row);
     document.querySelector('.status-badge').outerHTML = `<span class="status-badge status-partial">🔵 รอผู้จัดการฝ่ายผลิตอนุมัติ</span>`;
