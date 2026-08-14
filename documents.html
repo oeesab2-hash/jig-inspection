@@ -223,7 +223,7 @@
   let allDocs = [];
   let latestRevByDoc = {}; // document_id -> แถวประวัติแก้ไขล่าสุด (rev_no สูงสุด) — ใช้โชว์สรุปในหน้ารายการ
   let lineNameByJigId = {}; // source_jig_id (ของ master_documents) -> ชื่อ Line — ใช้จัดกลุ่มในหน้ารายการ
-  let filters = { company: params.get('company') || '', department: params.get('department') || '', q: '' };
+  let filters = { company: params.get('company') || '', department: params.get('department') || '', line: params.get('line') || '', q: '' };
   let currentDocId = params.get('doc') || null;
   let editingRevDocId = null;   // ← document_id ของแถวที่กำลังเปิดฟอร์มแก้ไขอยู่ในหน้า "รายการ"
   let editingRevIdDetail = null; // ← revision id ของแถวที่กำลังเปิดฟอร์มแก้ไขอยู่ในหน้า "รายละเอียด"
@@ -276,6 +276,20 @@
     const set = new Set();
     allDocs.filter(d => !company || d.company === company).forEach(d => set.add(d.department));
     return [...set].sort();
+  }
+
+  // ── รายชื่อ Line ที่มีให้เลือกในตัวกรอง (คำนวณจากเอกสารที่ผ่านตัวกรอง บริษัท/แผนก อยู่แล้ว ไม่รวมตัวกรอง Line เอง) ──
+  function linesFor(company, department) {
+    const set = new Set();
+    allDocs
+      .filter(d => (!company || d.company === company) && (!department || d.department === department))
+      .forEach(d => set.add(lineNameFor(d)));
+    const arr = [...set].sort((a, b) => {
+      if (a === NO_LINE_LABEL) return 1;
+      if (b === NO_LINE_LABEL) return -1;
+      return a.localeCompare(b, 'th');
+    });
+    return arr;
   }
 
   // ── markup ของแถวเอกสาร 1 รายการ (แยกเป็นฟังก์ชันเพื่อใช้ซ้ำได้ทั้งตอนจัดกลุ่มตาม Line) ──
@@ -332,9 +346,11 @@
 
   function renderList() {
     const departments = departmentsFor(filters.company);
+    const lineOptions = linesFor(filters.company, filters.department);
     let filtered = allDocs.filter(d => {
       if (filters.company && d.company !== filters.company) return false;
       if (filters.department && d.department !== filters.department) return false;
+      if (filters.line && lineNameFor(d) !== filters.line) return false;
       if (filters.q) {
         const q = filters.q.toLowerCase();
         if (!(d.doc_no || '').toLowerCase().includes(q) && !(d.doc_name || '').toLowerCase().includes(q)) return false;
@@ -356,6 +372,12 @@
           <select id="f-department">
             <option value="">ทุกแผนก</option>
             ${departments.map(dp => `<option value="${escAttr(dp)}" ${filters.department === dp ? 'selected' : ''}>${esc(dp)}</option>`).join('')}
+          </select>
+        </div>
+        <div class="filter-row">
+          <select id="f-line">
+            <option value="">🏭 ทุก Line</option>
+            ${lineOptions.map(l => `<option value="${escAttr(l)}" ${filters.line === l ? 'selected' : ''}>${esc(l)}</option>`).join('')}
           </select>
         </div>
         <div class="filter-row">
@@ -384,13 +406,20 @@
       </div>
     `;
 
+
     document.getElementById('f-company').addEventListener('change', e => {
       filters.company = e.target.value;
       filters.department = ''; // เปลี่ยนบริษัทแล้วรีเซ็ตตัวกรองแผนก
+      filters.line = ''; // ...และรีเซ็ตตัวกรอง Line ด้วย เพราะตัวเลือก Line ขึ้นกับบริษัท/แผนกที่เลือก
       render();
     });
     document.getElementById('f-department').addEventListener('change', e => {
       filters.department = e.target.value;
+      filters.line = ''; // เปลี่ยนแผนกแล้วรีเซ็ตตัวกรอง Line เช่นกัน
+      render();
+    });
+    document.getElementById('f-line').addEventListener('change', e => {
+      filters.line = e.target.value;
       render();
     });
     document.getElementById('f-search').addEventListener('input', e => {
