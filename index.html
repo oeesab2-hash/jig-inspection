@@ -431,9 +431,13 @@
       </div>
       <div class="admin-input-row">
         <input type="text" id="adm-doc-no" placeholder="Doc No. (เช่น DDM4-2-002)">
-        <input type="text" id="adm-rev-level" placeholder="Rev. Level (เช่น Rev.01)">
-        <input type="date" id="adm-issue-date" title="Issue Date — วันที่ออกแบบฟอร์มฉบับนี้ (ค่าเดียวทั้งบริษัท ไม่ใช่วันที่ตรวจของแต่ละใบ)">
+        <input type="text" id="adm-rev-level" placeholder="Rev. No. (เช่น 2)">
+        <input type="date" id="adm-rev-date" title="Rev. Date — วันที่แก้ไข Rev ของฟอร์มล่าสุด (เปลี่ยนทุกครั้งที่ ISO อนุมัติแก้ไขฟอร์ม)">
+        <input type="date" id="adm-issue-date" title="Issued Form — วันที่ออกแบบฟอร์มนี้ครั้งแรก (ค่าคงที่ ไม่เปลี่ยนตาม Rev)">
         <button class="btn-adm-add" id="btn-save-app-settings">บันทึก</button>
+      </div>
+      <div style="font-size:10px; color:var(--text-muted); margin-top:4px;">
+        Rev. No. / Rev. Date = แก้ไขเมื่อฝ่าย ISO อนุมัติเปลี่ยน "ฟอร์ม" &nbsp;|&nbsp; Issued Form = วันออกฟอร์มครั้งแรก (คงที่)
       </div>
     </div>
 

@@ -380,7 +380,7 @@
   ══════════════════════════════════════ */
   let catalog = { depts: [], lines: [], jigs: [], templates: [] };
   // ── ค่ากลางทั้งระบบ (ตาม ISO — Doc No. ของแบบฟอร์มตรวจ JIG มีค่าเดียวทั้งบริษัท ไม่ผูกกับ JIG ตัวไหน) ──
-  let appSettings = { docNo: 'DDM4-2-002', revLevel: 'Rev.01', issueDate: '' };
+  let appSettings = { docNo: 'DDM4-2-002', revLevel: 'Rev.01', revDate: '', issueDate: '' };
   let selection = { deptId: null, lineId: null, jigId: null };
   let jigSearchTerm = ''; // filters the Level-3 JIG chip list
   let checkState = [];  // current inspection items
@@ -426,7 +426,8 @@
       (data || []).forEach(row => {
         if (row.key === 'doc_no') appSettings.docNo = row.value;
         if (row.key === 'rev_level') appSettings.revLevel = row.value;
-        if (row.key === 'issue_date') appSettings.issueDate = row.value;
+        if (row.key === 'rev_date') appSettings.revDate = row.value;   // 🆕 Rev. Date — วันที่แก้ไข Rev ของฟอร์มล่าสุด (แยกจาก Issued Form)
+        if (row.key === 'issue_date') appSettings.issueDate = row.value; // Issued Form — วันที่ออกฟอร์มนี้ครั้งแรก (ค่าคงที่ ไม่ผูกกับ Rev)
       });
       saveAppSettingsLocal();
       renderAppSettingsForm();
@@ -444,6 +445,7 @@
         p_password: pass,
         p_doc_no: appSettings.docNo,
         p_rev_level: appSettings.revLevel,
+        p_rev_date: appSettings.revDate || '',     // 🆕 Rev. Date
         p_issue_date: appSettings.issueDate || '',
       });
       if (error) throw error;
@@ -459,9 +461,10 @@
     }
   }
   function renderAppSettingsForm() {
-    const docEl = $('adm-doc-no'), revEl = $('adm-rev-level'), issueEl = $('adm-issue-date');
+    const docEl = $('adm-doc-no'), revEl = $('adm-rev-level'), revDateEl = $('adm-rev-date'), issueEl = $('adm-issue-date');
     if (docEl) docEl.value = appSettings.docNo || '';
     if (revEl) revEl.value = appSettings.revLevel || '';
+    if (revDateEl) revDateEl.value = appSettings.revDate || '';
     if (issueEl) issueEl.value = appSettings.issueDate || '';
   }
 
@@ -1496,7 +1499,7 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
     const wb = XLSX.utils.book_new();
     // แถวหัวกระดาษ: Doc No. กลาง — เพื่อให้เห็นชัดว่าทุก JIG ใช้แบบฟอร์มเดียวกันนี้
     const headerRows = [
-      [`Doc No. (แบบฟอร์มตรวจ JIG ทั้งบริษัท): ${appSettings.docNo || '—'}    Rev. Level: ${appSettings.revLevel || '—'}`],
+      [`Doc No. (แบบฟอร์มตรวจ JIG ทั้งบริษัท): ${appSettings.docNo || '—'}    Rev. No.: ${appSettings.revLevel || '—'}    Rev. Date: ${appSettings.revDate || '—'}`],
       [],
     ];
     const ws = XLSX.utils.aoa_to_sheet(headerRows);
@@ -2076,12 +2079,14 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
     $('btn-export-excel').addEventListener('click', exportHistoryToExcel);
     $('btn-export-master-list').addEventListener('click', exportMasterListToExcel);
     $('btn-save-app-settings').addEventListener('click', () => {
-      const newDocNo = $('adm-doc-no').value.trim();
-      const newRev   = $('adm-rev-level').value.trim();
-      const newIssue = $('adm-issue-date') ? $('adm-issue-date').value : '';
+      const newDocNo  = $('adm-doc-no').value.trim();
+      const newRev    = $('adm-rev-level').value.trim();
+      const newRevDate = $('adm-rev-date') ? $('adm-rev-date').value : '';
+      const newIssue  = $('adm-issue-date') ? $('adm-issue-date').value : '';
       if (!newDocNo) { toast('กรุณากรอก Doc No.', 'ng'); return; }
       appSettings.docNo = newDocNo;
       appSettings.revLevel = newRev || 'Rev.01';
+      appSettings.revDate = newRevDate || '';
       appSettings.issueDate = newIssue || '';
       saveAppSettingsLocal();
       saveAppSettingsToSupabase();
@@ -2621,11 +2626,6 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
       
       return `<div class="history-item">
         <div class="hi-path">${escHtml(h.deptName || '')}  ›  ${escHtml(h.lineName || '')}  ›  ${escHtml(h.jigName || '')}</div>
-        <div class="hi-doc-refs">
-          Doc No: ${escHtml(appSettings.docNo || '—')}
-          &nbsp;·&nbsp; Run No: ${escHtml((h.jigDocNo && h.jigDocNo.trim()) ? h.jigDocNo.trim() : '—')}
-          &nbsp;·&nbsp; Report No: RPT-${escHtml((h.id || '').toString().slice(-8).toUpperCase())}
-        </div>
         <div class="hi-head">
           <div class="hi-meta"><strong>${escHtml(h.date)}</strong> เวลา: ${new Date(h.timestamp).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' })} · ${escHtml(h.shift)} · ผู้ตรวจ: ${escHtml(h.inspector)}</div>
           <div class="hi-badges">
@@ -2727,7 +2727,11 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
     const revLevel = appSettings.revLevel || 'Rev.01';
     const runNo    = (record.jigDocNo && record.jigDocNo.trim()) ? record.jigDocNo.trim() : null;
     const reportNo = 'RPT-' + (record.id || '').toString().slice(-8).toUpperCase();
-    // Issue Date = วันที่ออกแบบฟอร์มฉบับนี้ (ค่าเดียวทั้งบริษัท ตั้งใน Settings คู่กับ Doc No./Rev. Level)
+    // 🆕 Rev. Date = วันที่แก้ไข Rev ของ "ฟอร์ม" ล่าสุด (เปลี่ยนทุกครั้งที่ ISO อนุมัติแก้ไขฟอร์ม)
+    const revDate  = appSettings.revDate
+      ? new Date(appSettings.revDate).toLocaleDateString('th-TH', { year:'numeric', month:'2-digit', day:'2-digit' })
+      : '—';
+    // Issued Form = วันที่ออกแบบฟอร์มฉบับนี้ครั้งแรก (ค่าเดียวทั้งบริษัท คงที่ ไม่เปลี่ยนตาม Rev)
     // ไม่ใช่วันที่ตรวจของรายงานแต่ละใบ (อันนั้นอยู่แยกในบล็อก Inspector/วันที่ตรวจสอบด้านล่าง)
     const docDate  = appSettings.issueDate
       ? new Date(appSettings.issueDate).toLocaleDateString('th-TH', { year:'numeric', month:'2-digit', day:'2-digit' })
@@ -2818,11 +2822,15 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
               <span class="pdf-doc-value">${escHtml(reportNo)}</span>
             </div>
             <div class="pdf-doc-row">
-              <span class="pdf-doc-label">Rev. Level</span>
-              <span class="pdf-doc-value">${revLevel}</span>
+              <span class="pdf-doc-label">Rev. No.</span>
+              <span class="pdf-doc-value">${escHtml(revLevel)}</span>
             </div>
             <div class="pdf-doc-row">
-              <span class="pdf-doc-label">Issue Date</span>
+              <span class="pdf-doc-label">Rev. Date</span>
+              <span class="pdf-doc-value">${revDate}</span>
+            </div>
+            <div class="pdf-doc-row">
+              <span class="pdf-doc-label">Issued Form</span>
               <span class="pdf-doc-value">${docDate}</span>
             </div>
           </div>
