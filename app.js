@@ -589,6 +589,25 @@
     }
   }
 
+  // 🆕 แก้ไข Run No. อย่างเดียว (ไม่ต้องผ่านรหัส/ชื่อเหมือนปุ่ม ✏️ เต็มรูปแบบ)
+  function handleAdminRunNoEdit(e) {
+    const btn = e.target.closest('.adm-item-runno');
+    if (!btn) return;
+
+    e.stopPropagation();
+    const { id } = btn.dataset;
+    const j = catalog.jigs.find(x => x.id === id);
+    if (!j) return;
+
+    const newDocNo = prompt(`แก้ไข Run No. ของ "${j.name}" (${j.id})\nเว้นว่างได้ถ้าต้องการลบ Run No. ออก:`, j.docNo || '');
+    if (newDocNo === null) return; // กด Cancel — ไม่แก้อะไร
+
+    j.docNo = newDocNo.trim();
+    saveCatalog(); renderAdminLists(); renderFilter();
+    pushCatalogToSupabase(catalog);
+    toast(j.docNo ? `บันทึก Run No. "${j.docNo}" แล้ว` : 'ลบ Run No. แล้ว', 'ok');
+  }
+
   function handleAdminDelete(e) {
     const btn = e.target.closest('.adm-item-del');
     if (!btn) return;
@@ -2462,6 +2481,7 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
               <div class="adm-item-code">${escHtml(j.id)}${j.docNo ? ' · ' + escHtml(j.docNo) : ''} · ${escHtml(line ? line.name : j.lineId)}</div>
             </div>
           </div>
+          <button class="adm-item-runno" data-dtype="jig" data-id="${escHtml(j.id)}" title="แก้ไข Run No. อย่างเดียว (ไม่ต้องผ่านรหัส/ชื่อ)">🏷️</button>
           <button class="adm-item-edit" data-etype="jig" data-id="${escHtml(j.id)}">✏️</button>
           <button class="adm-item-del" data-dtype="jig" data-id="${escHtml(j.id)}">🗑</button>
         </div>`;
@@ -2475,6 +2495,7 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
        เพื่อป้องกัน memory leak ของ listeners ที่สะสมกันเรื่อยๆ */
     if (!_editHandlerAttached) {
       document.addEventListener('click', handleAdminEdit);
+      document.addEventListener('click', handleAdminRunNoEdit);
       _editHandlerAttached = true;
     }
     if (!_deleteHandlerAttached) {
