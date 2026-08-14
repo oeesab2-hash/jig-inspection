@@ -117,7 +117,13 @@
         p_departments: cat.depts?.length ? cat.depts.map(d => ({ id: d.id, name: d.name })) : null,
         p_lines: cat.lines?.length ? cat.lines.map(l => ({ id: l.id, deptId: l.deptId, name: l.name })) : null,
         p_jigs: cat.jigs?.length ? cat.jigs.map(j => ({
-          id: j.id, lineId: j.lineId, name: j.name, docNo: j.docNo || '', bgImage: j.bgImage || null
+          id: j.id, lineId: j.lineId, name: j.name, docNo: j.docNo || '', bgImage: j.bgImage || null,
+          // 🆕 ค่าเอกสารเฉพาะ JIG นี้ — เว้นว่าง = ใช้ค่ากลาง (appSettings) ตอนสร้าง PDF
+          docNoOverride: j.docNoOverride || '',
+          formRevLevelOverride: j.formRevLevelOverride || '',
+          revLevelOverride: j.revLevelOverride || '',
+          revDateOverride: j.revDateOverride || '',
+          issueDateOverride: j.issueDateOverride || '',
           // หมายเหตุ: ไม่ fallback ไปใช้ j.id แล้ว — Doc No. ต้องเป็นเลขคุมเอกสารจริงที่ Admin กรอกเองเท่านั้น เว้นว่างได้ถ้ายังไม่กำหนด
         })) : null,
         p_checkpoints: cat.jigs?.length ? flattenCheckpoints(cat.jigs) : null,
@@ -172,6 +178,12 @@
       const jigs = (j.data || []).map(row => ({
         id: row.id, lineId: row.line_id, name: row.name, docNo: row.doc_no,
         bgImage: row.bg_image || undefined,
+        // 🆕 ค่าเอกสารเฉพาะ JIG นี้ — เว้นว่าง = ใช้ค่ากลาง (appSettings)
+        docNoOverride: row.doc_no_override || '',
+        formRevLevelOverride: row.form_rev_level_override || '',
+        revLevelOverride: row.rev_level_override || '',
+        revDateOverride: row.rev_date_override || '',
+        issueDateOverride: row.issue_date_override || '',
         checkpoints: (cpByJig[row.id] || []).sort((a, b) => a.id - b.id),
       }));
       const depts = (d.data || []).map(row => ({ id: row.id, name: row.name }));
@@ -498,39 +510,80 @@
       if (!newName.trim()) { toast('ชื่อห้ามว่าง', 'ng'); return; }
       l.name = newName.trim();
     } else if (etype === 'jig') {
-      const j = catalog.jigs.find(x => x.id === id);
-      if (!j) return;
-
-      // ── รหัส JIG (id) ── แก้ได้แล้ว แต่ต้อง validate ซ้ำ + normalize แบบเดียวกับตอนเพิ่มใหม่
-      const newId = prompt('แก้ไขรหัส JIG (เช่น JRG01):', j.id);
-      if (newId === null) return;
-      const newIdNorm = newId.trim().toUpperCase();
-      if (!newIdNorm) { toast('รหัสห้ามว่าง', 'ng'); return; }
-      if (newIdNorm !== j.id && catalog.jigs.find(x => x.id === newIdNorm)) {
-        toast(`รหัส ${newIdNorm} มีแล้ว`, 'ng'); return;
-      }
-
-      const newName = prompt('แก้ไขชื่อชิ้นงาน:', j.name);
-      if (newName === null) return;
-      if (!newName.trim()) { toast('ชื่อห้ามว่าง', 'ng'); return; }
-      const newDocNo = prompt('แก้ไข Run No. (เลขประจำตัว JIG ตัวนี้ ตามเอกสารกระดาษเดิม เช่น SL-RG01-002 — ลบให้ว่างได้):', j.docNo || '');
-      if (newDocNo === null) return;
-
-      const oldId = j.id;
-      j.id = newIdNorm;
-      j.name = newName.trim();
-      j.docNo = newDocNo.trim();
-
-      saveCatalog(); renderAdminLists(); renderFilter();
-      // ถ้าเปลี่ยนรหัส JIG ต้องย้าย checkpoints/history บน Supabase ตามไปด้วย กันข้อมูลเดิมหลุด/กำพร้า
-      if (oldId !== newIdNorm) renameJigIdInSupabase(oldId, newIdNorm, j);
-      toast('แก้ไขสำเร็จ', 'ok');
+      openJigDocModal(id);
       return;
     }
     
     saveCatalog(); renderAdminLists(); renderFilter();
     toast('แก้ไขสำเร็จ', 'ok');
   }
+
+  // 🆕 ═══════════════════════════════════════════════════════════
+  // JIG Document-Control Modal — แก้ไข รหัส/ชื่อ/Run No. + ค่าเอกสาร
+  // เฉพาะ JIG นี้ (Doc No./Rev.Level/Rev No./Rev Date/Issued Form)
+  // เว้นว่าง = ใช้ค่ากลางของบริษัท (appSettings)
+  // ═══════════════════════════════════════════════════════════════
+  let _jdocEditingId = null;
+
+  function openJigDocModal(id) {
+    const j = catalog.jigs.find(x => x.id === id);
+    if (!j) return;
+    _jdocEditingId = id;
+
+    $('jig-doc-modal-title').textContent = `— ${j.name || j.id}`;
+    $('jdoc-id').value = j.id || '';
+    $('jdoc-name').value = j.name || '';
+    $('jdoc-runno').value = j.docNo || '';
+    $('jdoc-docno').value = j.docNoOverride || '';
+    $('jdoc-formrev').value = j.formRevLevelOverride || '';
+    $('jdoc-rev').value = j.revLevelOverride || '';
+    $('jdoc-revdate').value = j.revDateOverride || '';
+    $('jdoc-issuedate').value = j.issueDateOverride || '';
+
+    // แสดงค่ากลางปัจจุบันเป็น hint ให้เห็นว่าถ้าเว้นว่างจะได้ค่าอะไร
+    $('jdoc-docno-default').textContent = `(กลาง: ${appSettings.docNo || '—'})`;
+    $('jdoc-formrev-default').textContent = `(กลาง: ${appSettings.formRevLevel || '—'})`;
+    $('jdoc-rev-default').textContent = `(กลาง: ${appSettings.revLevel || '—'})`;
+    $('jdoc-revdate-default').textContent = appSettings.revDate ? `(กลาง: ${appSettings.revDate})` : '';
+    $('jdoc-issuedate-default').textContent = appSettings.issueDate ? `(กลาง: ${appSettings.issueDate})` : '';
+
+    $('jig-doc-modal').classList.remove('hidden');
+  }
+
+  function closeJigDocModal() {
+    $('jig-doc-modal').classList.add('hidden');
+    _jdocEditingId = null;
+  }
+
+  function saveJigDocModal() {
+    const j = catalog.jigs.find(x => x.id === _jdocEditingId);
+    if (!j) { closeJigDocModal(); return; }
+
+    const newIdNorm = $('jdoc-id').value.trim().toUpperCase();
+    if (!newIdNorm) { toast('รหัส JIG ห้ามว่าง', 'ng'); return; }
+    if (newIdNorm !== j.id && catalog.jigs.find(x => x.id === newIdNorm)) {
+      toast(`รหัส ${newIdNorm} มีแล้ว`, 'ng'); return;
+    }
+    const newName = $('jdoc-name').value.trim();
+    if (!newName) { toast('ชื่อชิ้นงานห้ามว่าง', 'ng'); return; }
+
+    const oldId = j.id;
+    j.id = newIdNorm;
+    j.name = newName;
+    j.docNo = $('jdoc-runno').value.trim();
+    j.docNoOverride = $('jdoc-docno').value.trim();
+    j.formRevLevelOverride = $('jdoc-formrev').value.trim();
+    j.revLevelOverride = $('jdoc-rev').value.trim();
+    j.revDateOverride = $('jdoc-revdate').value;
+    j.issueDateOverride = $('jdoc-issuedate').value;
+
+    saveCatalog(); renderAdminLists(); renderFilter();
+    // ถ้าเปลี่ยนรหัส JIG ต้องย้าย checkpoints/history บน Supabase ตามไปด้วย กันข้อมูลเดิมหลุด/กำพร้า
+    if (oldId !== newIdNorm) renameJigIdInSupabase(oldId, newIdNorm, j);
+    toast('แก้ไขสำเร็จ', 'ok');
+    closeJigDocModal();
+  }
+
 
   // ── เปลี่ยนรหัส (id) ของ JIG บน Supabase อย่างปลอดภัย ──
   // ทำแบบ "สร้างแถวใหม่ก่อน → ย้าย checkpoints/history มาอ้างอิงรหัสใหม่ → ค่อยลบแถวเก่า"
@@ -548,7 +601,10 @@
         p_password: pass,
         p_old_id: oldId,
         p_new_id: newId,
-        p_jig_data: { lineId: jigData.lineId, name: jigData.name, docNo: jigData.docNo || '', bgImage: jigData.bgImage || null },
+        p_jig_data: { lineId: jigData.lineId, name: jigData.name, docNo: jigData.docNo || '', bgImage: jigData.bgImage || null,
+          docNoOverride: jigData.docNoOverride || '', formRevLevelOverride: jigData.formRevLevelOverride || '',
+          revLevelOverride: jigData.revLevelOverride || '', revDateOverride: jigData.revDateOverride || '',
+          issueDateOverride: jigData.issueDateOverride || '' },
       });
       if (error) throw error;
       if (!ok) {
@@ -2081,6 +2137,11 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
     });
     $('btn-export-excel').addEventListener('click', exportHistoryToExcel);
     $('btn-export-master-list').addEventListener('click', exportMasterListToExcel);
+    // 🆕 JIG Document-Control Modal — ปิด/บันทึก
+    $('btn-jig-doc-modal-close').addEventListener('click', closeJigDocModal);
+    $('jig-doc-modal').addEventListener('click', (e) => { if (e.target.id === 'jig-doc-modal') closeJigDocModal(); });
+    $('btn-jdoc-save').addEventListener('click', saveJigDocModal);
+
     $('btn-save-app-settings').addEventListener('click', () => {
       const newDocNo   = $('adm-doc-no').value.trim();
       const newFormRev = $('adm-form-rev-level') ? $('adm-form-rev-level').value.trim() : '';
@@ -2725,25 +2786,29 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
   }
 
   function buildPdfReportHtml(record) {
-    // ── Doc No. (ค่าเดียวทั้งบริษัท ตามที่ฝ่าย ISO ยืนยัน — ไม่ผูกกับ JIG ตัวไหน) ──
+    // ── Doc No. (ค่ากลางทั้งบริษัท เว้นแต่ JIG ตัวนี้กำหนดค่าเฉพาะของตัวเองไว้ — ดู jig.*Override) ──
     // ── Run No. (เลขประจำตัว JIG ตัวนี้ตายตัว ตามเอกสารกระดาษเดิม เช่น SL-RG01-002) ──
     // ── Report No. (unique ต่อรายงานแต่ละใบ เพื่อ traceability ของการตรวจแต่ละรอบ) ──
-    const docId    = appSettings.docNo || null;
-    const formRevLevel = appSettings.formRevLevel || 'Rev.01'; // 🆕 Rev. Level ของ "ฟอร์ม" (โครงสร้าง/layout)
-    const revLevel = appSettings.revLevel || 'Rev.00';         // Rev. No. ของ "เนื้อหา" (เพิ่ม/ลบ/แก้ไขจุดตรวจ)
+    // 🆕 หา JIG ต้นทางเพื่อเช็คว่ามีค่าเอกสารเฉพาะตัว (override) หรือไม่ — ถ้าไม่มี/ว่าง ใช้ค่ากลาง
+    const jigRef = catalog.jigs.find(x => x.id === record.jigId);
+    const docId    = (jigRef && jigRef.docNoOverride) ? jigRef.docNoOverride : (appSettings.docNo || null);
+    const formRevLevel = (jigRef && jigRef.formRevLevelOverride) ? jigRef.formRevLevelOverride : (appSettings.formRevLevel || 'Rev.01');
+    const revLevel = (jigRef && jigRef.revLevelOverride) ? jigRef.revLevelOverride : (appSettings.revLevel || 'Rev.00');
     const runNo    = (record.jigDocNo && record.jigDocNo.trim()) ? record.jigDocNo.trim() : null;
     const reportNo = 'RPT-' + (record.id || '').toString().slice(-8).toUpperCase();
-    // 🆕 Rev. Date = วันที่แก้ไข Rev ของ "ฟอร์ม" ล่าสุด (เปลี่ยนทุกครั้งที่ ISO อนุมัติแก้ไขฟอร์ม)
-    const revDate  = appSettings.revDate
-      ? new Date(appSettings.revDate).toLocaleDateString('th-TH', { year:'numeric', month:'2-digit', day:'2-digit' })
+    // 🆕 Rev. Date = ของ JIG นี้ (ถ้ากำหนด) ไม่งั้นใช้ค่ากลาง — วันที่แก้ไข Rev เนื้อหาล่าสุด
+    const revDateRaw = (jigRef && jigRef.revDateOverride) ? jigRef.revDateOverride : appSettings.revDate;
+    const revDate  = revDateRaw
+      ? new Date(revDateRaw).toLocaleDateString('th-TH', { year:'numeric', month:'2-digit', day:'2-digit' })
       : '—';
-    // Issued Form = วันที่ออกแบบฟอร์มฉบับนี้ครั้งแรก (ค่าเดียวทั้งบริษัท คงที่ ไม่เปลี่ยนตาม Rev)
+    // Issued Form = ของ JIG นี้ (ถ้ากำหนด) ไม่งั้นใช้ค่ากลาง — วันที่ออกแบบฟอร์มฉบับนี้ครั้งแรก
     // ไม่ใช่วันที่ตรวจของรายงานแต่ละใบ (อันนั้นอยู่แยกในบล็อก Inspector/วันที่ตรวจสอบด้านล่าง)
-    const docDate  = appSettings.issueDate
-      ? new Date(appSettings.issueDate).toLocaleDateString('th-TH', { year:'numeric', month:'2-digit', day:'2-digit' })
+    const issueDateRaw = (jigRef && jigRef.issueDateOverride) ? jigRef.issueDateOverride : appSettings.issueDate;
+    const docDate  = issueDateRaw
+      ? new Date(issueDateRaw).toLocaleDateString('th-TH', { year:'numeric', month:'2-digit', day:'2-digit' })
       : '<span style="color:#dc2626;font-weight:700">⚠️ ยังไม่กำหนด</span>';
-    const docDatePlain = appSettings.issueDate
-      ? new Date(appSettings.issueDate).toLocaleDateString('th-TH', { year:'numeric', month:'2-digit', day:'2-digit' })
+    const docDatePlain = issueDateRaw
+      ? new Date(issueDateRaw).toLocaleDateString('th-TH', { year:'numeric', month:'2-digit', day:'2-digit' })
       : '—';
 
     // ── Result Summary ──
