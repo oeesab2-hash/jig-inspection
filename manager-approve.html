@@ -240,6 +240,17 @@
   function statusClass(s) {
     return s === 'ok' ? 'st-ok' : s === 'fixed' ? 'st-fixed' : s === 'ng' ? 'st-ng' : '';
   }
+  // ── สร้างข้อความรายการที่ไม่ผ่าน (NG) สำหรับใส่ในแจ้งเตือน Telegram ──
+  function ngListText(items) {
+    const ngItems = (items || []).filter(i => i.status === 'ng');
+    if (!ngItems.length) return '';
+    const lines = ngItems.map((item, idx) => {
+      const value = item.value ? ` (ค่า: ${item.value}${item.unit ? ' ' + item.unit : ''})` : '';
+      const note = item.note ? ` - _${esc(item.note)}_` : '';
+      return `${idx + 1}. ${esc(item.label)}${value}${note}`;
+    });
+    return `\n*🔴 รายการที่ไม่ผ่าน:*\n${lines.join('\n')}\n`;
+  }
   // ── ระบุ stage การอนุมัติ (หัวหน้างาน = หน้านี้ / ผู้จัดการฝ่ายผลิต = manager-approve.html) ──
   function approvalStage(row) {
     const supApproved = row.approval_status === 'approved';
@@ -656,7 +667,7 @@ ${row.jig_doc_no ? `_${esc(row.jig_doc_no)}_` : ''}
 👤 ผู้ตรวจ: ${esc(row.inspector)}
 🔍 จุดเช็คทั้งหมด: ${items.length} จุด
 ✅ ผ่าน (OK): ${okCount}  ❌ ไม่ผ่าน (NG): ${ngCount}
-
+${ngListText(items)}
 👔 หัวหน้างาน: ${esc(row.approved_by)} (${row.approved_at ? new Date(row.approved_at).toLocaleString('th-TH') : '-'})
 🏭 ผู้จัดการฝ่ายผลิต: ${esc(row.manager_approved_by)} (${new Date(row.manager_approved_at).toLocaleString('th-TH')})
 ${row.manager_comment ? `💬 ความเห็น: ${esc(row.manager_comment)}` : ''}
