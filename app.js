@@ -1528,6 +1528,21 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
   // ── Export Master List: รวม Run No. ของ JIG ทุกตัวในระบบ จัดกลุ่มตามแผนก/Line ──
   // ใช้สำหรับ Document Control ตามระบบ ISO/IATF — ดึงจาก catalog สดเสมอ (ไม่ใช่จากประวัติการตรวจ)
   // หมายเหตุ: Doc No. ของแบบฟอร์มตรวจ JIG มีค่าเดียวทั้งบริษัท (ตั้งค่าที่ "ตั้งค่าเอกสารกลาง") เลยไม่ใส่ในตารางนี้ต่อแถว
+  // 🆕 คำนวณค่าเอกสาร "ที่ใช้จริง" ของ JIG ตัวนี้ — ถ้า JIG กำหนด override ไว้ใช้ค่านั้น
+  // ไม่งั้น fallback ไปใช้ค่ากลาง (appSettings) เหมือนตอนสร้าง PDF ทุกประการ
+  function effectiveJigDocFields(j) {
+    const fmtDate = (d) => d ? new Date(d).toLocaleDateString('th-TH', { year:'numeric', month:'2-digit', day:'2-digit' }) : '';
+    return {
+      docNo:       (j.docNoOverride && j.docNoOverride.trim())              ? j.docNoOverride.trim()              : (appSettings.docNo || ''),
+      formRevLevel:(j.formRevLevelOverride && j.formRevLevelOverride.trim())? j.formRevLevelOverride.trim()       : (appSettings.formRevLevel || ''),
+      revLevel:    (j.revLevelOverride && j.revLevelOverride.trim())        ? j.revLevelOverride.trim()           : (appSettings.revLevel || ''),
+      revDate:     fmtDate((j.revDateOverride && j.revDateOverride.trim())  ? j.revDateOverride                  : appSettings.revDate),
+      issueDate:   fmtDate((j.issueDateOverride && j.issueDateOverride.trim())? j.issueDateOverride               : appSettings.issueDate),
+      isCustom: !!((j.docNoOverride && j.docNoOverride.trim()) || (j.formRevLevelOverride && j.formRevLevelOverride.trim())
+        || (j.revLevelOverride && j.revLevelOverride.trim()) || (j.revDateOverride && j.revDateOverride.trim()) || (j.issueDateOverride && j.issueDateOverride.trim())),
+    };
+  }
+
   function exportMasterListToExcel() {
     if (!window.XLSX) { toast('โหลด Excel library ไม่สำเร็จ', 'ng'); return; }
     if (!catalog.jigs.length) { toast('ยังไม่มี JIG ในระบบ', 'ng'); return; }
@@ -1544,6 +1559,7 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
     const rows = jigsSorted.map((j, i) => {
       const line = catalog.lines.find(l => l.id === j.lineId);
       const dept = catalog.depts.find(d => d.id === (line && line.deptId));
+      const eff = effectiveJigDocFields(j);
       return {
         'No.': i + 1,
         'แผนก': dept ? dept.name : '',
@@ -1551,19 +1567,26 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
         'ชื่อชิ้นงาน': j.name,
         'รหัส JIG (Part No.)': j.id,
         'Run No.': j.docNo && j.docNo.trim() ? j.docNo.trim() : '⚠️ ยังไม่กำหนด',
+        'Doc No.': eff.docNo || '⚠️ ยังไม่กำหนด',
+        'Rev. Level (ฟอร์ม)': eff.formRevLevel || '—',
+        'Rev. No. (เนื้อหา)': eff.revLevel || '—',
+        'Rev. Date': eff.revDate || '—',
+        'Issued Form': eff.issueDate || '—',
+        'ค่าเอกสาร': eff.isCustom ? 'เฉพาะ JIG นี้' : 'ใช้ค่ากลาง',
         'จำนวนจุดตรวจ': (j.checkpoints || []).length,
       };
     });
 
     const wb = XLSX.utils.book_new();
-    // แถวหัวกระดาษ: Doc No. กลาง — เพื่อให้เห็นชัดว่าทุก JIG ใช้แบบฟอร์มเดียวกันนี้
+    // แถวหัวกระดาษ: ค่ากลางทั้งบริษัท — เพื่อให้เห็นชัดว่า JIG ที่ไม่ได้กำหนดค่าเฉพาะ ใช้ค่าอะไรอยู่
     const headerRows = [
-      [`Doc No. (แบบฟอร์มตรวจ JIG ทั้งบริษัท): ${appSettings.docNo || '—'}    Rev. Level (ฟอร์ม): ${appSettings.formRevLevel || '—'}    Rev. No. (เนื้อหา): ${appSettings.revLevel || '—'}    Rev. Date: ${appSettings.revDate || '—'}`],
+      [`ค่ากลางทั้งบริษัท — Doc No.: ${appSettings.docNo || '—'}    Rev. Level (ฟอร์ม): ${appSettings.formRevLevel || '—'}    Rev. No. (เนื้อหา): ${appSettings.revLevel || '—'}    Rev. Date: ${appSettings.revDate || '—'}    Issued Form: ${appSettings.issueDate || '—'}`],
+      ['หมายเหตุ: คอลัมน์ Doc No./Rev. Level/Rev. No./Rev. Date/Issued Form ด้านล่าง = ค่าที่ใช้จริงของ JIG แต่ละตัว (ถ้า JIG ไม่ได้กำหนดค่าเฉพาะไว้ จะแสดงค่ากลางด้านบนนี้)'],
       [],
     ];
     const ws = XLSX.utils.aoa_to_sheet(headerRows);
     XLSX.utils.sheet_add_json(ws, rows, { origin: -1 });
-    ws['!cols'] = [{wch:5},{wch:14},{wch:16},{wch:30},{wch:16},{wch:18},{wch:12}];
+    ws['!cols'] = [{wch:5},{wch:14},{wch:16},{wch:30},{wch:16},{wch:14},{wch:16},{wch:16},{wch:16},{wch:12},{wch:12},{wch:14},{wch:12}];
     XLSX.utils.book_append_sheet(wb, ws, 'Master List');
 
     const stamp = new Date().toISOString().slice(0, 10);
