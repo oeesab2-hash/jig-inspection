@@ -207,13 +207,20 @@
   const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im90eXRwemltdXlhcWFndnh2ZXhmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ1MTMyMDEsImV4cCI6MjEwMDA4OTIwMX0.QQVIcDkIByAgyFTHrF7AmcZ-l-HfvLnbU8jh3Vnwyjw';
   const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-  // ✅ จำ PIN ไว้ชั่วคราวระหว่างที่หน้านี้ยังเปิดอยู่ (หายไปเองถ้า refresh/ปิดหน้า)
-  // เพื่อไม่ต้องพิมพ์ PIN ซ้ำทุกครั้งที่กดอนุมัติหลายรายการติดกัน
+  // ✅ จำ PIN และชื่อผู้อนุมัติไว้ชั่วคราวระหว่างที่หน้านี้ยังเปิดอยู่ (หายไปเองถ้า refresh/ปิดหน้า)
+  // เพื่อไม่ต้องพิมพ์ซ้ำทุกครั้งที่กดอนุมัติหลายรายการติดกัน
   let _rememberedPin = null;
+  let _rememberedName = null;
   function askPin(label) {
     if (_rememberedPin) return _rememberedPin;
     const p = prompt(label);
     if (p) _rememberedPin = p;
+    return p;
+  }
+  function askName(label) {
+    if (_rememberedName) return _rememberedName;
+    const p = prompt(label);
+    if (p && p.trim()) _rememberedName = p.trim();
     return p;
   }
   function clearRememberedPin() { _rememberedPin = null; }
@@ -377,9 +384,9 @@
 
   async function bulkApprove(lineName, ids, btn) {
     if (!ids.length) return;
-    const name = prompt(`ยืนยันอนุมัติทั้งหมด ${ids.length} รายการของ Line "${lineName}" (ไม่มี NG ทุกรายการ)\n\nกรุณาพิมพ์ชื่อผู้อนุมัติ (ผู้จัดการฝ่ายผลิต):`);
+    const name = askName(`ยืนยันอนุมัติทั้งหมด ${ids.length} รายการของ Line "${lineName}" (ไม่มี NG ทุกรายการ)\n\nกรุณาพิมพ์ชื่อผู้อนุมัติ (ผู้จัดการฝ่ายผลิต):`);
     if (!name || !name.trim()) return;
-    const approverName = name.trim();
+    const approverName = _rememberedName;
     // ✅ SECURITY: ต้องกรอก PIN ผู้จัดการก่อนอนุมัติได้ — เช็คฝั่ง Supabase (RPC) เท่านั้น
     // (จำ PIN ไว้ในหน้านี้ ถ้าเคยกรอกถูกแล้วไม่ต้องพิมพ์ซ้ำ)
     const pin = askPin('กรุณากรอก PIN ผู้จัดการฝ่ายผลิต เพื่อยืนยันการอนุมัติ:');
@@ -554,16 +561,24 @@
       </div>
       <div class="section-title" style="margin-top:16px;">✍️ อนุมัติรายงานนี้ (ผู้จัดการฝ่ายผลิต)</div>
       <label class="field-label">ชื่อผู้อนุมัติ (ผู้จัดการฝ่ายผลิต)</label>
-      <input type="text" id="approver-name" placeholder="พิมพ์ชื่อ-นามสกุล">
+      <input type="text" id="approver-name" placeholder="พิมพ์ชื่อ-นามสกุล" value="${_rememberedName ? escAttr(_rememberedName) : ''}">
       <label class="field-label">PIN ผู้จัดการฝ่ายผลิต</label>
       <input type="password" id="approver-pin" placeholder="กรอก PIN เพื่อยืนยันตัวตน" inputmode="numeric" value="${_rememberedPin ? escAttr(_rememberedPin) : ''}">
       <label class="field-label">ความเห็นเพิ่มเติม (ถ้ามี)</label>
       <textarea id="approver-comment" placeholder="เช่น รับทราบ อนุมัติให้ดำเนินการต่อ"></textarea>
       <button class="btn btn-approve" id="btn-approve">✅ อนุมัติรายงานนี้ (ขั้นสุดท้าย)</button>
       <div id="approve-msg" style="font-size:12px; color:var(--ng); margin-top:8px;"></div>
+      ${(_rememberedName || _rememberedPin) ? `<div style="text-align:center; margin-top:10px;"><a href="#" id="btn-reset-approver" style="font-size:12px; color:#6b7280;">ไม่ใช่ ${_rememberedName ? esc(_rememberedName) : 'คนนี้'}? เปลี่ยนผู้ใช้</a></div>` : ''}
     `;
 
     document.getElementById('btn-approve').addEventListener('click', () => approveReport(row));
+    const resetLink = document.getElementById('btn-reset-approver');
+    if (resetLink) resetLink.addEventListener('click', (e) => {
+      e.preventDefault();
+      _rememberedName = null;
+      clearRememberedPin();
+      renderApprovalCard(row); // วาดฟอร์มใหม่ให้ช่องว่างเปล่าอีกครั้ง
+    });
   }
 
   async function approveReport(row) {
@@ -610,6 +625,7 @@
       return;
     }
     _rememberedPin = pin; // จำไว้ใช้ต่อกับรายการถัดไปในหน้านี้
+    _rememberedName = name;
 
     row.manager_approval_status = 'approved';
     row.manager_approved_by = name;
