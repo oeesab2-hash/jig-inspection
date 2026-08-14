@@ -108,6 +108,11 @@
     overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%;
   }
   .doc-rev-empty { font-size: 11px; color: var(--muted); margin-top: 4px; font-style: italic; }
+  .btn-edit-rev {
+    border: none; background: none; color: var(--accent); font-size: 11px; font-weight: 600;
+    cursor: pointer; padding: 0 2px; font-family: inherit;
+  }
+  .btn-edit-rev:hover { text-decoration: underline; }
 
   .back-link {
     display: inline-block; font-size: 13px; font-weight: 600; color: var(--navy);
@@ -206,6 +211,8 @@
   let latestRevByDoc = {}; // document_id -> แถวประวัติแก้ไขล่าสุด (rev_no สูงสุด) — ใช้โชว์สรุปในหน้ารายการ
   let filters = { company: params.get('company') || '', department: params.get('department') || '', q: '' };
   let currentDocId = params.get('doc') || null;
+  let editingRevDocId = null;   // ← document_id ของแถวที่กำลังเปิดฟอร์มแก้ไขอยู่ในหน้า "รายการ"
+  let editingRevIdDetail = null; // ← revision id ของแถวที่กำลังเปิดฟอร์มแก้ไขอยู่ในหน้า "รายละเอียด"
 
   async function loadAll() {
     const { data, error } = await sb.from('master_documents').select('*').order('doc_no', { ascending: true });
@@ -285,7 +292,7 @@
 
       <div class="card">
         <div class="section-title"><span>📋 รายการเอกสาร (${filtered.length})</span></div>
-        ${filtered.length ? filtered.map((d, i) => { const rev = latestRevByDoc[d.id]; return `
+        ${filtered.length ? filtered.map((d, i) => { const rev = latestRevByDoc[d.id]; const isEditing = rev && editingRevDocId === d.id; return `
           <div class="doc-row" data-id="${escAttr(d.id)}">
             <div style="flex:1; min-width:0;">
               <div class="doc-no">${esc(d.doc_no)}</div>
@@ -296,6 +303,7 @@
                   <span>🕐 <b>${fmtDate(rev.rev_date)}</b></span>
                   <span>✏️ ผู้แก้ไข: <b>${esc(rev.prepared_by || '-')}</b></span>
                   <span>✅ ผู้อนุมัติ: <b>${esc(rev.approved_by || '-')}</b></span>
+                  <button class="btn-edit-rev" type="button" data-edit-id="${escAttr(d.id)}" title="แก้ไขข้อมูล Rev ล่าสุด">✏️ แก้ไข</button>
                 </div>
                 <div class="doc-rev-detail" title="${escAttr(rev.amendment_detail || '')}">📝 ${esc(rev.amendment_detail || '-')}</div>
               ` : `<div class="doc-rev-empty">ยังไม่มีประวัติการแก้ไข</div>`}
@@ -306,6 +314,7 @@
             </div>
             <div class="doc-arrow">›</div>
           </div>
+          ${isEditing ? renderEditRevForm(d, rev) : ''}
         `; }).join('') : `<div class="center-msg" style="padding:16px 0;">ไม่พบเอกสารตามเงื่อนไขที่กรอง</div>`}
       </div>
     `;
@@ -333,6 +342,22 @@
       });
     });
 
+    // ── ปุ่ม "✏️ แก้ไข" ในสรุป Rev ล่าสุดของแต่ละแถว — เปิด/ปิดฟอร์มแก้ไขแบบ inline ──
+    document.querySelectorAll('.btn-edit-rev').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation(); // กันไม่ให้ bubble ไปโดน click ของ .doc-row (จะพาไปหน้ารายละเอียดโดยไม่ตั้งใจ)
+        const id = btn.dataset.editId;
+        editingRevDocId = (editingRevDocId === id) ? null : id;
+        renderList();
+      });
+    });
+    if (editingRevDocId) {
+      const cancelBtn = document.getElementById('er-cancel');
+      if (cancelBtn) cancelBtn.addEventListener('click', () => { editingRevDocId = null; renderList(); });
+      const submitBtn = document.getElementById('er-submit');
+      if (submitBtn) submitBtn.addEventListener('click', () => submitEditRevision(submitBtn));
+    }
+
     let addFormOpen = false;
     document.getElementById('btn-add-doc').addEventListener('click', () => {
       addFormOpen = !addFormOpen;
@@ -344,6 +369,92 @@
       document.getElementById('import-file-input').click();
     });
     document.getElementById('import-file-input').addEventListener('change', handleImportFile);
+  }
+
+  // ── ฟอร์มแก้ไขข้อมูล Rev ที่มีอยู่แล้ว (ใช้ทั้งในหน้ารายการ แก้ Rev ล่าสุด และหน้ารายละเอียด แก้ Rev ไหนก็ได้) ──
+  function renderEditRevForm(doc, rev) {
+    const revDateVal = rev.rev_date ? String(rev.rev_date).slice(0, 10) : '';
+    return `
+      <div class="card" id="edit-rev-card" style="border:1px solid var(--accent); margin-top:-6px; margin-bottom:14px;">
+        <div class="section-title"><span>✏️ แก้ไขข้อมูลการแก้ไข — ${esc(doc.doc_no)} (Rev ${rev.rev_no})</span></div>
+        <label class="field-label">Rev No.</label>
+        <input type="number" id="er-revno" min="0" value="${rev.rev_no}">
+        <label class="field-label">วันที่ปรับปรุง</label>
+        <input type="date" id="er-date" value="${revDateVal}">
+        <label class="field-label">รายละเอียดการแก้ไข</label>
+        <textarea id="er-detail">${esc(rev.amendment_detail || '')}</textarea>
+        <label class="field-label">ผู้แก้ไข</label>
+        <input type="text" id="er-prepared" value="${escAttr(rev.prepared_by || '')}">
+        <label class="field-label">ผู้อนุมัติ</label>
+        <input type="text" id="er-approver" value="${escAttr(rev.approved_by || '')}">
+        <label class="field-label">PIN ยืนยันตัวตน</label>
+        <input type="password" id="er-pin" inputmode="numeric" placeholder="กรอก PIN" value="${_rememberedPin ? escAttr(_rememberedPin) : ''}">
+        <div style="display:flex; gap:8px; margin-top:10px;">
+          <button class="btn btn-approve" id="er-submit" type="button" data-rev-id="${escAttr(rev.id)}" style="flex:1;">บันทึกการแก้ไข</button>
+          <button class="btn-ghost" id="er-cancel" type="button" style="flex:0 0 auto;">ยกเลิก</button>
+        </div>
+        <div class="form-msg" id="er-msg"></div>
+      </div>
+    `;
+  }
+
+  async function submitEditRevision(btn) {
+    const revId = btn.dataset.revId;
+    const msgEl = document.getElementById('er-msg');
+    const revNo = parseInt(document.getElementById('er-revno').value, 10);
+    const revDate = document.getElementById('er-date').value;
+    const detail = document.getElementById('er-detail').value.trim();
+    const prepared = document.getElementById('er-prepared').value.trim();
+    const approver = document.getElementById('er-approver').value.trim();
+    const pin = document.getElementById('er-pin').value.trim();
+
+    msgEl.textContent = '';
+    msgEl.className = 'form-msg';
+
+    if (Number.isNaN(revNo) || revNo < 0) {
+      msgEl.textContent = 'กรุณากรอก Rev No. ให้ถูกต้อง (ตัวเลขตั้งแต่ 0 ขึ้นไป)';
+      msgEl.classList.add('err');
+      return;
+    }
+    if (!revDate || !detail) {
+      msgEl.textContent = 'กรุณากรอกวันที่ปรับปรุงและรายละเอียดการแก้ไข';
+      msgEl.classList.add('err');
+      return;
+    }
+    if (!pin) {
+      msgEl.textContent = 'กรุณากรอก PIN';
+      msgEl.classList.add('err');
+      return;
+    }
+
+    btn.disabled = true;
+    btn.textContent = 'กำลังบันทึก...';
+
+    // ✅ SECURITY: แก้ไขผ่าน RPC 'doc_edit_revision' เท่านั้น (เช็ค PIN ฝั่ง DB ก่อนเขียนทุกครั้ง เหมือน RPC อื่นๆ ในระบบนี้)
+    const { data: ok, error } = await sb.rpc('doc_edit_revision', {
+      p_pin: pin, p_revision_id: revId, p_rev_no: revNo, p_rev_date: revDate,
+      p_amendment_detail: detail, p_prepared_by: prepared || null, p_approved_by: approver || null,
+    });
+
+    btn.disabled = false;
+    btn.textContent = 'บันทึกการแก้ไข';
+
+    if (error) {
+      msgEl.textContent = 'บันทึกไม่สำเร็จ: ' + error.message;
+      msgEl.classList.add('err');
+      return;
+    }
+    if (!ok) {
+      clearRememberedPin();
+      msgEl.textContent = 'PIN ไม่ถูกต้อง — บันทึกไม่สำเร็จ';
+      msgEl.classList.add('err');
+      return;
+    }
+
+    _rememberedPin = pin;
+    editingRevDocId = null;
+    editingRevIdDetail = null;
+    await loadAll(); // โหลดข้อมูลใหม่ทั้งหมด แล้ว render() จะเลือกโชว์หน้ารายการ/รายละเอียดให้เองตาม currentDocId
   }
 
   function renderAddDocForm() {
@@ -694,7 +805,7 @@
         <table class="rev-table">
           <thead>
             <tr>
-              <th>REV.</th><th>วันที่</th><th>หน้า</th><th>รายละเอียดการแก้ไข</th><th>ผู้แก้ไข</th><th>ผู้อนุมัติ</th>
+              <th>REV.</th><th>วันที่</th><th>หน้า</th><th>รายละเอียดการแก้ไข</th><th>ผู้แก้ไข</th><th>ผู้อนุมัติ</th><th></th>
             </tr>
           </thead>
           <tbody>
@@ -706,12 +817,15 @@
                 <td>${esc(r.amendment_detail)}</td>
                 <td>${esc(r.prepared_by || '-')}</td>
                 <td>${esc(r.approved_by || '-')}</td>
+                <td><button class="btn-edit-rev" type="button" data-edit-id="${escAttr(r.id)}" title="แก้ไขรายการนี้">✏️</button></td>
               </tr>
             `).join('')}
           </tbody>
         </table>
         ` : `<div class="center-msg" style="padding:16px 0;">ยังไม่มีประวัติการแก้ไข</div>`}
       </div>
+
+      ${editingRevIdDetail ? renderEditRevForm(doc, revs.find(r => r.id === editingRevIdDetail)) : ''}
     `;
 
     document.getElementById('back-to-list').addEventListener('click', e => {
@@ -729,6 +843,21 @@
       document.getElementById('add-rev-form').innerHTML = revFormOpen ? renderAddRevForm(doc) : '';
       if (revFormOpen) bindAddRevForm(doc);
     });
+
+    // ── ปุ่ม "✏️" ในแต่ละแถวประวัติแก้ไข — เปิด/ปิดฟอร์มแก้ไขรายการนั้น ──
+    document.querySelectorAll('.btn-edit-rev').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const id = btn.dataset.editId;
+        editingRevIdDetail = (editingRevIdDetail === id) ? null : id;
+        render();
+      });
+    });
+    if (editingRevIdDetail) {
+      const cancelBtn = document.getElementById('er-cancel');
+      if (cancelBtn) cancelBtn.addEventListener('click', () => { editingRevIdDetail = null; render(); });
+      const submitBtn = document.getElementById('er-submit');
+      if (submitBtn) submitBtn.addEventListener('click', () => submitEditRevision(submitBtn));
+    }
 
     document.getElementById('btn-toggle-status').addEventListener('click', async () => {
       const newStatus = doc.status === 'obsolete' ? 'active' : 'obsolete';
