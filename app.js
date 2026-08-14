@@ -1572,7 +1572,6 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
         'Rev. No. (เนื้อหา)': eff.revLevel || '—',
         'Rev. Date': eff.revDate || '—',
         'Issued Form': eff.issueDate || '—',
-        'ค่าเอกสาร': eff.isCustom ? 'เฉพาะ JIG นี้' : 'ใช้ค่ากลาง',
         'จำนวนจุดตรวจ': (j.checkpoints || []).length,
       };
     });
@@ -1586,7 +1585,7 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
     ];
     const ws = XLSX.utils.aoa_to_sheet(headerRows);
     XLSX.utils.sheet_add_json(ws, rows, { origin: -1 });
-    ws['!cols'] = [{wch:5},{wch:14},{wch:16},{wch:30},{wch:16},{wch:14},{wch:16},{wch:16},{wch:16},{wch:12},{wch:12},{wch:14},{wch:12}];
+    ws['!cols'] = [{wch:5},{wch:14},{wch:16},{wch:30},{wch:16},{wch:14},{wch:16},{wch:16},{wch:16},{wch:12},{wch:12},{wch:12}];
     XLSX.utils.book_append_sheet(wb, ws, 'Master List');
 
     const stamp = new Date().toISOString().slice(0, 10);
