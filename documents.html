@@ -7,6 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Thai:wght@400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
   :root {
     --navy: #1e3a5f;
@@ -249,9 +250,12 @@
           <input type="text" id="f-search" placeholder="ค้นหาเลขที่เอกสาร หรือ ชื่อเอกสาร..." value="${escAttr(filters.q)}">
         </div>
         <button class="btn btn-primary" id="btn-add-doc" type="button">➕ เพิ่มเอกสารใหม่</button>
+        <button class="btn-ghost" id="btn-import-excel" type="button" style="width:100%; margin-top:8px; box-sizing:border-box;">📥 นำเข้าจาก Excel (Master List JIG)</button>
+        <input type="file" id="import-file-input" accept=".xlsx,.xls" style="display:none">
       </div>
 
       <div id="add-doc-form"></div>
+      <div id="import-preview"></div>
 
       <div class="card">
         <div class="section-title"><span>📋 รายการเอกสาร (${filtered.length})</span></div>
@@ -301,6 +305,11 @@
       document.getElementById('add-doc-form').innerHTML = addFormOpen ? renderAddDocForm() : '';
       if (addFormOpen) bindAddDocForm();
     });
+
+    document.getElementById('btn-import-excel').addEventListener('click', () => {
+      document.getElementById('import-file-input').click();
+    });
+    document.getElementById('import-file-input').addEventListener('change', handleImportFile);
   }
 
   function renderAddDocForm() {
@@ -385,6 +394,219 @@
       history.pushState({}, '', '?' + p.toString());
       await loadAll();
     });
+  }
+
+  // ══════════════════════════════════════════════════════════════
+  //  นำเข้าจาก Excel — ใช้ไฟล์ที่ export จาก "Export Master List (Run No. ทั้งหมด)" ในหน้า index.html
+  //  คอลัมน์ที่คาดหวัง: No. / แผนก / Line / ชื่อชิ้นงาน / รหัส JIG (Part No.) / Run No. / Doc No. /
+  //                    Rev. Level (ฟอร์ม) / Rev. No. (เนื้อหา) / Rev. Date / Issued Form / จำนวนจุดตรวจ
+  // ══════════════════════════════════════════════════════════════
+
+  // แปลงวันที่ dd/mm/yyyy (พ.ศ. หรือ ค.ศ.) จากไฟล์ export กลับเป็น ISO ค.ศ. สำหรับ <input type=date>
+  function parseThaiDateToISO(s) {
+    if (!s) return null;
+    const str = String(s).trim();
+    if (!str || str === '—' || str === '-') return null;
+    const m = str.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/);
+    if (!m) return null;
+    let [, d, mo, y] = m;
+    y = parseInt(y, 10);
+    if (y < 100) y += 2500; // เผื่อปี พ.ศ. แบบ 2 หลัก
+    if (y > 2400) y -= 543; // พ.ศ. -> ค.ศ.
+    const pad = n => String(n).padStart(2, '0');
+    return `${y}-${pad(mo)}-${pad(d)}`;
+  }
+
+  function handleImportFile(e) {
+    const file = e.target.files[0];
+    e.target.value = ''; // เคลียร์ input ไว้เผื่อเลือกไฟล์เดิมซ้ำ
+    if (!file) return;
+    if (!window.XLSX) { alert('โหลด Excel library ไม่สำเร็จ ลองรีเฟรชหน้าอีกครั้ง'); return; }
+
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      try {
+        const wb = XLSX.read(ev.target.result, { type: 'array' });
+        const ws = wb.Sheets[wb.SheetNames[0]];
+        const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
+
+        // หาแถวหัวตาราง (แถวที่มีคำว่า 'Doc No.' อยู่)
+        const headerIdx = rows.findIndex(r => r.some(c => String(c).trim() === 'Doc No.'));
+        if (headerIdx === -1) {
+          alert('ไม่พบหัวตาราง "Doc No." ในไฟล์นี้ — ตรวจสอบว่าเป็นไฟล์ที่ export จากปุ่ม "Export Master List" ในหน้า index.html');
+          return;
+        }
+        const header = rows[headerIdx].map(h => String(h).trim());
+        const col = name => header.indexOf(name);
+        const cDept = col('แผนก'), cName = col('ชื่อชิ้นงาน'), cJig = col('รหัส JIG (Part No.)'),
+              cRun = col('Run No.'), cDocNo = col('Doc No.'), cRevLevel = col('Rev. No. (เนื้อหา)'),
+              cRevDate = col('Rev. Date'), cIssued = col('Issued Form');
+
+        const parsed = rows.slice(headerIdx + 1)
+          .filter(r => r[cDocNo] && String(r[cDocNo]).trim() && !String(r[cDocNo]).includes('⚠️'))
+          .map(r => ({
+            department: String(r[cDept] || '').trim(),
+            docName: String(r[cName] || '').trim(),
+            jigId: String(r[cJig] || '').trim(),
+            runNo: String(r[cRun] || '').trim(),
+            docNo: String(r[cDocNo] || '').trim(),
+            revLevelText: String(r[cRevLevel] || '').trim(),
+            revDateText: String(r[cRevDate] || '').trim(),
+            issuedText: String(r[cIssued] || '').trim(),
+          }))
+          .filter(r => r.docNo && r.docName);
+
+        if (!parsed.length) {
+          alert('ไม่พบแถวข้อมูลที่นำเข้าได้ในไฟล์นี้');
+          return;
+        }
+
+        // ตัดรายการที่เลขที่เอกสารซ้ำกันเอง (เก็บแถวแรกที่เจอ)
+        const seen = new Set();
+        const deduped = [];
+        let dupInFile = 0;
+        parsed.forEach(r => {
+          if (seen.has(r.docNo)) { dupInFile++; return; }
+          seen.add(r.docNo);
+          deduped.push(r);
+        });
+
+        // ตัดรายการที่มีอยู่แล้วในระบบ (เทียบกับ allDocs ที่โหลดไว้)
+        const existingDocNos = new Set(allDocs.map(d => d.doc_no));
+        const toImport = deduped.filter(r => !existingDocNos.has(r.docNo));
+        const alreadyExists = deduped.length - toImport.length;
+
+        renderImportPreview(toImport, { dupInFile, alreadyExists, totalInFile: parsed.length });
+      } catch (err) {
+        alert('อ่านไฟล์ไม่สำเร็จ: ' + err.message);
+      }
+    };
+    reader.readAsArrayBuffer(file);
+  }
+
+  function renderImportPreview(rows, stats) {
+    const box = document.getElementById('import-preview');
+    if (!rows.length) {
+      box.innerHTML = `
+        <div class="card">
+          <div class="section-title"><span>📥 นำเข้าจาก Excel</span></div>
+          <div class="center-msg" style="padding:12px 0;">
+            ไม่มีรายการใหม่ให้นำเข้า (พบทั้งหมด ${stats.totalInFile} แถว —
+            มีอยู่แล้วในระบบ ${stats.alreadyExists} รายการ${stats.dupInFile ? `, ซ้ำกันเองในไฟล์ ${stats.dupInFile} รายการ` : ''})
+          </div>
+          <button class="btn-ghost" id="btn-import-cancel" type="button">ปิด</button>
+        </div>`;
+      document.getElementById('btn-import-cancel').addEventListener('click', () => box.innerHTML = '');
+      return;
+    }
+
+    box.innerHTML = `
+      <div class="card">
+        <div class="section-title"><span>📥 นำเข้าจาก Excel — พบ ${rows.length} รายการใหม่</span></div>
+        <div style="font-size:11px; color:var(--muted); margin-bottom:10px; line-height:1.6;">
+          ทั้งหมดในไฟล์ ${stats.totalInFile} แถว · มีอยู่แล้วในระบบแล้ว ${stats.alreadyExists} รายการ (ข้าม)
+          ${stats.dupInFile ? ` · ซ้ำกันเองในไฟล์ ${stats.dupInFile} รายการ (ใช้แถวแรก)` : ''}
+        </div>
+
+        <label class="field-label">นำเข้าเป็นเอกสารของบริษัท</label>
+        <select id="imp-company">
+          ${COMPANIES.map(c => `<option value="${escAttr(c)}">${esc(c)}</option>`).join('')}
+        </select>
+        <label class="field-label">ประเภทเอกสาร</label>
+        <input type="text" id="imp-category" value="WI">
+        <label class="field-label">PIN ยืนยันตัวตน</label>
+        <input type="password" id="imp-pin" inputmode="numeric" placeholder="กรอก PIN" value="${_rememberedPin ? escAttr(_rememberedPin) : ''}">
+
+        <div style="max-height:220px; overflow:auto; margin-top:10px; border:1px solid var(--border); border-radius:8px;">
+          <table class="rev-table" style="margin-top:0;">
+            <thead><tr><th>Doc No.</th><th>ชื่อเอกสาร</th><th>แผนก</th><th>Rev เดิม</th></tr></thead>
+            <tbody>
+              ${rows.map(r => `
+                <tr>
+                  <td>${esc(r.docNo)}</td>
+                  <td>${esc(r.docName)}</td>
+                  <td>${esc(r.department)}</td>
+                  <td>${esc(r.revLevelText || '-')}</td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        </div>
+
+        <button class="btn btn-approve" id="btn-import-confirm" type="button" style="margin-top:12px;">📥 นำเข้า ${rows.length} รายการ</button>
+        <button class="btn-ghost" id="btn-import-cancel" type="button" style="width:100%; margin-top:8px; box-sizing:border-box;">ยกเลิก</button>
+        <div class="form-msg" id="imp-msg"></div>
+      </div>
+    `;
+
+    document.getElementById('btn-import-cancel').addEventListener('click', () => box.innerHTML = '');
+    document.getElementById('btn-import-confirm').addEventListener('click', () => runImport(rows));
+  }
+
+  async function runImport(rows) {
+    const btn = document.getElementById('btn-import-confirm');
+    const msgEl = document.getElementById('imp-msg');
+    const company = document.getElementById('imp-company').value;
+    const category = document.getElementById('imp-category').value.trim() || 'WI';
+    const pin = document.getElementById('imp-pin').value.trim();
+
+    msgEl.textContent = '';
+    msgEl.className = 'form-msg';
+
+    if (!pin) {
+      msgEl.textContent = 'กรุณากรอก PIN';
+      msgEl.classList.add('err');
+      return;
+    }
+
+    btn.disabled = true;
+    let done = 0, failed = 0, pinInvalid = false;
+
+    for (const r of rows) {
+      if (pinInvalid) break;
+      btn.textContent = `กำลังนำเข้า... (${done + failed}/${rows.length})`;
+
+      const firstRevDate = parseThaiDateToISO(r.issuedText) || parseThaiDateToISO(r.revDateText);
+      const { data: newId, error: e1 } = await sb.rpc('doc_add_master', {
+        p_pin: pin, p_company: company, p_department: r.department || 'ไม่ระบุ', p_doc_category: category,
+        p_doc_no: r.docNo, p_doc_name: r.docName, p_first_rev_date: firstRevDate,
+      });
+
+      if (e1) { failed++; continue; }
+      if (!newId) { pinInvalid = true; break; }
+      _rememberedPin = pin;
+
+      // บันทึกประวัติเริ่มต้น เก็บค่า Rev เดิมจากระบบ JIG ไว้เป็นหมายเหตุ ไม่ให้ข้อมูลหาย
+      const revDate = parseThaiDateToISO(r.revDateText) || firstRevDate || new Date().toISOString().slice(0, 10);
+      const detailParts = [`นำเข้าจากทะเบียน JIG เดิม`];
+      if (r.jigId) detailParts.push(`รหัส JIG: ${r.jigId}`);
+      if (r.runNo) detailParts.push(`Run No.: ${r.runNo}`);
+      if (r.revLevelText) detailParts.push(`Rev เดิม: ${r.revLevelText}`);
+      await sb.rpc('doc_add_revision', {
+        p_pin: pin, p_document_id: newId, p_rev_date: revDate, p_page: 'all',
+        p_amendment_detail: detailParts.join(' · '), p_approved_by: null,
+      });
+
+      done++;
+    }
+
+    btn.disabled = false;
+    btn.textContent = `📥 นำเข้า ${rows.length} รายการ`;
+
+    if (pinInvalid) {
+      clearRememberedPin();
+      msgEl.textContent = `PIN ไม่ถูกต้อง — นำเข้าไปแล้ว ${done} รายการก่อนหยุด`;
+      msgEl.classList.add('err');
+    } else if (failed) {
+      msgEl.textContent = `นำเข้าสำเร็จ ${done} รายการ, ล้มเหลว ${failed} รายการ`;
+      msgEl.classList.add(failed === rows.length ? 'err' : 'ok');
+    } else {
+      msgEl.textContent = `✅ นำเข้าสำเร็จทั้งหมด ${done} รายการ`;
+      msgEl.classList.add('ok');
+    }
+
+    document.getElementById('import-preview').innerHTML = '';
+    await loadAll();
   }
 
   async function renderDetail(docId) {
