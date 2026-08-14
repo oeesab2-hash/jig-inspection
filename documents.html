@@ -97,6 +97,17 @@
     border-radius: 999px; background: var(--obsolete-bg); color: var(--obsolete); margin-left: 6px;
   }
   .doc-arrow { font-size: 18px; color: var(--muted); flex: 0 0 auto; }
+  /* ── ข้อมูลแก้ไขล่าสุด (วันที่/ผู้แก้ไข/ผู้อนุมัติ) ที่โชว์ในหน้ารายการ ── */
+  .doc-rev-info {
+    font-size: 11px; color: var(--muted); margin-top: 4px;
+    display: flex; flex-wrap: wrap; gap: 2px 10px;
+  }
+  .doc-rev-info b { color: var(--text); font-weight: 600; }
+  .doc-rev-detail {
+    font-size: 11px; color: var(--muted); margin-top: 3px;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%;
+  }
+  .doc-rev-empty { font-size: 11px; color: var(--muted); margin-top: 4px; font-style: italic; }
 
   .back-link {
     display: inline-block; font-size: 13px; font-weight: 600; color: var(--navy);
@@ -192,6 +203,7 @@
   const params = new URLSearchParams(window.location.search);
 
   let allDocs = [];
+  let latestRevByDoc = {}; // document_id -> แถวประวัติแก้ไขล่าสุด (rev_no สูงสุด) — ใช้โชว์สรุปในหน้ารายการ
   let filters = { company: params.get('company') || '', department: params.get('department') || '', q: '' };
   let currentDocId = params.get('doc') || null;
 
@@ -202,6 +214,19 @@
       return;
     }
     allDocs = data || [];
+
+    // ── ดึงประวัติแก้ไขล่าสุดของทุกเอกสารมาด้วย (ใช้โชว์ วันที่/รายละเอียด/ผู้แก้ไข/ผู้อนุมัติ ในหน้ารายการ) ──
+    // ดึงมาทั้งหมดแล้วหา rev_no สูงสุดของแต่ละเอกสารฝั่ง client (จำนวนแถวไม่เยอะ ไม่ต้องทำ view/RPC แยก)
+    const { data: revs, error: revErr } = await sb.from('document_revisions')
+      .select('document_id, rev_no, rev_date, amendment_detail, prepared_by, approved_by')
+      .order('rev_no', { ascending: false });
+    latestRevByDoc = {};
+    if (!revErr && revs) {
+      revs.forEach(r => {
+        if (!latestRevByDoc[r.document_id]) latestRevByDoc[r.document_id] = r; // เจอตัวแรก = rev_no สูงสุด (เรียง desc ไว้แล้ว)
+      });
+    }
+
     render();
   }
 
@@ -260,12 +285,20 @@
 
       <div class="card">
         <div class="section-title"><span>📋 รายการเอกสาร (${filtered.length})</span></div>
-        ${filtered.length ? filtered.map((d, i) => `
+        ${filtered.length ? filtered.map((d, i) => { const rev = latestRevByDoc[d.id]; return `
           <div class="doc-row" data-id="${escAttr(d.id)}">
-            <div style="flex:1;">
+            <div style="flex:1; min-width:0;">
               <div class="doc-no">${esc(d.doc_no)}</div>
               <div class="doc-name">${esc(d.doc_name)}</div>
               <div class="doc-meta">${esc(d.department)} · ${esc(d.company)}</div>
+              ${rev ? `
+                <div class="doc-rev-info">
+                  <span>🕐 <b>${fmtDate(rev.rev_date)}</b></span>
+                  <span>✏️ ผู้แก้ไข: <b>${esc(rev.prepared_by || '-')}</b></span>
+                  <span>✅ ผู้อนุมัติ: <b>${esc(rev.approved_by || '-')}</b></span>
+                </div>
+                <div class="doc-rev-detail" title="${escAttr(rev.amendment_detail || '')}">📝 ${esc(rev.amendment_detail || '-')}</div>
+              ` : `<div class="doc-rev-empty">ยังไม่มีประวัติการแก้ไข</div>`}
             </div>
             <div style="display:flex; align-items:center;">
               <span class="doc-rev-badge">REV ${d.current_rev_no ?? 0}</span>
@@ -273,7 +306,7 @@
             </div>
             <div class="doc-arrow">›</div>
           </div>
-        `).join('') : `<div class="center-msg" style="padding:16px 0;">ไม่พบเอกสารตามเงื่อนไขที่กรอง</div>`}
+        `; }).join('') : `<div class="center-msg" style="padding:16px 0;">ไม่พบเอกสารตามเงื่อนไขที่กรอง</div>`}
       </div>
     `;
 
