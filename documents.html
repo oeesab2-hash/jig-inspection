@@ -225,7 +225,7 @@
     // ── ดึงประวัติแก้ไขล่าสุดของทุกเอกสารมาด้วย (ใช้โชว์ วันที่/รายละเอียด/ผู้แก้ไข/ผู้อนุมัติ ในหน้ารายการ) ──
     // ดึงมาทั้งหมดแล้วหา rev_no สูงสุดของแต่ละเอกสารฝั่ง client (จำนวนแถวไม่เยอะ ไม่ต้องทำ view/RPC แยก)
     const { data: revs, error: revErr } = await sb.from('document_revisions')
-      .select('document_id, rev_no, rev_date, amendment_detail, prepared_by, approved_by')
+      .select('id, document_id, rev_no, rev_date, amendment_detail, prepared_by, approved_by')
       .order('rev_no', { ascending: false });
     latestRevByDoc = {};
     if (!revErr && revs) {
