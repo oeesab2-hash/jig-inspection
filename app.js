@@ -380,7 +380,7 @@
   ══════════════════════════════════════ */
   let catalog = { depts: [], lines: [], jigs: [], templates: [] };
   // ── ค่ากลางทั้งระบบ (ตาม ISO — Doc No. ของแบบฟอร์มตรวจ JIG มีค่าเดียวทั้งบริษัท ไม่ผูกกับ JIG ตัวไหน) ──
-  let appSettings = { docNo: 'DDM4-2-002', revLevel: 'Rev.01', revDate: '', issueDate: '' };
+  let appSettings = { docNo: 'DDM4-2-002', formRevLevel: 'Rev.01', revLevel: 'Rev.00', revDate: '', issueDate: '' };
   let selection = { deptId: null, lineId: null, jigId: null };
   let jigSearchTerm = ''; // filters the Level-3 JIG chip list
   let checkState = [];  // current inspection items
@@ -425,9 +425,10 @@
       if (error) throw error; // ตาราง app_settings ยังไม่มี (ยังไม่ได้รัน SQL migration) — ใช้ค่า default/cache local ต่อไป
       (data || []).forEach(row => {
         if (row.key === 'doc_no') appSettings.docNo = row.value;
-        if (row.key === 'rev_level') appSettings.revLevel = row.value;
-        if (row.key === 'rev_date') appSettings.revDate = row.value;   // 🆕 Rev. Date — วันที่แก้ไข Rev ของฟอร์มล่าสุด (แยกจาก Issued Form)
-        if (row.key === 'issue_date') appSettings.issueDate = row.value; // Issued Form — วันที่ออกฟอร์มนี้ครั้งแรก (ค่าคงที่ ไม่ผูกกับ Rev)
+        if (row.key === 'form_rev_level') appSettings.formRevLevel = row.value; // 🆕 Rev. Level ของ "ฟอร์ม" (โครงสร้าง/layout)
+        if (row.key === 'rev_level') appSettings.revLevel = row.value;          // Rev. No. ของ "เนื้อหา" (เพิ่ม/ลบ/แก้ไขจุดตรวจ)
+        if (row.key === 'rev_date') appSettings.revDate = row.value;            // Rev. Date คู่กับ Rev. No. เนื้อหา
+        if (row.key === 'issue_date') appSettings.issueDate = row.value;        // Issued Form — วันออกฟอร์มครั้งแรก (คงที่)
       });
       saveAppSettingsLocal();
       renderAppSettingsForm();
@@ -444,8 +445,9 @@
       const { data: ok, error } = await sb.rpc('save_app_settings', {
         p_password: pass,
         p_doc_no: appSettings.docNo,
+        p_form_rev_level: appSettings.formRevLevel,  // 🆕 Rev. Level ของฟอร์ม
         p_rev_level: appSettings.revLevel,
-        p_rev_date: appSettings.revDate || '',     // 🆕 Rev. Date
+        p_rev_date: appSettings.revDate || '',
         p_issue_date: appSettings.issueDate || '',
       });
       if (error) throw error;
@@ -461,8 +463,9 @@
     }
   }
   function renderAppSettingsForm() {
-    const docEl = $('adm-doc-no'), revEl = $('adm-rev-level'), revDateEl = $('adm-rev-date'), issueEl = $('adm-issue-date');
+    const docEl = $('adm-doc-no'), formRevEl = $('adm-form-rev-level'), revEl = $('adm-rev-level'), revDateEl = $('adm-rev-date'), issueEl = $('adm-issue-date');
     if (docEl) docEl.value = appSettings.docNo || '';
+    if (formRevEl) formRevEl.value = appSettings.formRevLevel || '';
     if (revEl) revEl.value = appSettings.revLevel || '';
     if (revDateEl) revDateEl.value = appSettings.revDate || '';
     if (issueEl) issueEl.value = appSettings.issueDate || '';
@@ -1499,7 +1502,7 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
     const wb = XLSX.utils.book_new();
     // แถวหัวกระดาษ: Doc No. กลาง — เพื่อให้เห็นชัดว่าทุก JIG ใช้แบบฟอร์มเดียวกันนี้
     const headerRows = [
-      [`Doc No. (แบบฟอร์มตรวจ JIG ทั้งบริษัท): ${appSettings.docNo || '—'}    Rev. No.: ${appSettings.revLevel || '—'}    Rev. Date: ${appSettings.revDate || '—'}`],
+      [`Doc No. (แบบฟอร์มตรวจ JIG ทั้งบริษัท): ${appSettings.docNo || '—'}    Rev. Level (ฟอร์ม): ${appSettings.formRevLevel || '—'}    Rev. No. (เนื้อหา): ${appSettings.revLevel || '—'}    Rev. Date: ${appSettings.revDate || '—'}`],
       [],
     ];
     const ws = XLSX.utils.aoa_to_sheet(headerRows);
@@ -2079,13 +2082,15 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
     $('btn-export-excel').addEventListener('click', exportHistoryToExcel);
     $('btn-export-master-list').addEventListener('click', exportMasterListToExcel);
     $('btn-save-app-settings').addEventListener('click', () => {
-      const newDocNo  = $('adm-doc-no').value.trim();
-      const newRev    = $('adm-rev-level').value.trim();
+      const newDocNo   = $('adm-doc-no').value.trim();
+      const newFormRev = $('adm-form-rev-level') ? $('adm-form-rev-level').value.trim() : '';
+      const newRev     = $('adm-rev-level').value.trim();
       const newRevDate = $('adm-rev-date') ? $('adm-rev-date').value : '';
-      const newIssue  = $('adm-issue-date') ? $('adm-issue-date').value : '';
+      const newIssue   = $('adm-issue-date') ? $('adm-issue-date').value : '';
       if (!newDocNo) { toast('กรุณากรอก Doc No.', 'ng'); return; }
       appSettings.docNo = newDocNo;
-      appSettings.revLevel = newRev || 'Rev.01';
+      appSettings.formRevLevel = newFormRev || 'Rev.01';
+      appSettings.revLevel = newRev || 'Rev.00';
       appSettings.revDate = newRevDate || '';
       appSettings.issueDate = newIssue || '';
       saveAppSettingsLocal();
@@ -2724,7 +2729,8 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
     // ── Run No. (เลขประจำตัว JIG ตัวนี้ตายตัว ตามเอกสารกระดาษเดิม เช่น SL-RG01-002) ──
     // ── Report No. (unique ต่อรายงานแต่ละใบ เพื่อ traceability ของการตรวจแต่ละรอบ) ──
     const docId    = appSettings.docNo || null;
-    const revLevel = appSettings.revLevel || 'Rev.01';
+    const formRevLevel = appSettings.formRevLevel || 'Rev.01'; // 🆕 Rev. Level ของ "ฟอร์ม" (โครงสร้าง/layout)
+    const revLevel = appSettings.revLevel || 'Rev.00';         // Rev. No. ของ "เนื้อหา" (เพิ่ม/ลบ/แก้ไขจุดตรวจ)
     const runNo    = (record.jigDocNo && record.jigDocNo.trim()) ? record.jigDocNo.trim() : null;
     const reportNo = 'RPT-' + (record.id || '').toString().slice(-8).toUpperCase();
     // 🆕 Rev. Date = วันที่แก้ไข Rev ของ "ฟอร์ม" ล่าสุด (เปลี่ยนทุกครั้งที่ ISO อนุมัติแก้ไขฟอร์ม)
@@ -2820,6 +2826,10 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
             <div class="pdf-doc-row">
               <span class="pdf-doc-label">Report No.</span>
               <span class="pdf-doc-value">${escHtml(reportNo)}</span>
+            </div>
+            <div class="pdf-doc-row">
+              <span class="pdf-doc-label">Rev. Level</span>
+              <span class="pdf-doc-value">${escHtml(formRevLevel)}</span>
             </div>
             <div class="pdf-doc-row">
               <span class="pdf-doc-label">Rev. No.</span>
