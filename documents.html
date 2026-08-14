@@ -250,7 +250,8 @@
           <input type="text" id="f-search" placeholder="ค้นหาเลขที่เอกสาร หรือ ชื่อเอกสาร..." value="${escAttr(filters.q)}">
         </div>
         <button class="btn btn-primary" id="btn-add-doc" type="button">➕ เพิ่มเอกสารใหม่</button>
-        <button class="btn-ghost" id="btn-import-excel" type="button" style="width:100%; margin-top:8px; box-sizing:border-box;">📥 นำเข้าจาก Excel (Master List JIG)</button>
+        <!-- 🚫 ซ่อนไว้: ไม่ต้องใช้แล้ว เพราะ JIG ทุกตัว sync เข้ามาอัตโนมัติผ่าน trigger ในฐานข้อมูลแล้ว -->
+        <button class="btn-ghost" id="btn-import-excel" type="button" style="width:100%; margin-top:8px; box-sizing:border-box; display:none;">📥 นำเข้าจาก Excel (Master List JIG)</button>
         <input type="file" id="import-file-input" accept=".xlsx,.xls" style="display:none">
       </div>
 
