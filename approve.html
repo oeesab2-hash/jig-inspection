@@ -206,6 +206,17 @@
   const SUPABASE_URL = 'https://otytpzimuyaqagvxvexf.supabase.co';
   const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im90eXRwemltdXlhcWFndnh2ZXhmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ1MTMyMDEsImV4cCI6MjEwMDA4OTIwMX0.QQVIcDkIByAgyFTHrF7AmcZ-l-HfvLnbU8jh3Vnwyjw';
   const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+  // ✅ จำ PIN ไว้ชั่วคราวระหว่างที่หน้านี้ยังเปิดอยู่ (หายไปเองถ้า refresh/ปิดหน้า)
+  // เพื่อไม่ต้องพิมพ์ PIN ซ้ำทุกครั้งที่กดอนุมัติหลายรายการติดกัน
+  let _rememberedPin = null;
+  function askPin(label) {
+    if (_rememberedPin) return _rememberedPin;
+    const p = prompt(label);
+    if (p) _rememberedPin = p;
+    return p;
+  }
+  function clearRememberedPin() { _rememberedPin = null; }
   const TELEGRAM_FUNCTION_URL = `${SUPABASE_URL}/functions/v1/send-telegram`;
   const APPROVED_NOTIFY_CHAT_ID = '-5170940793'; // กลุ่ม Telegram ที่แจ้งผล "ตรวจสอบแล้ว" (แจ้งซ้ำตอนหัวหน้าตรวจสอบ เพื่อให้ทุกคนตามงานได้)
   // Telegram chat id ของกลุ่มผู้จัดการฝ่ายผลิต — แจ้งเตือนให้เข้ามาอนุมัติขั้นที่ 2
@@ -369,7 +380,8 @@
     if (!name || !name.trim()) return;
     const approverName = name.trim();
     // ✅ SECURITY: ต้องกรอก PIN หัวหน้างานก่อนอนุมัติได้ — เช็คฝั่ง Supabase (RPC) เท่านั้น
-    const pin = prompt('กรุณากรอก PIN หัวหน้างาน เพื่อยืนยันการอนุมัติ:');
+    // (จำ PIN ไว้ในหน้านี้ ถ้าเคยกรอกถูกแล้วไม่ต้องพิมพ์ซ้ำ)
+    const pin = askPin('กรุณากรอก PIN หัวหน้างาน เพื่อยืนยันการอนุมัติ:');
     if (!pin) return;
 
     btn.disabled = true;
@@ -386,7 +398,8 @@
       return;
     }
     if (count === -1) {
-      alert('PIN ไม่ถูกต้อง — บันทึกไม่สำเร็จ');
+      clearRememberedPin();
+      alert('PIN ไม่ถูกต้อง — บันทึกไม่สำเร็จ กรุณากดใหม่แล้วกรอก PIN อีกครั้ง');
       btn.disabled = false;
       btn.textContent = 'ตรวจสอบทั้งหมด';
       return;
@@ -541,7 +554,7 @@
       <label class="field-label">ชื่อผู้ตรวจสอบ (หัวหน้างาน)</label>
       <input type="text" id="approver-name" placeholder="พิมพ์ชื่อ-นามสกุล">
       <label class="field-label">PIN หัวหน้างาน</label>
-      <input type="password" id="approver-pin" placeholder="กรอก PIN เพื่อยืนยันตัวตน" inputmode="numeric">
+      <input type="password" id="approver-pin" placeholder="กรอก PIN เพื่อยืนยันตัวตน" inputmode="numeric" value="${_rememberedPin ? escAttr(_rememberedPin) : ''}">
       <label class="field-label">ความเห็นเพิ่มเติม (ถ้ามี)</label>
       <textarea id="approver-comment" placeholder="เช่น รับทราบ NG แล้ว ให้ทีมซ่อมเข้าแก้ไขภายในวันนี้"></textarea>
       <button class="btn btn-approve" id="btn-approve">✅ ตรวจสอบรายงานนี้</button>
@@ -586,6 +599,7 @@
       return;
     }
     if (!ok) {
+      clearRememberedPin();
       btn.disabled = false;
       btn.textContent = '✅ ตรวจสอบรายงานนี้';
       msgEl.textContent = 'PIN ไม่ถูกต้อง — บันทึกไม่สำเร็จ';
@@ -593,6 +607,7 @@
       pinEl.focus();
       return;
     }
+    _rememberedPin = pin; // จำไว้ใช้ต่อกับรายการถัดไปในหน้านี้
 
     row.approval_status = 'approved';
     row.approved_by = name;
