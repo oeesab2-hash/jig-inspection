@@ -155,6 +155,19 @@
 
   .section-title { font-size: 13px; font-weight: 700; color: var(--navy); margin: 0 0 10px; display: flex; justify-content: space-between; align-items: center; }
 
+  /* ── หัวกลุ่ม Line ในหน้ารายการเอกสาร ── */
+  .line-group { margin-top: 18px; }
+  .line-group:first-child { margin-top: 0; }
+  .line-group-header {
+    font-size: 12px; font-weight: 700; color: #fff; background: var(--navy);
+    padding: 7px 12px; border-radius: 8px; margin-bottom: 4px;
+    display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  }
+  .line-group-count {
+    font-size: 11px; font-weight: 700; background: rgba(255,255,255,0.2);
+    padding: 2px 8px; border-radius: 999px;
+  }
+
   .center-msg { text-align: center; padding: 40px 16px; color: var(--muted); font-size: 14px; }
   .spinner {
     width: 28px; height: 28px; border: 3px solid var(--border); border-top-color: var(--accent);
@@ -209,6 +222,7 @@
 
   let allDocs = [];
   let latestRevByDoc = {}; // document_id -> แถวประวัติแก้ไขล่าสุด (rev_no สูงสุด) — ใช้โชว์สรุปในหน้ารายการ
+  let lineNameByJigId = {}; // source_jig_id (ของ master_documents) -> ชื่อ Line — ใช้จัดกลุ่มในหน้ารายการ
   let filters = { company: params.get('company') || '', department: params.get('department') || '', q: '' };
   let currentDocId = params.get('doc') || null;
   let editingRevDocId = null;   // ← document_id ของแถวที่กำลังเปิดฟอร์มแก้ไขอยู่ในหน้า "รายการ"
@@ -234,6 +248,19 @@
       });
     }
 
+    // ── ดึงข้อมูล Line มาด้วย เพื่อจัดกลุ่มรายการเอกสารตาม Line ──
+    // master_documents.source_jig_id -> jigs.id -> jigs.line_id -> lines.name
+    const [{ data: jigs, error: jigErr }, { data: lines, error: lineErr }] = await Promise.all([
+      sb.from('jigs').select('id, line_id'),
+      sb.from('lines').select('id, name'),
+    ]);
+    lineNameByJigId = {};
+    if (!jigErr && !lineErr && jigs && lines) {
+      const lineNameById = {};
+      lines.forEach(l => { lineNameById[l.id] = l.name; });
+      jigs.forEach(j => { lineNameByJigId[j.id] = lineNameById[j.line_id] || null; });
+    }
+
     render();
   }
 
@@ -251,6 +278,58 @@
     return [...set].sort();
   }
 
+  // ── markup ของแถวเอกสาร 1 รายการ (แยกเป็นฟังก์ชันเพื่อใช้ซ้ำได้ทั้งตอนจัดกลุ่มตาม Line) ──
+  function renderDocRow(d) {
+    const rev = latestRevByDoc[d.id];
+    const isEditing = rev && editingRevDocId === d.id;
+    return `
+      <div class="doc-row" data-id="${escAttr(d.id)}">
+        <div style="flex:1; min-width:0;">
+          <div class="doc-no">${esc(d.doc_no)}</div>
+          <div class="doc-name">${esc(d.doc_name)}</div>
+          <div class="doc-meta">${esc(d.department)} · ${esc(d.company)}</div>
+          ${rev ? `
+            <div class="doc-rev-info">
+              <span>🕐 <b>${fmtDate(rev.rev_date)}</b></span>
+              <span>✏️ ผู้แก้ไข: <b>${esc(rev.prepared_by || '-')}</b></span>
+              <span>✅ ผู้อนุมัติ: <b>${esc(rev.approved_by || '-')}</b></span>
+              <button class="btn-edit-rev" type="button" data-edit-id="${escAttr(d.id)}" title="แก้ไขข้อมูล Rev ล่าสุด">✏️ แก้ไข</button>
+            </div>
+            <div class="doc-rev-detail" title="${escAttr(rev.amendment_detail || '')}">📝 ${esc(rev.amendment_detail || '-')}</div>
+          ` : `<div class="doc-rev-empty">ยังไม่มีประวัติการแก้ไข</div>`}
+        </div>
+        <div style="display:flex; align-items:center;">
+          <span class="doc-rev-badge">REV ${d.current_rev_no ?? 0}</span>
+          ${d.status === 'obsolete' ? `<span class="doc-status-obsolete">ยกเลิกใช้</span>` : ''}
+        </div>
+        <div class="doc-arrow">›</div>
+      </div>
+      ${isEditing ? renderEditRevForm(d, rev) : ''}
+    `;
+  }
+
+  const NO_LINE_LABEL = 'ไม่ระบุ Line';
+
+  function lineNameFor(d) {
+    return (d.source_jig_id && lineNameByJigId[d.source_jig_id]) || NO_LINE_LABEL;
+  }
+
+  // ── จัดกลุ่มรายการเอกสารตาม Line (เอกสารที่ไม่มี Line ระบุ จะถูกจัดไว้กลุ่มท้ายสุด) ──
+  function groupByLine(docs) {
+    const groups = {};
+    docs.forEach(d => {
+      const key = lineNameFor(d);
+      if (!groups[key]) groups[key] = [];
+      groups[key].push(d);
+    });
+    const orderedKeys = Object.keys(groups).sort((a, b) => {
+      if (a === NO_LINE_LABEL) return 1;
+      if (b === NO_LINE_LABEL) return -1;
+      return a.localeCompare(b, 'th');
+    });
+    return orderedKeys.map(key => ({ line: key, docs: groups[key] }));
+  }
+
   function renderList() {
     const departments = departmentsFor(filters.company);
     let filtered = allDocs.filter(d => {
@@ -262,6 +341,7 @@
       }
       return true;
     });
+    const grouped = groupByLine(filtered);
 
     app.innerHTML = `
       <div class="card">
@@ -292,30 +372,15 @@
 
       <div class="card">
         <div class="section-title"><span>📋 รายการเอกสาร (${filtered.length})</span></div>
-        ${filtered.length ? filtered.map((d, i) => { const rev = latestRevByDoc[d.id]; const isEditing = rev && editingRevDocId === d.id; return `
-          <div class="doc-row" data-id="${escAttr(d.id)}">
-            <div style="flex:1; min-width:0;">
-              <div class="doc-no">${esc(d.doc_no)}</div>
-              <div class="doc-name">${esc(d.doc_name)}</div>
-              <div class="doc-meta">${esc(d.department)} · ${esc(d.company)}</div>
-              ${rev ? `
-                <div class="doc-rev-info">
-                  <span>🕐 <b>${fmtDate(rev.rev_date)}</b></span>
-                  <span>✏️ ผู้แก้ไข: <b>${esc(rev.prepared_by || '-')}</b></span>
-                  <span>✅ ผู้อนุมัติ: <b>${esc(rev.approved_by || '-')}</b></span>
-                  <button class="btn-edit-rev" type="button" data-edit-id="${escAttr(d.id)}" title="แก้ไขข้อมูล Rev ล่าสุด">✏️ แก้ไข</button>
-                </div>
-                <div class="doc-rev-detail" title="${escAttr(rev.amendment_detail || '')}">📝 ${esc(rev.amendment_detail || '-')}</div>
-              ` : `<div class="doc-rev-empty">ยังไม่มีประวัติการแก้ไข</div>`}
+        ${grouped.length ? grouped.map(g => `
+          <div class="line-group">
+            <div class="line-group-header">
+              <span>🏭 LINE: ${esc(g.line)}</span>
+              <span class="line-group-count">${g.docs.length}</span>
             </div>
-            <div style="display:flex; align-items:center;">
-              <span class="doc-rev-badge">REV ${d.current_rev_no ?? 0}</span>
-              ${d.status === 'obsolete' ? `<span class="doc-status-obsolete">ยกเลิกใช้</span>` : ''}
-            </div>
-            <div class="doc-arrow">›</div>
+            ${g.docs.map(d => renderDocRow(d)).join('')}
           </div>
-          ${isEditing ? renderEditRevForm(d, rev) : ''}
-        `; }).join('') : `<div class="center-msg" style="padding:16px 0;">ไม่พบเอกสารตามเงื่อนไขที่กรอง</div>`}
+        `).join('') : `<div class="center-msg" style="padding:16px 0;">ไม่พบเอกสารตามเงื่อนไขที่กรอง</div>`}
       </div>
     `;
 
