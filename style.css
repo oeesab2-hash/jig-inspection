@@ -1881,7 +1881,7 @@ h1, h2, h3, h4, label, button, input, select, textarea, p, span, div {
 
 .sidebar-nav .tab-btn.side-nav-item,
 .sidebar-nav a.side-nav-item {
-  display: flex; align-items: center; gap: 12px; width: 100%;
+  display: flex; align-items: center; justify-content: flex-start; gap: 12px; width: 100%;
   flex: none;
   padding: 10px 12px;
   border-radius: 9px;
