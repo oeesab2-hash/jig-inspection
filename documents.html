@@ -74,15 +74,22 @@
     cursor: pointer; font-family: inherit;
   }
   .docs-login-btn:disabled { opacity: 0.6; cursor: default; }
-  .header-back-link {
+  .header-actions-row {
     position: absolute; top: 16px; right: 16px;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .header-back-link {
     display: flex; align-items: center; gap: 5px;
     padding: 6px 11px; border-radius: 999px;
     background: hsla(0,0%,100%,0.12); border: 1px solid hsla(0,0%,100%,0.25);
     color: #fff; font-size: 11.5px; font-weight: 600; text-decoration: none;
-    white-space: nowrap;
+    white-space: nowrap; font-family: inherit; cursor: pointer;
   }
   .header-back-link:hover { background: hsla(0,0%,100%,0.2); }
+  .header-logout-btn {
+    background: hsla(0, 75%, 60%, 0.18); border-color: hsla(0, 75%, 60%, 0.4);
+  }
+  .header-logout-btn:hover { background: hsla(0, 75%, 60%, 0.3); }
   header {
     background: linear-gradient(120deg, var(--navy), var(--navy-light));
     color: #fff;
@@ -279,10 +286,16 @@
         <h1><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-3px;margin-right:5px"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>ควบคุมเอกสาร — Master List / Amendment Record</h1>
         <p>ทะเบียนเอกสารแม่บทและประวัติการแก้ไข</p>
       </div>
-      <a href="index.html" class="header-back-link" title="กลับไปหน้าตรวจสอบหลัก">
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
-        <span>หน้าหลัก</span>
-      </a>
+      <div class="header-actions-row">
+        <button id="btn-docs-logout" class="header-back-link header-logout-btn" title="ออกจากระบบ">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+          <span>ออกจากระบบ</span>
+        </button>
+        <a href="index.html" class="header-back-link" title="กลับไปหน้าตรวจสอบหลัก">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
+          <span>หน้าหลัก</span>
+        </a>
+      </div>
     </div>
   </header>
 
@@ -1207,6 +1220,17 @@
   loginBtn.addEventListener('click', attemptDocsLogin);
   loginPassInp.addEventListener('keydown', e => { if (e.key === 'Enter') attemptDocsLogin(); });
   loginUserInp.addEventListener('keydown', e => { if (e.key === 'Enter') loginPassInp.focus(); });
+
+  // ── Logout — เคลียร์ session ('docs_authed') แล้วโชว์หน้า login gate อีกครั้ง
+  document.getElementById('btn-docs-logout').addEventListener('click', () => {
+    if (!confirm('ต้องการออกจากระบบใช่หรือไม่?')) return;
+    sessionStorage.removeItem('docs_authed');
+    loginUserInp.value = '';
+    loginPassInp.value = '';
+    loginMsg.textContent = '';
+    loginOverlay.classList.remove('hidden');
+    loginUserInp.focus();
+  });
 
   if (sessionStorage.getItem('docs_authed') === '1') {
     unlockDocsApp();
