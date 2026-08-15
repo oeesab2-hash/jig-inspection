@@ -3408,6 +3408,10 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
      TAB NAVIGATION
   ══════════════════════════════════════ */
   function bindTabNav() {
+    const HEADER_BY_TAB = {
+      inspect:   { title: 'ใบรายงานการตรวจสอบสภาพจิ๊ก', sub: 'เลือกแผนก &rarr; Line &rarr; JIG เพื่อเริ่มตรวจสอบ' },
+      dashboard: { title: 'Dashboard ภาพรวมการตรวจสอบ', sub: 'สรุปผลการตรวจสอบ JIG ทั้งหมด แยกตามเดือนและ Line' },
+    };
     document.querySelectorAll('.tab-btn[data-tab]').forEach(btn => {
       btn.addEventListener('click', () => {
         const tab = btn.dataset.tab;
@@ -3415,6 +3419,11 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
         btn.classList.add('active');
         $('view-inspect').classList.toggle('hidden', tab !== 'inspect');
         $('view-dashboard').classList.toggle('hidden', tab !== 'dashboard');
+        const h = HEADER_BY_TAB[tab];
+        if (h) {
+          $('header-title').textContent = h.title;
+          $('header-sub').innerHTML = h.sub;
+        }
         if (tab === 'dashboard') refreshDashboard();
       });
     });
