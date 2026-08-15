@@ -121,6 +121,7 @@ body {
   color: var(--text-main);
   transition: background 0.4s, color 0.3s;
   min-height: 100vh;
+  overflow-x: hidden; /* กันสกอลล์แนวนอนเวลามีอะไรล้นขอบเล็กน้อยบนจอมือถือ/แท็บเล็ต */
   /* Force Thai text rendering on Windows */
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
@@ -184,7 +185,7 @@ h1, h2, h3, h4, label, button, input, select, textarea, p, span, div {
   font-size: 9.5px; font-weight: 600; letter-spacing: 0.6px; text-transform: uppercase;
   color: var(--brand-gold); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin: 2px 0 1px;
 }
-.brand-text p  { font-size: 11px; color: hsla(0, 0%, 100%, 0.7); margin-top: 1px; }
+.brand-text p  { font-size: 11px; color: hsla(0, 0%, 100%, 0.7); margin-top: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .header-actions { display: flex; gap: 8px; flex-shrink: 0; }
 .btn-icon {
   width: 32px; height: 32px; border-radius: 8px;
@@ -1131,6 +1132,16 @@ h1, h2, h3, h4, label, button, input, select, textarea, p, span, div {
   .panel-resize-handle { display: none; }
 }
 
+/* ─── Header — small phones: shrink actions so the title always has room ─── */
+@media (max-width: 480px) {
+  .app-header { padding: 0.7rem 0.6rem; gap: 6px; }
+  .header-actions { gap: 5px; }
+  .btn-icon { width: 28px; height: 28px; border-radius: 7px; }
+  .btn-icon svg { width: 15px; height: 15px; }
+  .app-user-badge { max-width: 78px; font-size: 11px; padding: 5px 9px; }
+  .brand-text p { display: none; } /* คำอธิบายรอง ซ่อนบนจอเล็กมาก — เหลือแค่หัวข้อหลักให้อ่านง่าย */
+}
+
 @media print {
   .btn-row, .toast, .side-panel, .panel-overlay,
   .app-header .header-actions, .filter-card { display: none !important; }
@@ -1983,6 +1994,9 @@ body.sidebar-collapsed .sidebar-nav a.side-nav-item { justify-content: center; p
   background: hsla(0, 0%, 100%, 0.12);
   border: 1px solid hsla(0, 0%, 100%, 0.22);
   white-space: nowrap;
+  max-width: 160px;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .app-user-badge:not(:empty) { display: flex; }
 
