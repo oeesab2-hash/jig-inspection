@@ -29,6 +29,44 @@
 </head>
 <body>
 
+<!-- ─── APP LOGIN GATE — ต้อง Login ก่อนถึงจะใช้งานระบบได้ (บันทึก log ทุกครั้งที่ Login สำเร็จ) ─── -->
+<div id="app-login-gate" class="modal-overlay app-login-gate">
+  <div class="modal-box admin-login-box">
+    <div class="admin-login-icon">
+      <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+    </div>
+    <h3 class="admin-login-title">เข้าสู่ระบบ JIG Inspection</h3>
+    <p class="admin-login-subtitle">กรุณา Login ด้วยบัญชีของท่านก่อนเริ่มใช้งาน<br>ระบบจะบันทึกการเข้าใช้งานทุกครั้ง</p>
+
+    <div class="admin-login-field">
+      <label for="inp-app-user">ชื่อผู้ใช้</label>
+      <div class="admin-login-input-wrap">
+        <svg class="admin-login-input-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+        <input type="text" id="inp-app-user" placeholder="กรอกชื่อผู้ใช้" autocomplete="username">
+      </div>
+    </div>
+
+    <div class="admin-login-field">
+      <label for="inp-app-pass">รหัสผ่าน</label>
+      <div class="admin-login-input-wrap">
+        <svg class="admin-login-input-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+        <input type="password" id="inp-app-pass" placeholder="กรอกรหัสผ่าน" autocomplete="current-password">
+        <button type="button" id="btn-toggle-app-pass" class="admin-login-eye" title="แสดง/ซ่อนรหัสผ่าน">
+          <svg class="eye-open" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+          <svg class="eye-closed" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:none"><path d="M17.94 17.94A10.94 10.94 0 0 1 12 20c-7 0-11-8-11-8a18.6 18.6 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+        </button>
+      </div>
+    </div>
+
+    <div id="app-login-msg" class="app-login-msg"></div>
+
+    <button id="btn-app-login-submit" class="admin-login-submit">
+      <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/></svg>
+      เข้าสู่ระบบ
+    </button>
+  </div>
+</div>
+
 <!-- ─── SIDEBAR NAVIGATION ─── -->
 <aside class="sidebar" id="app-sidebar">
   <div class="sidebar-top">
@@ -86,6 +124,10 @@
       </div>
     </div>
     <div class="header-actions">
+      <span id="app-user-badge" class="app-user-badge" title="ผู้ใช้งานปัจจุบัน"></span>
+      <button id="btn-app-logout" class="btn-icon" title="ออกจากระบบ">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+      </button>
       <button id="btn-admin-toggle" class="btn-icon" title="Admin Panel">
         <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>
       </button>
@@ -481,6 +523,35 @@
         <input type="password" id="adm-new-pass" placeholder="รหัสผ่านใหม่">
         <button class="btn-adm-add" id="btn-adm-pass">เปลี่ยน</button>
       </div>
+    </div>
+
+    <!-- Staff Accounts — บัญชี Login สำหรับพนักงาน -->
+    <div class="admin-section">
+      <div class="admin-section-title"><svg class="inline-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg> จัดการบัญชีผู้ใช้งาน (Login เข้าเว็บ)</div>
+      <div style="font-size:11px; color:var(--text-muted); margin-bottom:8px;">
+        ต้องกรอกรหัสผ่าน Admin ทุกครั้งที่เพิ่ม/แก้ไขบัญชี — เพื่อยืนยันสิทธิ์ก่อนเขียนข้อมูล
+      </div>
+      <div class="admin-input-row">
+        <input type="text" id="adm-user-username" placeholder="Username (eng, ไม่ซ้ำ)">
+        <input type="text" id="adm-user-fullname" placeholder="ชื่อ-นามสกุล">
+      </div>
+      <div class="admin-input-row">
+        <input type="text" id="adm-user-password" placeholder="รหัสผ่านเริ่มต้น">
+        <select id="adm-user-role" class="adm-sel">
+          <option value="inspector">inspector</option>
+          <option value="supervisor">supervisor</option>
+          <option value="manager">manager</option>
+        </select>
+        <button class="btn-adm-add" id="btn-adm-add-user">+ เพิ่มผู้ใช้</button>
+      </div>
+      <div class="admin-list admin-list-scroll" id="adm-user-list"></div>
+    </div>
+
+    <!-- Login Audit Log — เก็บ log ผู้เข้าใช้งาน -->
+    <div class="admin-section">
+      <div class="admin-section-title"><svg class="inline-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v5h5"/><path d="M3.05 13a9 9 0 1 0 .5-4.5L3 8"/><path d="M12 7v5l4 2"/></svg> ประวัติการเข้าใช้งาน (Login Log)</div>
+      <button id="btn-adm-refresh-logs" class="btn-sec" style="width:100%;"><svg class="inline-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v5h5"/><path d="M3.05 13a9 9 0 1 0 .5-4.5L3 8"/></svg> โหลด/รีเฟรช ประวัติ Login</button>
+      <div class="admin-list admin-list-scroll" id="adm-login-log-list" style="margin-top:8px;"></div>
     </div>
 
     <!-- Add Department -->

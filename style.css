@@ -1954,3 +1954,45 @@ body.sidebar-collapsed .sidebar-nav a.side-nav-item { justify-content: center; p
   .app-container, body.sidebar-collapsed .app-container { margin-left: 0 !important; }
   .hamburger-btn { display: flex; }
 }
+
+/* ─────────────────────────────
+   App Login Gate — ต้อง Login ก่อนใช้งานระบบ
+───────────────────────────── */
+.app-login-gate {
+  z-index: 99999; /* อยู่บนสุดเสมอ ทับทุกอย่างรวมถึง admin modal */
+  background: linear-gradient(135deg, hsl(210,55%,10%), hsl(213,60%,20%));
+}
+.app-login-gate.hidden { display: none; }
+.app-login-msg {
+  min-height: 16px; font-size: 12px; color: var(--ng, #dc2626);
+  margin: -4px 0 10px; text-align: left;
+}
+.app-user-badge {
+  display: none;
+  align-items: center;
+  font-size: 12px; font-weight: 600;
+  color: #fff;
+  padding: 6px 12px; border-radius: 999px;
+  background: hsla(0, 0%, 100%, 0.12);
+  border: 1px solid hsla(0, 0%, 100%, 0.22);
+  white-space: nowrap;
+}
+.app-user-badge:not(:empty) { display: flex; }
+
+/* Staff account list row states */
+.adm-item.adm-user-inactive { opacity: 0.5; }
+.adm-item-role-tag {
+  font-size: 9.5px; font-weight: 600; letter-spacing: 0.02em;
+  color: var(--accent); background: var(--accent-dim);
+  border-radius: 5px; padding: 1px 6px; margin-left: 6px;
+}
+.adm-login-log-item {
+  display: flex; flex-direction: column; gap: 1px;
+  padding: 6px 10px; border-radius: 7px;
+  background: var(--bg-input); border: 1px solid var(--border-input);
+  font-size: 11.5px;
+}
+.adm-login-log-item .llg-top { display: flex; justify-content: space-between; gap: 8px; }
+.adm-login-log-item .llg-name { font-weight: 600; color: var(--text-main); }
+.adm-login-log-item .llg-time { color: var(--text-muted); font-family: var(--font-en); font-size: 10.5px; white-space: nowrap; }
+.adm-login-log-item .llg-meta { color: var(--text-muted); font-size: 10px; }

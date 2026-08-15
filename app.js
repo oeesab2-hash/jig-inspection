@@ -1802,6 +1802,122 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
   }
 
   /* ══════════════════════════════════════
+     APP LOGIN GATE — ต้อง Login ก่อนถึงจะใช้งานระบบได้
+     - ตรวจสอบผ่าน RPC verify_app_login (เทียบกับตาราง app_users ฝั่ง Supabase)
+     - Login สำเร็จทุกครั้งจะถูกบันทึกลง app_login_logs โดยอัตโนมัติฝั่ง DB
+     - สถานะ Login เก็บใน sessionStorage เท่านั้น (ไม่จำข้ามเซสชัน —ต้อง Login ใหม่
+       ทุกครั้งที่เปิดเบราว์เซอร์ใหม่ ตามที่พี่บีต้องการ)
+     - init() ของแอปจริงจะยังไม่ทำงาน จนกว่าจะ Login สำเร็จ (ดูท้ายไฟล์)
+  ══════════════════════════════════════ */
+  let currentAppUser = null; // { user_id, username, full_name, role }
+
+  function getStoredAppUser() {
+    try {
+      const raw = sessionStorage.getItem('jig_app_user');
+      return raw ? JSON.parse(raw) : null;
+    } catch (e) { return null; }
+  }
+
+  function renderAppUserBadge() {
+    const badge = $('app-user-badge');
+    if (badge) badge.textContent = currentAppUser ? currentAppUser.full_name : '';
+  }
+
+  function unlockApp() {
+    $('app-login-gate').classList.add('hidden');
+    renderAppUserBadge();
+    // Auto-fill ชื่อผู้ตรวจสอบจากบัญชีที่ Login (ยังแก้ไขเองได้ภายหลังถ้าจำเป็น)
+    const inspInp = $('inp-inspector');
+    if (inspInp && !inspInp.value.trim() && currentAppUser) inspInp.value = currentAppUser.full_name;
+    init(); // เริ่มโหลดข้อมูลจริงของแอป หลัง Login สำเร็จเท่านั้น
+  }
+
+  async function attemptAppLogin() {
+    const userInp = $('inp-app-user');
+    const passInp = $('inp-app-pass');
+    const msgEl = $('app-login-msg');
+    const btn = $('btn-app-login-submit');
+    const username = userInp.value.trim();
+    const password = passInp.value;
+    msgEl.textContent = '';
+
+    if (!username || !password) { msgEl.textContent = 'กรุณากรอกชื่อผู้ใช้และรหัสผ่าน'; return; }
+
+    if (!sb) {
+      msgEl.textContent = 'ยังไม่ได้เชื่อมต่อ Supabase — ไม่สามารถ Login ได้';
+      return;
+    }
+
+    btn.disabled = true;
+    const origHtml = btn.innerHTML;
+    btn.textContent = '🔄 กำลังตรวจสอบ...';
+
+    try {
+      const { data, error } = await sb.rpc('verify_app_login', {
+        p_username: username,
+        p_password: password,
+        p_user_agent: navigator.userAgent,
+      });
+
+      if (error) {
+        console.error('App login RPC error:', error);
+        msgEl.textContent = 'เกิดข้อผิดพลาดในการตรวจสอบ กรุณาลองใหม่';
+        return;
+      }
+
+      if (data && data.ok) {
+        currentAppUser = {
+          user_id: data.user_id, username: data.username,
+          full_name: data.full_name, role: data.role,
+        };
+        sessionStorage.setItem('jig_app_user', JSON.stringify(currentAppUser));
+        unlockApp();
+      } else {
+        msgEl.textContent = 'ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง';
+        passInp.value = '';
+        passInp.focus();
+      }
+    } catch (e) {
+      console.error('App login error:', e);
+      msgEl.textContent = 'เกิดข้อผิดพลาดในการตรวจสอบ กรุณาลองใหม่';
+    } finally {
+      btn.disabled = false;
+      btn.innerHTML = origHtml;
+    }
+  }
+
+  function bindAppLoginGate() {
+    $('btn-app-login-submit').addEventListener('click', attemptAppLogin);
+    $('inp-app-pass').addEventListener('keydown', e => { if (e.key === 'Enter') attemptAppLogin(); });
+    $('inp-app-user').addEventListener('keydown', e => { if (e.key === 'Enter') $('inp-app-pass').focus(); });
+
+    const eyeBtn = $('btn-toggle-app-pass');
+    const passInp = $('inp-app-pass');
+    if (eyeBtn && passInp) {
+      eyeBtn.addEventListener('click', () => {
+        const showing = passInp.type === 'text';
+        passInp.type = showing ? 'password' : 'text';
+        eyeBtn.querySelector('.eye-open').style.display = showing ? '' : 'none';
+        eyeBtn.querySelector('.eye-closed').style.display = showing ? 'none' : '';
+      });
+    }
+
+    $('btn-app-logout').addEventListener('click', () => {
+      if (!confirm('ต้องการออกจากระบบใช่หรือไม่?')) return;
+      sessionStorage.removeItem('jig_app_user');
+      location.reload();
+    });
+
+    const stored = getStoredAppUser();
+    if (stored) {
+      currentAppUser = stored;
+      unlockApp();
+    } else {
+      $('inp-app-user').focus();
+    }
+  }
+
+  /* ══════════════════════════════════════
      ADMIN PANEL & LOGIN
   ══════════════════════════════════════ */
   let admLoggedIn = false;
@@ -1843,7 +1959,10 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
     $('adm-jig-search').addEventListener('input', filterJigList);
 
     $('btn-admin-toggle').addEventListener('click', () => {
-      if (admLoggedIn) openPanel('admin-panel');
+      if (admLoggedIn) {
+        openPanel('admin-panel');
+        if (_adminSessionPass) { renderStaffAccountList(); renderLoginLogList(); }
+      }
       else {
         $('admin-login-modal').classList.remove('hidden');
         $('inp-admin-pass').value = '';
@@ -2215,8 +2334,172 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
       setTimeout(() => { btn.textContent = original; }, 2000);
     });
 
+    /* Staff Accounts (Login) + Login Audit Log */
+    bindStaffAccountPanel();
+
     /* Seed demo */
     renderAdminLists();
+  }
+
+  /* ══════════════════════════════════════
+     STAFF ACCOUNTS + LOGIN AUDIT LOG (Admin Panel)
+     ทุก RPC ต้องแนบรหัสผ่าน Admin ไปด้วยเสมอ (getAdminPass) — DB เป็นคนตัดสินสุดท้าย
+  ══════════════════════════════════════ */
+  function roleLabelTh(role) {
+    return { inspector: 'ผู้ตรวจสอบ', supervisor: 'หัวหน้างาน', manager: 'ผู้จัดการ' }[role] || role;
+  }
+
+  async function renderStaffAccountList() {
+    const box = $('adm-user-list');
+    if (!box) return;
+    if (!sb) { box.innerHTML = '<span class="chip-empty">ต้องเชื่อมต่อ Supabase ก่อน</span>'; return; }
+    box.innerHTML = '<span class="chip-empty">🔄 กำลังโหลด...</span>';
+
+    const pass = getAdminPass();
+    if (!pass) { box.innerHTML = ''; return; }
+
+    const { data, error } = await sb.rpc('admin_list_app_users', { p_admin_password: pass });
+    if (error) {
+      console.error('admin_list_app_users error:', error);
+      box.innerHTML = '<span class="chip-empty">โหลดไม่สำเร็จ — รหัสผ่าน Admin อาจไม่ถูกต้อง</span>';
+      _adminSessionPass = null; // เผื่อรหัสผิด จะได้ prompt ใหม่ครั้งหน้า
+      return;
+    }
+
+    const users = data || [];
+    if (!users.length) {
+      box.innerHTML = '<span class="chip-empty">ยังไม่มีบัญชีผู้ใช้งาน — เพิ่มด้านบนได้เลย</span>';
+      return;
+    }
+
+    box.innerHTML = users.map(u => `
+      <div class="adm-item ${u.active ? '' : 'adm-user-inactive'}" data-uid="${escHtml(u.id)}">
+        <div class="adm-item-main">
+          <div class="adm-item-info">
+            <div>${escHtml(u.full_name)}<span class="adm-item-role-tag">${escHtml(roleLabelTh(u.role))}</span></div>
+            <div class="adm-item-code">@${escHtml(u.username)} ${u.active ? '' : '· ปิดใช้งานอยู่'}</div>
+          </div>
+        </div>
+        <div>
+          <button class="adm-item-edit btn-user-reset" title="รีเซ็ตรหัสผ่าน">🔑</button>
+          <button class="adm-item-edit btn-user-toggle" title="${u.active ? 'ปิดใช้งาน' : 'เปิดใช้งาน'}">${u.active ? '⏸️' : '▶️'}</button>
+        </div>
+      </div>
+    `).join('');
+
+    box.querySelectorAll('.btn-user-reset').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const uid = btn.closest('.adm-item').dataset.uid;
+        const newPass = prompt('ตั้งรหัสผ่านใหม่ให้พนักงานคนนี้ (แจ้งพนักงานเปลี่ยนเองภายหลังได้):');
+        if (!newPass) return;
+        const p = getAdminPass();
+        if (!p) return;
+        const { data: ok, error: e } = await sb.rpc('admin_reset_app_user_password', {
+          p_admin_password: p, p_user_id: uid, p_new_password: newPass,
+        });
+        if (e || !ok) { toast('รีเซ็ตรหัสผ่านไม่สำเร็จ', 'ng'); return; }
+        toast('รีเซ็ตรหัสผ่านแล้ว', 'ok');
+      });
+    });
+
+    box.querySelectorAll('.btn-user-toggle').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const item = btn.closest('.adm-item');
+        const uid = item.dataset.uid;
+        const nextActive = item.classList.contains('adm-user-inactive');
+        const p = getAdminPass();
+        if (!p) return;
+        const { data: ok, error: e } = await sb.rpc('admin_set_app_user_active', {
+          p_admin_password: p, p_user_id: uid, p_active: nextActive,
+        });
+        if (e || !ok) { toast('อัปเดตสถานะไม่สำเร็จ', 'ng'); return; }
+        toast(nextActive ? 'เปิดใช้งานบัญชีแล้ว' : 'ปิดใช้งานบัญชีแล้ว', 'ok');
+        renderStaffAccountList();
+      });
+    });
+  }
+
+  async function renderLoginLogList() {
+    const box = $('adm-login-log-list');
+    if (!box) return;
+    if (!sb) { box.innerHTML = '<span class="chip-empty">ต้องเชื่อมต่อ Supabase ก่อน</span>'; return; }
+    box.innerHTML = '<span class="chip-empty">🔄 กำลังโหลด...</span>';
+
+    const pass = getAdminPass();
+    if (!pass) { box.innerHTML = ''; return; }
+
+    const { data, error } = await sb.rpc('admin_list_login_logs', { p_admin_password: pass, p_limit: 200 });
+    if (error) {
+      console.error('admin_list_login_logs error:', error);
+      box.innerHTML = '<span class="chip-empty">โหลดไม่สำเร็จ — รหัสผ่าน Admin อาจไม่ถูกต้อง</span>';
+      _adminSessionPass = null;
+      return;
+    }
+
+    const logs = data || [];
+    if (!logs.length) { box.innerHTML = '<span class="chip-empty">ยังไม่มีประวัติการ Login</span>'; return; }
+
+    box.innerHTML = logs.map(l => {
+      const dt = new Date(l.login_at);
+      const dateStr = dt.toLocaleDateString('th-TH', { day: '2-digit', month: 'short', year: 'numeric' });
+      const timeStr = dt.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' });
+      return `
+        <div class="adm-login-log-item">
+          <div class="llg-top">
+            <span class="llg-name">${escHtml(l.full_name)} <span style="color:var(--text-muted);font-weight:400">@${escHtml(l.username)}</span></span>
+            <span class="llg-time">${dateStr} ${timeStr}</span>
+          </div>
+        </div>`;
+    }).join('');
+  }
+
+  function bindStaffAccountPanel() {
+    $('btn-adm-add-user').addEventListener('click', async () => {
+      if (!sb) { toast('ต้องเชื่อมต่อ Supabase ก่อน', 'ng'); return; }
+      const username = $('adm-user-username').value.trim();
+      const fullName = $('adm-user-fullname').value.trim();
+      const password = $('adm-user-password').value;
+      const role = $('adm-user-role').value;
+
+      if (!username || !fullName || !password) { toast('กรอกให้ครบ: Username, ชื่อ-นามสกุล, รหัสผ่าน', 'ng'); return; }
+      if (password.length < 4) { toast('รหัสผ่านต้องยาว 4 ตัวขึ้นไป', 'ng'); return; }
+
+      const p = getAdminPass();
+      if (!p) return;
+
+      const btn = $('btn-adm-add-user');
+      btn.disabled = true;
+      const orig = btn.textContent;
+      btn.textContent = '🔄 กำลังเพิ่ม...';
+
+      const { data: newId, error } = await sb.rpc('admin_add_app_user', {
+        p_admin_password: p,
+        p_username: username,
+        p_password: password,
+        p_full_name: fullName,
+        p_role: role,
+      });
+
+      btn.disabled = false;
+      btn.textContent = orig;
+
+      if (error) {
+        console.error('admin_add_app_user error:', error);
+        toast(error.message && error.message.includes('duplicate') ? 'Username นี้มีอยู่แล้ว' : 'เพิ่มผู้ใช้ไม่สำเร็จ', 'ng');
+        return;
+      }
+
+      toast(`เพิ่มบัญชี "${fullName}" แล้ว`, 'ok');
+      $('adm-user-username').value = '';
+      $('adm-user-fullname').value = '';
+      $('adm-user-password').value = '';
+      renderStaffAccountList();
+    });
+
+    $('btn-adm-refresh-logs').addEventListener('click', renderLoginLogList);
+
+    // โหลดรายชื่อผู้ใช้ครั้งแรกตอนเปิด Admin Panel (ถ้ามี session admin password อยู่แล้ว)
+    if (_adminSessionPass) renderStaffAccountList();
   }
 
   function renderTplSelect() {
@@ -3385,7 +3668,7 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
     bindAiPanel();
     startDashClock();
     initPanelResize();
-    init();
+    bindAppLoginGate(); // แสดงหน้า Login ก่อน — init() ของแอปจริงจะถูกเรียกจากในนี้เมื่อ Login สำเร็จ
     
     // ─── GPS Check Button (เร็ว + Auto-retry) ───
     $('btn-gps-check').addEventListener('click', async () => {
