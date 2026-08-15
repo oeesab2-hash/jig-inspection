@@ -38,8 +38,16 @@
     color: #fff;
     padding: 20px 16px;
     text-align: center;
-    border-bottom: 2px solid var(--gold);
+    position: relative;
     box-shadow: 0 4px 16px rgba(15,33,55,0.25);
+  }
+  header::after {
+    content: "";
+    position: absolute;
+    left: 0; right: 0; bottom: -1px;
+    height: 2px;
+    background: linear-gradient(90deg, transparent 0%, var(--gold) 18%, var(--gold) 82%, transparent 100%);
+    opacity: 0.85;
   }
   header h1 { margin: 0; font-size: 17px; font-weight: 700; }
   header p { margin: 4px 0 0; font-size: 12px; opacity: 0.85; }
