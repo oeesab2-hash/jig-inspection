@@ -4168,7 +4168,7 @@ ${JSON.stringify(summary, null, 2)}
       ${topNg.length ? `<ul>
         ${topNg.map(([id, d]) => `<li>
           <strong>ข้อ ${id} — ${escHtml(d.label)}</strong>
-          <span class="tag-risk ${riskLevel(d.n, s.total)}">NG ${d.n} ครั้ง</span>
+          <span class="tag-risk tag-high">NG ${d.n} ครั้ง</span>
           <br><small>พบ NG คิดเป็น ${s.total ? Math.round(d.n/s.total*100) : 0}% ของการตรวจทั้งหมด — ควรตรวจสอบ PM schedule</small>
         </li>`).join('')}
       </ul>` : '<p>✅ ไม่พบรายการ NG ที่น่าเป็นห่วง</p>'}
