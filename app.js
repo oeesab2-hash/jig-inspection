@@ -1918,14 +1918,9 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
 
     $('btn-close-admin').addEventListener('click', () => closePanel('admin-panel'));
 
-    // ── Logout (sidebar) — ระบบนี้มี "session" จริงแบบเดียวคือ Admin
-    // (ฝั่งตรวจสอบทั่วไปไม่ต้อง login) ปุ่มนี้จึงเคลียร์ session ของ Admin
-    // ทั้ง memory (_adminSessionPass), state (admLoggedIn) และ localStorage
-    $('btn-sidebar-logout').addEventListener('click', () => {
-      if (!admLoggedIn) {
-        toast('ยังไม่ได้เข้าสู่ระบบ Admin', 'ok');
-        return;
-      }
+    // ── Logout — อยู่ใน Admin Panel เพราะผูกกับ session ของ Admin โดยตรง
+    // เคลียร์ทั้ง memory (_adminSessionPass), state (admLoggedIn) และ localStorage
+    $('btn-admin-logout').addEventListener('click', () => {
       if (!confirm('ต้องการออกจากระบบ Admin ใช่หรือไม่?')) return;
       admLoggedIn = false;
       _adminSessionPass = null;
