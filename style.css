@@ -224,6 +224,21 @@ h1, h2, h3, h4, label, button, input, select, textarea, p, span, div {
   color: var(--accent);
 }
 .title-icon svg { width: 14px; height: 14px; }
+
+/* Inline icons used inside buttons, labels, section titles (replaces emoji) */
+.inline-ico {
+  display: inline-block;
+  width: 13px; height: 13px;
+  vertical-align: -2px;
+  margin-right: 1px;
+  flex-shrink: 0;
+}
+.admin-section-title, .kpi-icon, .cp-map-hint, .sb-icon {
+  display: flex; align-items: center; gap: 6px;
+}
+.kpi-icon { justify-content: center; }
+.kpi-icon .inline-ico, .sb-icon .inline-ico { width: 18px; height: 18px; margin-right: 0; vertical-align: 0; }
+.modal-warn .inline-ico { width: 13px; height: 13px; vertical-align: -2px; margin-right: 3px; }
 .card-header-flex {
   display: flex; align-items: center; justify-content: space-between;
   flex-wrap: wrap; gap: 6px; margin-bottom: 10px;
