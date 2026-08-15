@@ -35,6 +35,16 @@
     color: var(--text);
     padding-bottom: 40px;
   }
+  header { position: relative; }
+  .header-back-link {
+    position: absolute; top: 16px; right: 16px;
+    display: flex; align-items: center; gap: 5px;
+    padding: 6px 11px; border-radius: 999px;
+    background: hsla(0,0%,100%,0.12); border: 1px solid hsla(0,0%,100%,0.25);
+    color: #fff; font-size: 11.5px; font-weight: 600; text-decoration: none;
+    white-space: nowrap;
+  }
+  .header-back-link:hover { background: hsla(0,0%,100%,0.2); }
   header {
     background: linear-gradient(120deg, var(--navy), var(--navy-light));
     color: #fff;
@@ -210,6 +220,10 @@
         <h1><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-3px;margin-right:5px"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>ควบคุมเอกสาร — Master List / Amendment Record</h1>
         <p>ทะเบียนเอกสารแม่บทและประวัติการแก้ไข</p>
       </div>
+      <a href="index.html" class="header-back-link" title="กลับไปหน้าตรวจสอบหลัก">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
+        <span>หน้าหลัก</span>
+      </a>
     </div>
   </header>
 

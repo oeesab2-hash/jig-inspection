@@ -1717,3 +1717,148 @@ h1, h2, h3, h4, label, button, input, select, textarea, p, span, div {
   .pdf-page { border: 1px solid #1e3a5f !important; margin: 0 !important; }
   @page { size: A4; margin: 8mm; }
 }
+
+/* ─────────────────────────────
+   Sidebar Navigation
+   (persistent left nav — replaces the old horizontal .tab-nav;
+   collapsible on desktop, off-canvas drawer on mobile, resets each load)
+───────────────────────────── */
+.sidebar {
+  position: fixed;
+  top: 0; left: 0; bottom: 0;
+  width: 224px;
+  z-index: 60;
+  display: flex;
+  flex-direction: column;
+  background: linear-gradient(180deg, var(--brand-navy-800), var(--brand-navy-900));
+  border-right: 1px solid hsla(0, 0%, 100%, 0.08);
+  box-shadow: 2px 0 18px hsla(210, 60%, 10%, 0.18);
+  transition: width 0.2s ease, transform 0.25s ease;
+  overflow: hidden;
+}
+
+.sidebar-top {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 12px;
+  border-bottom: 1px solid hsla(0, 0%, 100%, 0.08);
+  flex-shrink: 0;
+}
+.sidebar-collapse-toggle {
+  width: 32px; height: 32px; flex-shrink: 0;
+  border-radius: 8px;
+  border: 1px solid hsla(0, 0%, 100%, 0.18);
+  background: hsla(0, 0%, 100%, 0.08);
+  color: hsla(0, 0%, 100%, 0.85);
+  cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  transition: all 0.2s;
+}
+.sidebar-collapse-toggle:hover { border-color: var(--brand-gold); color: var(--brand-gold); background: hsla(0, 0%, 100%, 0.14); }
+
+.sidebar-brand { display: flex; align-items: center; gap: 9px; min-width: 0; overflow: hidden; }
+.sidebar-brand-logo {
+  width: 28px; height: 28px; flex-shrink: 0;
+  border-radius: 7px;
+  background: #fff;
+  display: flex; align-items: center; justify-content: center;
+  box-shadow: 0 1px 4px hsla(210, 60%, 10%, 0.35);
+}
+.sidebar-brand-text {
+  font-size: 12.5px; font-weight: 700; color: #fff;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+
+.sidebar-nav {
+  flex: 1;
+  padding: 12px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+.sidebar-nav-label {
+  font-size: 10px; font-weight: 700; letter-spacing: 0.6px; text-transform: uppercase;
+  color: hsla(0, 0%, 100%, 0.35);
+  padding: 10px 12px 4px;
+  white-space: nowrap;
+}
+.sidebar-divider { height: 1px; background: hsla(0, 0%, 100%, 0.1); margin: 8px 6px; }
+
+.sidebar-nav .tab-btn.side-nav-item,
+.sidebar-nav a.side-nav-item {
+  display: flex; align-items: center; gap: 12px; width: 100%;
+  flex: none;
+  padding: 10px 12px;
+  border-radius: 9px;
+  border: none; border-bottom: none;
+  background: transparent;
+  color: hsla(0, 0%, 100%, 0.68);
+  font-size: 13px; font-weight: 600; letter-spacing: 0.2px;
+  font-family: var(--font-thai);
+  cursor: pointer; text-align: left; text-decoration: none;
+  box-sizing: border-box;
+  white-space: nowrap;
+  transition: background 0.15s, color 0.15s;
+}
+.sidebar-nav .tab-btn.side-nav-item svg,
+.sidebar-nav a.side-nav-item svg { width: 18px; height: 18px; flex-shrink: 0; }
+.sidebar-nav .tab-btn.side-nav-item:hover,
+.sidebar-nav a.side-nav-item:hover { background: hsla(0, 0%, 100%, 0.08); color: #fff; }
+.sidebar-nav .tab-btn.side-nav-item.active {
+  background: var(--brand-gold-dim);
+  color: var(--brand-gold);
+}
+
+.sidebar-bottom {
+  padding: 10px 14px 14px;
+  border-top: 1px solid hsla(0, 0%, 100%, 0.08);
+  flex-shrink: 0;
+}
+.sidebar-foot-text { font-size: 10.5px; color: hsla(0, 0%, 100%, 0.4); white-space: nowrap; }
+
+.sidebar-overlay {
+  position: fixed; inset: 0;
+  background: hsla(210, 60%, 10%, 0.5);
+  z-index: 55;
+  opacity: 0; pointer-events: none;
+  transition: opacity 0.2s;
+}
+body.sidebar-open .sidebar-overlay { opacity: 1; pointer-events: auto; }
+
+.hamburger-btn { display: none; }
+
+/* shift page content to make room for the fixed sidebar */
+.app-container { margin-left: 224px; transition: margin-left 0.2s ease; }
+
+/* collapsed state — icon rail only (desktop) */
+body.sidebar-collapsed .sidebar { width: 68px; }
+body.sidebar-collapsed .app-container { margin-left: 68px; }
+body.sidebar-collapsed .sidebar-brand-text,
+body.sidebar-collapsed .sidebar-link-text,
+body.sidebar-collapsed .sidebar-nav-label,
+body.sidebar-collapsed .sidebar-foot-text { display: none; }
+body.sidebar-collapsed .sidebar-top { justify-content: center; }
+body.sidebar-collapsed .sidebar-brand { display: none; }
+body.sidebar-collapsed .sidebar-nav .tab-btn.side-nav-item,
+body.sidebar-collapsed .sidebar-nav a.side-nav-item { justify-content: center; padding: 10px 0; }
+
+/* mobile — off-canvas drawer */
+@media (max-width: 900px) {
+  .sidebar {
+    width: 240px;
+    transform: translateX(-100%);
+  }
+  body.sidebar-open .sidebar { transform: translateX(0); }
+  body.sidebar-collapsed .sidebar { width: 240px; } /* no icon-rail concept on mobile */
+  body.sidebar-collapsed .sidebar-brand-text,
+  body.sidebar-collapsed .sidebar-link-text,
+  body.sidebar-collapsed .sidebar-nav-label,
+  body.sidebar-collapsed .sidebar-foot-text { display: block; }
+  body.sidebar-collapsed .sidebar-brand { display: flex; }
+  .sidebar-collapse-toggle { display: none; }
+  .app-container, body.sidebar-collapsed .app-container { margin-left: 0 !important; }
+  .hamburger-btn { display: flex; }
+}

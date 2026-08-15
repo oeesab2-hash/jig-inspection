@@ -27,11 +27,58 @@
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
+
+<!-- ─── SIDEBAR NAVIGATION ─── -->
+<aside class="sidebar" id="app-sidebar">
+  <div class="sidebar-top">
+    <button id="sidebar-collapse-toggle" class="sidebar-collapse-toggle" title="ย่อ/ขยายเมนู">
+      <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+    </button>
+    <div class="sidebar-brand">
+      <div class="sidebar-brand-logo">
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="#1e3a5f" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+      </div>
+      <span class="sidebar-brand-text">JIG Inspection</span>
+    </div>
+  </div>
+
+  <nav class="sidebar-nav">
+    <span class="sidebar-nav-label">เมนูหลัก</span>
+    <button class="tab-btn side-nav-item active" data-tab="inspect">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+      <span class="sidebar-link-text">ตรวจสอบ</span>
+    </button>
+    <button class="tab-btn side-nav-item" data-tab="dashboard">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+      <span class="sidebar-link-text">Dashboard</span>
+    </button>
+    <button class="tab-btn side-nav-item" id="tab-history">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v5h5"/><path d="M3.05 13a9 9 0 1 0 .5-4.5L3 8"/><path d="M12 7v5l4 2"/></svg>
+      <span class="sidebar-link-text">ประวัติ</span>
+    </button>
+
+    <div class="sidebar-divider"></div>
+    <span class="sidebar-nav-label">เอกสาร &amp; อนุมัติ</span>
+    <a class="side-nav-item" href="documents.html" target="_blank" rel="noopener">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+      <span class="sidebar-link-text">ควบคุมเอกสาร</span>
+    </a>
+  </nav>
+
+  <div class="sidebar-bottom">
+    <span class="sidebar-link-text sidebar-foot-text">JIG Inspection System</span>
+  </div>
+</aside>
+<div class="sidebar-overlay" id="sidebar-overlay"></div>
+
 <div class="app-container">
 
   <!-- ─── HEADER ─── -->
   <header class="app-header">
     <div class="brand">
+      <button id="sidebar-open-toggle" class="btn-icon hamburger-btn" title="เมนู">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+      </button>
       <div class="brand-logo">
         <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="#1e3a5f" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
       </div>
@@ -50,22 +97,6 @@
       </button>
     </div>
   </header>
-
-  <!-- ─── TAB NAVIGATION ─── -->
-  <nav class="tab-nav">
-    <button class="tab-btn active" data-tab="inspect">
-      <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
-      ตรวจสอบ
-    </button>
-    <button class="tab-btn" data-tab="dashboard">
-      <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
-      Dashboard
-    </button>
-    <button class="tab-btn" id="tab-history">
-      <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v5h5"/><path d="M3.05 13a9 9 0 1 0 .5-4.5L3 8"/><path d="M12 7v5l4 2"/></svg>
-      ประวัติ
-    </button>
-  </nav>
 
   <!-- ─── VIEW: INSPECTION FORM ─── -->
   <main class="dashboard" id="view-inspect">
@@ -664,6 +695,32 @@
 
 </div>
 <script src="app.js"></script>
+<script>
+(function () {
+  var collapseBtn = document.getElementById('sidebar-collapse-toggle');
+  var openBtn     = document.getElementById('sidebar-open-toggle');
+  var overlay     = document.getElementById('sidebar-overlay');
+
+  function closeMobileDrawer() { document.body.classList.remove('sidebar-open'); }
+
+  if (collapseBtn) {
+    collapseBtn.addEventListener('click', function () {
+      document.body.classList.toggle('sidebar-collapsed');
+    });
+  }
+  if (openBtn) {
+    openBtn.addEventListener('click', function () {
+      document.body.classList.add('sidebar-open');
+    });
+  }
+  if (overlay) overlay.addEventListener('click', closeMobileDrawer);
+
+  // ปิดเมนู (มือถือ) หลังเลือกเมนูแล้ว
+  document.querySelectorAll('#app-sidebar .tab-btn, #app-sidebar .side-nav-item').forEach(function (el) {
+    el.addEventListener('click', closeMobileDrawer);
+  });
+})();
+</script>
 
 <!-- ─── GPS ALERT MODAL ─── -->
 <div id="gps-alert-modal" class="modal-overlay hidden">
