@@ -678,18 +678,41 @@
 
   <!-- ─── ADMIN LOGIN MODAL ─── -->
   <div id="admin-login-modal" class="modal-overlay hidden">
-    <div class="modal-box">
-      <div class="modal-head">
-        <h3><svg class="inline-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg> เข้าสู่ระบบ Admin</h3>
-        <button id="btn-close-login" class="btn-close-panel">✕</button>
+    <div class="modal-box admin-login-box">
+      <button id="btn-close-login" class="admin-login-close" title="ปิด">
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+
+      <div class="admin-login-icon">
+        <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
       </div>
-      <div class="modal-inp-row">
-        <input type="text" id="inp-admin-user" placeholder="ชื่อผู้ใช้">
+      <h3 class="admin-login-title">เข้าสู่ระบบ Admin</h3>
+      <p class="admin-login-subtitle">กรอกข้อมูลเพื่อเข้าใช้งานส่วนผู้ดูแลระบบ</p>
+
+      <div class="admin-login-field">
+        <label for="inp-admin-user">ชื่อผู้ใช้</label>
+        <div class="admin-login-input-wrap">
+          <svg class="admin-login-input-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+          <input type="text" id="inp-admin-user" placeholder="กรอกชื่อผู้ใช้" autocomplete="username">
+        </div>
       </div>
-      <div class="modal-inp-row">
-        <input type="password" id="inp-admin-pass" placeholder="รหัสผ่าน">
-        <button id="btn-login-submit" class="btn-adm-add">เข้าสู่ระบบ</button>
+
+      <div class="admin-login-field">
+        <label for="inp-admin-pass">รหัสผ่าน</label>
+        <div class="admin-login-input-wrap">
+          <svg class="admin-login-input-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+          <input type="password" id="inp-admin-pass" placeholder="กรอกรหัสผ่าน" autocomplete="current-password">
+          <button type="button" id="btn-toggle-admin-pass" class="admin-login-eye" title="แสดง/ซ่อนรหัสผ่าน">
+            <svg class="eye-open" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+            <svg class="eye-closed" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:none"><path d="M17.94 17.94A10.94 10.94 0 0 1 12 20c-7 0-11-8-11-8a18.6 18.6 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+          </button>
+        </div>
       </div>
+
+      <button id="btn-login-submit" class="admin-login-submit">
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/></svg>
+        เข้าสู่ระบบ
+      </button>
     </div>
   </div>
 
@@ -719,6 +742,31 @@
   document.querySelectorAll('#app-sidebar .tab-btn, #app-sidebar .side-nav-item').forEach(function (el) {
     el.addEventListener('click', closeMobileDrawer);
   });
+
+  // ─── Admin Login Modal: แสดง/ซ่อนรหัสผ่าน + กด Enter เพื่อเข้าสู่ระบบ ───
+  var eyeBtn = document.getElementById('btn-toggle-admin-pass');
+  var passInp = document.getElementById('inp-admin-pass');
+  var userInp = document.getElementById('inp-admin-user');
+  var loginSubmitBtn = document.getElementById('btn-login-submit');
+
+  if (eyeBtn && passInp) {
+    eyeBtn.addEventListener('click', function () {
+      var showing = passInp.type === 'text';
+      passInp.type = showing ? 'password' : 'text';
+      eyeBtn.querySelector('.eye-open').style.display = showing ? '' : 'none';
+      eyeBtn.querySelector('.eye-closed').style.display = showing ? 'none' : '';
+    });
+  }
+  if (userInp) {
+    userInp.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter') { e.preventDefault(); passInp && passInp.focus(); }
+    });
+  }
+  if (passInp) {
+    passInp.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter') { e.preventDefault(); loginSubmitBtn && loginSubmitBtn.click(); }
+    });
+  }
 })();
 </script>
 

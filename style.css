@@ -1444,6 +1444,83 @@ h1, h2, h3, h4, label, button, input, select, textarea, p, span, div {
 .modal-warn { font-size: 11px; color: #b45309; background: rgba(180,83,9,0.1); border: 1px solid rgba(180,83,9,0.3); border-radius: 6px; padding: 8px 10px; margin-bottom: 10px; line-height: 1.5; }
 
 /* ─────────────────────────────
+   Admin Login Modal — dedicated professional layout
+───────────────────────────── */
+.admin-login-box {
+  width: min(360px, 90vw);
+  padding: 2rem 1.75rem 1.75rem;
+  text-align: center;
+  position: relative;
+}
+.admin-login-close {
+  position: absolute; top: 14px; right: 14px;
+  width: 30px; height: 30px; border-radius: 8px;
+  border: 1px solid var(--border-card);
+  background: var(--bg-input); color: var(--text-muted);
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer; transition: all 0.15s;
+}
+.admin-login-close:hover { color: var(--text-main); border-color: var(--accent); }
+
+.admin-login-icon {
+  width: 52px; height: 52px; border-radius: 14px;
+  margin: 0 auto 14px;
+  background: linear-gradient(135deg, var(--brand-navy-700), var(--brand-navy-600));
+  color: #fff;
+  display: flex; align-items: center; justify-content: center;
+  box-shadow: 0 6px 18px hsla(210, 60%, 25%, 0.35);
+}
+.admin-login-title { font-size: 16.5px; font-weight: 700; color: var(--text-heading); margin: 0 0 4px; }
+.admin-login-subtitle { font-size: 12px; color: var(--text-muted); margin: 0 0 22px; line-height: 1.5; }
+
+.admin-login-field { text-align: left; margin-bottom: 14px; }
+.admin-login-field label {
+  display: block; font-size: 11.5px; font-weight: 600;
+  color: var(--text-muted); margin-bottom: 6px;
+}
+.admin-login-input-wrap {
+  position: relative; display: flex; align-items: center;
+}
+.admin-login-input-icon {
+  position: absolute; left: 12px;
+  color: var(--text-muted); pointer-events: none;
+}
+.admin-login-input-wrap input {
+  width: 100%; box-sizing: border-box;
+  padding: 11px 12px 11px 38px;
+  border-radius: 10px; border: 1px solid var(--border-input);
+  background: var(--bg-input); color: var(--text-main);
+  font-size: 14px; font-family: var(--font-thai); outline: none;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.admin-login-input-wrap input:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-dim);
+}
+.admin-login-input-wrap input#inp-admin-pass { padding-right: 40px; }
+.admin-login-eye {
+  position: absolute; right: 8px;
+  width: 28px; height: 28px; border-radius: 7px;
+  border: none; background: transparent; color: var(--text-muted);
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer;
+}
+.admin-login-eye:hover { color: var(--accent); background: var(--accent-dim); }
+
+.admin-login-submit {
+  width: 100%; margin-top: 6px;
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+  padding: 12px; border: none; border-radius: 10px;
+  background: linear-gradient(120deg, var(--brand-navy-700), var(--brand-navy-600));
+  color: #fff; font-size: 14.5px; font-weight: 700; font-family: var(--font-thai);
+  cursor: pointer; transition: filter 0.15s, transform 0.1s;
+  box-shadow: 0 4px 14px hsla(210, 60%, 25%, 0.3);
+}
+.admin-login-submit:hover { filter: brightness(1.08); }
+.admin-login-submit:active { transform: translateY(1px); }
+.admin-login-submit:disabled { opacity: 0.65; cursor: default; }
+
+/* ─────────────────────────────
    Responsive: Dashboard
 ───────────────────────────── */
 @media (max-width: 640px) {
