@@ -75,7 +75,7 @@
          STEP 0 — 3-Level Filter Selector
          ════════════════════════════════════ -->
     <div class="glass-card filter-card" id="filter-card">
-      <h2 class="card-title"><span class="title-icon">🏭</span> เลือก JIG ที่ต้องการตรวจสอบ</h2>
+      <h2 class="card-title"><span class="title-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21V11l5 3v-3l5 3V8l5 3v10z"/><path d="M3 21h18"/></svg></span> เลือก JIG ที่ต้องการตรวจสอบ</h2>
 
       <!-- Breadcrumb trail -->
       <div class="breadcrumb-trail" id="breadcrumb">
@@ -132,7 +132,7 @@
          STEP 1 — Meta Info (ปรากฏหลัง select JIG)
          ════════════════════════════════════ -->
     <div class="glass-card meta-card hidden" id="meta-card">
-      <h2 class="card-title"><span class="title-icon">📋</span> ข้อมูลทั่วไป</h2>
+      <h2 class="card-title"><span class="title-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="18" rx="2"/><path d="M9 2h6v3H9z"/><path d="M8 11h8M8 15h8"/></svg></span> ข้อมูลทั่วไป</h2>
       <div class="meta-grid">
         <div class="form-group">
           <label for="inp-inspector">ผู้ตรวจสอบ</label>
@@ -167,7 +167,7 @@
          STEP 2 — SVG Map
          ════════════════════════════════════ -->
     <div class="glass-card map-card hidden" id="map-card">
-      <h2 class="card-title"><span class="title-icon">📍</span> แผนผังจุดตรวจสอบ JIG</h2>
+      <h2 class="card-title"><span class="title-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg></span> แผนผังจุดตรวจสอบ JIG</h2>
       <div class="jig-svg-wrap">
         <svg id="jig-schematic" viewBox="0 0 600 340" preserveAspectRatio="xMidYMid meet">
           <defs>
@@ -208,7 +208,7 @@
          ════════════════════════════════════ -->
     <div class="glass-card checklist-card hidden" id="checklist-card">
       <div class="card-header-flex">
-        <h2 class="card-title"><span class="title-icon">🔍</span> รายการตรวจสอบ</h2>
+        <h2 class="card-title"><span class="title-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg></span> รายการตรวจสอบ</h2>
         <div class="legend-row">
           <span class="badge ok">✔ ปกติ</span>
           <span class="badge ng">✖ NG</span>
@@ -222,12 +222,12 @@
          STEP 4 — Notes + Signatures
          ════════════════════════════════════ -->
     <div class="glass-card notes-card hidden" id="notes-card">
-      <h2 class="card-title"><span class="title-icon">📝</span> หมายเหตุเพิ่มเติม</h2>
+      <h2 class="card-title"><span class="title-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg></span> หมายเหตุเพิ่มเติม</h2>
       <textarea id="report-notes" class="note-area" placeholder="ระบุรายละเอียดเพิ่มเติม..."></textarea>
     </div>
 
     <div class="glass-card sig-card hidden" id="sig-card">
-      <h2 class="card-title"><span class="title-icon">✍️</span> ลายเซ็นรับรอง (พิมพ์ชื่อ)</h2>
+      <h2 class="card-title"><span class="title-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg></span> ลายเซ็นรับรอง (พิมพ์ชื่อ)</h2>
       <div class="sig-row">
         <div class="sig-block">
           <label>ผู้ตรวจสอบ</label>
@@ -304,7 +304,7 @@
       <!-- Trend -->
       <div class="glass-card chart-card chart-wide">
         <div class="card-header-flex">
-          <h2 class="card-title"><span class="title-icon">📈</span> <span id="trend-title-text">แนวโน้มการตรวจสอบ (30 วัน)</span></h2>
+          <h2 class="card-title"><span class="title-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg></span> <span id="trend-title-text">แนวโน้มการตรวจสอบ (30 วัน)</span></h2>
           <span class="chart-legend">
             <span class="cl-dot ok"></span>ผ่าน
             <span class="cl-dot ng"></span>NG
@@ -317,12 +317,12 @@
     <div class="chart-row">
       <!-- NG by Line -->
       <div class="glass-card chart-card">
-        <h2 class="card-title"><span class="title-icon">🏭</span> NG ตาม Line</h2>
+        <h2 class="card-title"><span class="title-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg></span> NG ตาม Line</h2>
         <div class="chart-wrap"><canvas id="chart-byline"></canvas></div>
       </div>
       <!-- Pass rate donut by Dept -->
       <div class="glass-card chart-card">
-        <h2 class="card-title"><span class="title-icon">🍩</span> อัตราผ่านตาม Line</h2>
+        <h2 class="card-title"><span class="title-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.21 15.89A10 10 0 1 1 8 2.83"/><path d="M22 12A10 10 0 0 0 12 2v10z"/></svg></span> อัตราผ่านตาม Line</h2>
         <div class="chart-wrap chart-donut-wrap"><canvas id="chart-dept"></canvas></div>
         <div id="donut-legend" class="donut-legend"></div>
       </div>
@@ -330,7 +330,7 @@
 
     <!-- Top NG Checkpoints -->
     <div class="glass-card">
-      <h2 class="card-title"><span class="title-icon">🔴</span> จุดตรวจที่พบ NG บ่อยที่สุด</h2>
+      <h2 class="card-title"><span class="title-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg></span> จุดตรวจที่พบ NG บ่อยที่สุด</h2>
       <div id="ng-ranking"></div>
     </div>
 
@@ -338,7 +338,7 @@
     <div class="glass-card ai-card">
       <div class="ai-card-head">
         <div>
-          <h2 class="card-title" style="margin-bottom:4px"><span class="title-icon">🤖</span> AI วิเคราะห์ข้อมูล</h2>
+          <h2 class="card-title" style="margin-bottom:4px"><span class="title-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="16" rx="2"/><rect x="9" y="9" width="6" height="6"/><line x1="9" y1="1" x2="9" y2="4"/><line x1="15" y1="1" x2="15" y2="4"/><line x1="9" y1="20" x2="9" y2="23"/><line x1="15" y1="20" x2="15" y2="23"/><line x1="20" y1="9" x2="23" y2="9"/><line x1="20" y1="14" x2="23" y2="14"/><line x1="1" y1="9" x2="4" y2="9"/><line x1="1" y1="14" x2="4" y2="14"/></svg></span> AI วิเคราะห์ข้อมูล</h2>
           <p class="ai-subtitle">วิเคราะห์ pattern NG, แนวโน้ม, และคำแนะนำเชิงป้องกัน</p>
         </div>
         <div class="ai-btn-group">
