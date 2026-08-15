@@ -1896,6 +1896,24 @@ h1, h2, h3, h4, label, button, input, select, textarea, p, span, div {
   border-top: 1px solid hsla(0, 0%, 100%, 0.08);
   flex-shrink: 0;
 }
+.sidebar-logout-btn {
+  display: flex; align-items: center; gap: 12px; width: 100%;
+  padding: 9px 12px; margin-bottom: 10px;
+  border-radius: 9px;
+  border: 1px solid hsla(0, 0%, 100%, 0.1);
+  background: hsla(0, 0%, 100%, 0.04);
+  color: hsla(0, 0%, 100%, 0.68);
+  font-family: var(--font-thai); font-size: 13px; font-weight: 600; letter-spacing: 0.2px;
+  cursor: pointer; text-align: left; white-space: nowrap;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+.sidebar-logout-btn svg { flex-shrink: 0; }
+.sidebar-logout-btn:hover {
+  background: hsla(0, 72%, 55%, 0.14);
+  border-color: hsla(0, 72%, 55%, 0.35);
+  color: hsl(0, 85%, 78%);
+}
+body.sidebar-collapsed .sidebar-logout-btn { justify-content: center; padding: 9px 0; }
 .sidebar-foot-text { font-size: 10.5px; color: hsla(0, 0%, 100%, 0.4); white-space: nowrap; }
 
 .sidebar-overlay {

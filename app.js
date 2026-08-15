@@ -1918,6 +1918,22 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
 
     $('btn-close-admin').addEventListener('click', () => closePanel('admin-panel'));
 
+    // ── Logout (sidebar) — ระบบนี้มี "session" จริงแบบเดียวคือ Admin
+    // (ฝั่งตรวจสอบทั่วไปไม่ต้อง login) ปุ่มนี้จึงเคลียร์ session ของ Admin
+    // ทั้ง memory (_adminSessionPass), state (admLoggedIn) และ localStorage
+    $('btn-sidebar-logout').addEventListener('click', () => {
+      if (!admLoggedIn) {
+        toast('ยังไม่ได้เข้าสู่ระบบ Admin', 'ok');
+        return;
+      }
+      if (!confirm('ต้องการออกจากระบบ Admin ใช่หรือไม่?')) return;
+      admLoggedIn = false;
+      _adminSessionPass = null;
+      localStorage.removeItem('jig_admin_user');
+      closePanel('admin-panel');
+      toast('ออกจากระบบเรียบร้อยแล้ว', 'ok');
+    });
+
     /* Change Pass — ต้องยืนยันรหัสเดิมก่อนเสมอ (ผ่าน RPC ฝั่ง DB) */
     $('btn-adm-pass').addEventListener('click', async () => {
       const oldPass = $('adm-old-pass').value.trim();
