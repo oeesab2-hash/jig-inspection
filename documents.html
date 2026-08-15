@@ -287,14 +287,14 @@
         <p>ทะเบียนเอกสารแม่บทและประวัติการแก้ไข</p>
       </div>
       <div class="header-actions-row">
-        <button id="btn-docs-logout" class="header-back-link header-logout-btn" title="ออกจากระบบ">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
-          <span>ออกจากระบบ</span>
-        </button>
         <a href="index.html" class="header-back-link" title="กลับไปหน้าตรวจสอบหลัก">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
           <span>หน้าหลัก</span>
         </a>
+        <button id="btn-docs-logout" class="header-back-link header-logout-btn" title="ออกจากระบบ">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+          <span>ออกจากระบบ</span>
+        </button>
       </div>
     </div>
   </header>
@@ -1223,7 +1223,7 @@
 
   // ── Logout — เคลียร์ session ('docs_authed') แล้วโชว์หน้า login gate อีกครั้ง
   document.getElementById('btn-docs-logout').addEventListener('click', () => {
-    if (!confirm('ต้องการออกจากระบบใช่หรือไม่?')) return;
+    if (!confirm('ต้องการออกจากระบบควบคุมเอกสารใช่หรือไม่?')) return;
     sessionStorage.removeItem('docs_authed');
     loginUserInp.value = '';
     loginPassInp.value = '';
