@@ -3193,34 +3193,30 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
             <div class="pdf-subtitle">ใบรายงานการตรวจสอบสภาพจิ๊ก</div>
           </div>
           <div class="pdf-header-doc-cell">
-            <div class="pdf-doc-row">
-              <span class="pdf-doc-label">Doc No.</span>
-              <span class="pdf-doc-value">${docId ? escHtml(docId) : '<span style="color:#dc2626;font-weight:700">⚠️ ยังไม่กำหนด</span>'}</span>
+            <div class="pdf-doc-th pdf-doc-area-rdlbl">Rev.Date</div>
+            <div class="pdf-doc-th pdf-doc-area-rnlbl">Rev. No.</div>
+            <div class="pdf-doc-info pdf-doc-area-doc">
+              <div class="pdf-doc-info-row">
+                <span class="pdf-doc-info-label">Doc. No. :</span>
+                <span class="pdf-doc-info-value">${docId ? escHtml(docId) : '<span style="color:#dc2626;font-weight:700">⚠️ ยังไม่กำหนด</span>'}</span>
+              </div>
+              <div class="pdf-doc-info-row">
+                <span class="pdf-doc-info-label">Run No. :</span>
+                <span class="pdf-doc-info-value">${runNo ? escHtml(runNo) : '<span style="color:#dc2626;font-weight:700">⚠️ ยังไม่กำหนด</span>'}</span>
+              </div>
+              <div class="pdf-doc-info-row">
+                <span class="pdf-doc-info-label">Report No. :</span>
+                <span class="pdf-doc-info-value">${escHtml(reportNo)}</span>
+              </div>
+              <div class="pdf-doc-info-row">
+                <span class="pdf-doc-info-label">Issued Form :</span>
+                <span class="pdf-doc-info-value">${docDate}</span>
+              </div>
             </div>
-            <div class="pdf-doc-row">
-              <span class="pdf-doc-label">Run No.</span>
-              <span class="pdf-doc-value">${runNo ? escHtml(runNo) : '<span style="color:#dc2626;font-weight:700">⚠️ ยังไม่กำหนด</span>'}</span>
-            </div>
-            <div class="pdf-doc-row">
-              <span class="pdf-doc-label">Report No.</span>
-              <span class="pdf-doc-value">${escHtml(reportNo)}</span>
-            </div>
-            <div class="pdf-doc-row">
-              <span class="pdf-doc-label">Rev. Level</span>
-              <span class="pdf-doc-value">${escHtml(formRevLevel)}</span>
-            </div>
-            <div class="pdf-doc-row">
-              <span class="pdf-doc-label">Rev. No.</span>
-              <span class="pdf-doc-value">${escHtml(revLevel)}</span>
-            </div>
-            <div class="pdf-doc-row">
-              <span class="pdf-doc-label">Rev. Date</span>
-              <span class="pdf-doc-value">${revDate}</span>
-            </div>
-            <div class="pdf-doc-row">
-              <span class="pdf-doc-label">Issued Form</span>
-              <span class="pdf-doc-value">${docDate}</span>
-            </div>
+            <div class="pdf-doc-th pdf-doc-area-rllbl">Rev. Level</div>
+            <div class="pdf-doc-value-cell pdf-doc-area-rdval">${revDate}</div>
+            <div class="pdf-doc-value-cell pdf-doc-area-rnval">${escHtml(revLevel)}</div>
+            <div class="pdf-doc-value-cell pdf-doc-area-rlval">${escHtml(formRevLevel)}</div>
           </div>
         </div>
 
