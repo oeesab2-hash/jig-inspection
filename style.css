@@ -1641,8 +1641,7 @@ h1, h2, h3, h4, label, button, input, select, textarea, p, span, div {
 /* ─── HEADER BLOCK ──────────────────────────────────────── */
 .pdf-header-block {
   display: grid;
-  grid-template-columns: 90px 1fr 268px;
-  align-items: stretch;
+  grid-template-columns: 90px 1fr 200px;
   border-bottom: 2px solid #1e3a5f;
 }
 .pdf-header-logo-cell {
@@ -1661,49 +1660,16 @@ h1, h2, h3, h4, label, button, input, select, textarea, p, span, div {
 .pdf-title { font-size: 16px; font-weight: 800; color: #111827; }
 .pdf-subtitle { font-size: 10px; color: #374151; margin-top: 2px; }
 .pdf-header-doc-cell {
-  display: grid;
-  grid-template-columns: 38px 38px minmax(0, 1fr) 38px;
-  grid-template-rows: auto 1fr;
-  grid-template-areas:
-    "rdlbl rnlbl doc rllbl"
-    "rdval rnval doc rlval";
-  font-size: 8px;
-  min-width: 0;
-  overflow: hidden;
+  display: grid; grid-template-rows: repeat(5, 1fr);
+  font-size: 9.5px;
 }
-.pdf-doc-area-rdlbl { grid-area: rdlbl; }
-.pdf-doc-area-rnlbl { grid-area: rnlbl; }
-.pdf-doc-area-doc   { grid-area: doc; min-width: 0; }
-.pdf-doc-area-rllbl { grid-area: rllbl; }
-.pdf-doc-area-rdval { grid-area: rdval; }
-.pdf-doc-area-rnval { grid-area: rnval; }
-.pdf-doc-area-rlval { grid-area: rlval; }
-
-.pdf-doc-th {
-  display: flex; align-items: center; justify-content: center; text-align: center;
-  border-left: 1px solid #d1d5db; border-bottom: 1px solid #1e3a5f;
-  padding: 3px 1px; color: #1e3a5f; font-weight: 700; font-size: 7px;
-  line-height: 1.1; white-space: nowrap; overflow: hidden;
+.pdf-doc-row {
+  display: flex; align-items: center;
+  border-bottom: 1px solid #d1d5db; padding: 3px 8px; gap: 4px;
 }
-.pdf-doc-value-cell {
-  display: flex; align-items: center; justify-content: center; text-align: center;
-  border-left: 1px solid #d1d5db;
-  padding: 3px 1px; color: #111827; font-weight: 700;
-  font-family: 'Outfit', monospace; font-size: 8px;
-  white-space: nowrap; overflow: hidden;
-}
-.pdf-doc-info {
-  border-left: 1px solid #d1d5db; border-bottom: 1px solid #1e3a5f;
-  display: flex; flex-direction: column; justify-content: center;
-  padding: 3px 8px; gap: 1.5px;
-  min-width: 0;
-}
-.pdf-doc-info-row {
-  display: flex; align-items: baseline; gap: 4px;
-  white-space: nowrap;
-}
-.pdf-doc-info-label { color: #6b7280; font-weight: 600; min-width: 58px; font-size: 7.5px; flex-shrink: 0; }
-.pdf-doc-info-value { color: #111827; font-weight: 700; font-family: 'Outfit', monospace; font-size: 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.pdf-doc-row:last-child { border-bottom: none; }
+.pdf-doc-label { color: #6b7280; min-width: 52px; font-weight: 600; }
+.pdf-doc-value { color: #111827; font-weight: 700; font-family: 'Outfit', monospace; font-size: 9px; }
 
 /* ─── TRACEABILITY / META ROW ───────────────────────────── */
 .pdf-meta-block {
