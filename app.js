@@ -346,6 +346,11 @@
       clearTimeout(historyTimer);
       historyTimer = setTimeout(refreshHistory, 700);
     });
+    let lineLayoutTimer = null;
+    ch.on('postgres_changes', { event: '*', schema: 'public', table: 'line_layout' }, () => {
+      clearTimeout(lineLayoutTimer);
+      lineLayoutTimer = setTimeout(pullLineLayoutFromSupabase, 700);
+    });
     ch.subscribe();
   }
 
@@ -475,6 +480,45 @@
       toast(`บันทึกไม่สำเร็จ: ${e.message || e.code || 'ดู Console (F12) เพื่อดูรายละเอียด'}`, 'ng');
     }
   }
+  // ── โหลด/บันทึก Layout สถานะ Line (รูปพื้นหลัง + ตำแหน่งจุด) ขึ้น Supabase — เห็นเหมือนกันทุกเครื่อง ──
+  // ตาราง: line_layout (แถวเดียว id=1) | RPC เขียน: save_line_layout (เช็ครหัสผ่าน Admin ฝั่ง DB)
+  async function pullLineLayoutFromSupabase() {
+    if (!sb) return;
+    try {
+      const { data, error } = await sb.from('line_layout').select('bg_image, points').eq('id', 1).maybeSingle();
+      if (error) throw error; // ตาราง line_layout ยังไม่มี (ยังไม่ได้รัน SQL migration) — ใช้ค่า default/cache local ต่อไป
+      if (data) {
+        lineLayout = { bgImage: data.bg_image || null, points: data.points || {} };
+        saveLineLayout(); // cache local ไว้ใช้ offline
+        renderLineStatusMap();
+      }
+    } catch (e) {
+      console.error('pullLineLayoutFromSupabase error (ตรวจสอบว่ารัน SQL migration line_layout แล้วหรือยัง):', e);
+    }
+  }
+  async function pushLineLayoutToSupabase() {
+    if (!sb) { toast('ไม่ได้เชื่อมต่อ Supabase — บันทึกแค่ในเครื่องนี้', 'ng'); return; }
+    const pass = getAdminPass();
+    if (!pass) { toast('ต้องกรอกรหัสผ่าน Admin เพื่อบันทึก', 'ng'); return; }
+    try {
+      const { data: ok, error } = await sb.rpc('save_line_layout', {
+        p_password: pass,
+        p_bg_image: lineLayout.bgImage || null,
+        p_points: lineLayout.points || {},
+      });
+      if (error) throw error;
+      if (!ok) {
+        _adminSessionPass = null;
+        toast('รหัสผ่าน Admin ไม่ถูกต้อง — บันทึกขึ้น Supabase ไม่สำเร็จ', 'ng');
+        return;
+      }
+      toast('✅ บันทึก Layout ขึ้นระบบกลางสำเร็จ — เห็นเหมือนกันทุกเครื่อง', 'ok');
+    } catch (e) {
+      console.error('pushLineLayoutToSupabase error:', e);
+      toast(`บันทึกขึ้น Supabase ไม่สำเร็จ: ${e.message || e.code || 'ดู Console (F12) เพื่อดูรายละเอียด — อาจยังไม่ได้รัน SQL migration'}`, 'ng');
+    }
+  }
+
   function renderAppSettingsForm() {
     const docEl = $('adm-doc-no'), formRevEl = $('adm-form-rev-level'), revEl = $('adm-rev-level'), revDateEl = $('adm-rev-date'), issueEl = $('adm-issue-date');
     if (docEl) docEl.value = appSettings.docNo || '';
@@ -794,6 +838,8 @@
   ══════════════════════════════════════ */
   async function init() {
     ensureLocalAdminPassBootstrap();
+    loadLineLayout();
+    pullLineLayoutFromSupabase(); // ดึง Layout ล่าสุดจากระบบกลาง (ถ้ามี) — ไม่บล็อกหน้าจอ ใช้ cache local รอไปก่อน
 
     // ─── ตรวจสอบ GPS Status ───
     await checkGPSStatusOnLoad();
@@ -3665,6 +3711,7 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
 
     bindTabNav();
     bindDashboard();
+    bindLineStatusLayout();
     bindAiPanel();
     startDashClock();
     initPanelResize();
@@ -3758,6 +3805,178 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
     });
   }
 
+  /* ══════════════════════════════════════
+     LINE STATUS LAYOUT — สถานะ Line วันนี้ (จุด check jig บน layout ที่ลากเองได้)
+     ⚠️ เก็บไว้ local เท่านั้น (ไม่ sync ขึ้น Supabase) — ตำแหน่งจุด + รูป layout จะอยู่เฉพาะเครื่องนี้
+     สี: เทา = ยังไม่ตรวจวันนี้ | เขียว = ตรวจแล้วปกติ | แดง = พบ NG (คำนวณจากวันที่ "วันนี้" เท่านั้น รีเซ็ตทุกเช้า)
+  ══════════════════════════════════════ */
+  const LINE_LAYOUT_KEY = 'jig_line_layout_v1';
+  let lineLayout = { bgImage: null, points: {} }; // points: { [lineId]: {x,y} }
+  let lineLayoutEditMode = false;
+
+  function loadLineLayout() {
+    try {
+      const raw = localStorage.getItem(LINE_LAYOUT_KEY);
+      const parsed = raw ? JSON.parse(raw) : null;
+      lineLayout = (parsed && typeof parsed === 'object')
+        ? { bgImage: parsed.bgImage || null, points: parsed.points || {} }
+        : { bgImage: null, points: {} };
+    } catch (e) { lineLayout = { bgImage: null, points: {} }; }
+  }
+  function saveLineLayout() {
+    try { localStorage.setItem(LINE_LAYOUT_KEY, JSON.stringify(lineLayout)); }
+    catch (e) { console.error('saveLineLayout error:', e); }
+  }
+
+  /* คำนวณสถานะแต่ละ Line จากประวัติ "วันนี้" เท่านั้น (รวมทุก JIG ในไลน์) */
+  function computeLineStatusToday() {
+    const todayStr = new Date().toISOString().slice(0, 10);
+    const hist = loadHistory();
+    const map = {}; // lineId -> 'ok' | 'ng'
+    hist.forEach(r => {
+      if (r.date !== todayStr || !r.lineId) return;
+      if (map[r.lineId] === 'ng') return; // เคยพบ NG แล้ว คงสถานะแดงไว้
+      const hasNg = (r.items || []).some(i => i.status === 'ng');
+      map[r.lineId] = hasNg ? 'ng' : 'ok';
+    });
+    return map;
+  }
+
+  /* จัดตำแหน่งเริ่มต้น (เรียงเป็นตาราง) ให้ Line ที่ยังไม่เคยกำหนดตำแหน่งบน Layout
+     และล้างตำแหน่งของ Line ที่ถูกลบไปแล้วออกจาก layout */
+  function ensureLineLayoutDefaults() {
+    const cols = 5, spacingX = 100, spacingY = 90, startX = 70, startY = 70;
+    let idx = Object.keys(lineLayout.points).length;
+    let changed = false;
+    catalog.lines.forEach(l => {
+      if (!lineLayout.points[l.id]) {
+        const col = idx % cols, row = Math.floor(idx / cols);
+        lineLayout.points[l.id] = { x: startX + col * spacingX, y: startY + row * spacingY };
+        idx++; changed = true;
+      }
+    });
+    Object.keys(lineLayout.points).forEach(lid => {
+      if (!catalog.lines.some(l => l.id === lid)) { delete lineLayout.points[lid]; changed = true; }
+    });
+    if (changed) saveLineLayout();
+  }
+
+  function renderLineStatusMap() {
+    if (!$('line-status-map')) return; // กันพัง ถ้ายังไม่ได้ render DOM (เช่นตอน login ยังไม่เสร็จ)
+    ensureLineLayoutDefaults();
+
+    const bgImg = $('line-layout-bg-image');
+    if (lineLayout.bgImage) { bgImg.setAttribute('href', lineLayout.bgImage); bgImg.style.display = ''; }
+    else { bgImg.style.display = 'none'; }
+
+    const statusMap = computeLineStatusToday();
+    const group = $('line-status-points-group');
+    group.innerHTML = catalog.lines.map(l => {
+      const pos = lineLayout.points[l.id] || { x: 70, y: 70 };
+      const status = statusMap[l.id]; // undefined | 'ok' | 'ng'
+      const statusClass = status === 'ng' ? 'status-ng' : status === 'ok' ? 'status-ok' : '';
+      const dragClass = lineLayoutEditMode ? 'cp-drag-pt' : '';
+      const name = l.name || l.id;
+      const shortName = name.length > 12 ? name.slice(0, 11) + '…' : name;
+      const statusLabel = status === 'ng' ? 'พบ NG' : status === 'ok' ? 'ตรวจแล้ว ปกติ' : 'ยังไม่ตรวจวันนี้';
+      return `
+        <g class="svg-pt line-status-pt ${statusClass} ${dragClass}" data-line-id="${escHtml(l.id)}" transform="translate(${pos.x},${pos.y})">
+          <title>${escHtml(name)} — ${statusLabel}</title>
+          <rect class="pt-name-bg" x="-38" y="16" width="76" height="15" rx="4"/>
+          <text class="pt-name-label" y="27">${escHtml(shortName)}</text>
+          <circle class="pt-pulse" r="14"/><circle class="pt-core" r="8"/>
+        </g>`;
+    }).join('');
+
+    if (lineLayoutEditMode) bindLineLayoutDrag();
+  }
+
+  /* ── ลากจุด Line เพื่อจัดตำแหน่งบน Layout (Pointer Events) — ใช้เฉพาะตอน edit mode ── */
+  function bindLineLayoutDrag() {
+    const svg = $('line-status-map');
+    svg.querySelectorAll('.cp-drag-pt').forEach(g => {
+      g.addEventListener('pointerdown', e => {
+        e.preventDefault();
+        g.setPointerCapture(e.pointerId);
+        g.classList.add('dragging');
+        let lastX = null, lastY = null;
+
+        const toSvgPoint = ev => {
+          const pt = svg.createSVGPoint();
+          pt.x = ev.clientX; pt.y = ev.clientY;
+          const loc = pt.matrixTransform(svg.getScreenCTM().inverse());
+          return {
+            x: Math.max(10, Math.min(590, Math.round(loc.x))),
+            y: Math.max(10, Math.min(310, Math.round(loc.y)))
+          };
+        };
+        const onMove = ev => {
+          const { x, y } = toSvgPoint(ev);
+          g.setAttribute('transform', `translate(${x},${y})`);
+          lastX = x; lastY = y;
+        };
+        const onUp = () => {
+          svg.removeEventListener('pointermove', onMove);
+          svg.removeEventListener('pointerup', onUp);
+          g.classList.remove('dragging');
+          if (lastX !== null) {
+            lineLayout.points[g.dataset.lineId] = { x: lastX, y: lastY };
+          }
+        };
+        svg.addEventListener('pointermove', onMove);
+        svg.addEventListener('pointerup', onUp);
+      });
+    });
+  }
+
+  function setLineLayoutEditMode(on) {
+    lineLayoutEditMode = on;
+    $('line-layout-upload-label').classList.toggle('hidden', !on);
+    $('btn-line-layout-bg-remove').classList.toggle('hidden', !on || !lineLayout.bgImage);
+    $('btn-line-layout-save').classList.toggle('hidden', !on);
+    $('btn-line-layout-done').classList.toggle('hidden', !on);
+    $('btn-line-layout-edit').classList.toggle('hidden', on);
+    $('line-layout-hint').classList.toggle('hidden', !on);
+    renderLineStatusMap();
+  }
+
+  function bindLineStatusLayout() {
+    $('btn-line-layout-edit').addEventListener('click', () => {
+      const pass = getAdminPass(); // ขอรหัสผ่าน Admin ก่อนอนุญาตให้แก้ไข Layout (กันแก้เผลอ)
+      if (!pass) return;
+      setLineLayoutEditMode(true);
+    });
+    $('btn-line-layout-done').addEventListener('click', () => setLineLayoutEditMode(false));
+    $('btn-line-layout-save').addEventListener('click', () => {
+      saveLineLayout(); // cache local ไว้ก่อนเสมอ (ใช้ได้ offline)
+      pushLineLayoutToSupabase(); // แล้ว sync ขึ้นระบบกลางให้ทุกเครื่องเห็นเหมือนกัน
+    });
+    $('line-layout-bg-input').addEventListener('change', async e => {
+      const file = e.target.files[0];
+      if (!file) return;
+      try {
+        const dataUrl = await resizeImageToDataURL(file, 1200, 0.75);
+        lineLayout.bgImage = dataUrl;
+        saveLineLayout();
+        $('btn-line-layout-bg-remove').classList.remove('hidden');
+        renderLineStatusMap();
+        toast('อัปโหลดรูป Layout สำเร็จ — กำลังบันทึกขึ้นระบบกลาง...', 'ok');
+        pushLineLayoutToSupabase();
+      } catch (err) {
+        toast('อัปโหลดรูปไม่สำเร็จ', 'ng');
+      }
+      e.target.value = '';
+    });
+    $('btn-line-layout-bg-remove').addEventListener('click', () => {
+      if (!confirm('ลบรูปพื้นหลัง Layout นี้?')) return;
+      lineLayout.bgImage = null;
+      saveLineLayout();
+      $('btn-line-layout-bg-remove').classList.add('hidden');
+      renderLineStatusMap();
+      pushLineLayoutToSupabase();
+    });
+  }
+
   /* สร้าง options ของ dropdown Line จาก catalog ทั้งหมด (ไม่ใช่แค่ Line ที่มีข้อมูลตรวจแล้ว
      เพื่อให้เลือกดู Line ที่ยังไม่เคยตรวจได้ด้วย — เห็นชัดว่า "ยังไม่มีข้อมูล") */
   function populateDashLineOptions() {
@@ -3777,6 +3996,7 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
     const allHist = loadHistory();
     populateDashMonthOptions(allHist);
     populateDashLineOptions();
+    renderLineStatusMap();
     let hist = dashMonthFilter === 'all'
       ? allHist
       : allHist.filter(h => (h.date || '').slice(0, 7) === dashMonthFilter);
