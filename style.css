@@ -461,7 +461,7 @@ h1, h2, h3, h4, label, button, input, select, textarea, p, span, div {
   background: var(--svg-base-bg); border: 1px solid var(--svg-border);
   position: relative; margin-bottom: 6px;
 }
-.cp-map-wrap svg { display: block; width: 100%; height: auto; touch-action: none; }
+.cp-map-wrap > svg { display: block; width: 100%; height: auto; touch-action: none; }
 .cp-map-hint {
   position: absolute; bottom: 6px; right: 10px; font-size: 10px;
   color: var(--text-muted); background: var(--bg-card); padding: 2px 8px;
