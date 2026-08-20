@@ -1150,12 +1150,53 @@ h1, h2, h3, h4, label, button, input, select, textarea, p, span, div {
 .hist-stat.ng  .n { color: var(--ng); }
 .hist-stat.all .n { color: var(--accent); }
 
+.hist-select-row {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 8px; padding: 0 2px;
+}
+.hist-select-all {
+  display: flex; align-items: center; gap: 6px;
+  font-size: 12px; color: var(--text-muted); cursor: pointer;
+  font-family: var(--font-thai);
+}
+.hist-select-all input { width: 15px; height: 15px; cursor: pointer; accent-color: var(--accent); }
+.hist-select-count { font-size: 11px; color: var(--accent); font-weight: 600; }
+
 .history-item {
-  padding: 12px; border: 1px solid var(--border-card);
+  padding: 12px; padding-left: 34px; position: relative;
+  border: 1px solid var(--border-card);
   border-radius: 10px; margin-bottom: 8px;
-  background: var(--bg-card); transition: border-color 0.2s;
+  background: var(--bg-card); transition: border-color 0.2s, background 0.2s;
 }
 .history-item:hover { border-color: var(--accent); }
+.history-item.sel { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 6%, var(--bg-card)); }
+.hi-select-wrap { position: absolute; top: 12px; left: 10px; }
+.hi-select-cb { width: 16px; height: 16px; cursor: pointer; accent-color: var(--accent); }
+.badge.protected { background: var(--accent); color: #fff; }
+
+/* ── Sticky bulk-action bar ── */
+.hist-bulk-bar {
+  position: sticky; bottom: 0; left: 0; right: 0;
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 8px; flex-wrap: wrap;
+  background: var(--bg-card); border-top: 1px solid var(--border-card);
+  border-radius: 10px 10px 0 0; box-shadow: 0 -4px 12px rgba(0,0,0,0.08);
+  padding: 10px 12px; margin-top: 8px;
+}
+.hist-bulk-bar.hidden { display: none; }
+.hist-bulk-count { font-size: 12px; font-weight: 600; color: var(--text-main); font-family: var(--font-thai); }
+.hist-bulk-actions { display: flex; gap: 6px; flex-wrap: wrap; }
+.hi-bulk-btn {
+  padding: 6px 10px; border-radius: 6px;
+  border: 1px solid var(--border-input);
+  background: var(--bg-input); color: var(--text-main);
+  font-size: 12px; cursor: pointer; font-family: var(--font-thai);
+  display: inline-flex; align-items: center; gap: 4px;
+  transition: all 0.2s;
+}
+.hi-bulk-btn:hover { border-color: var(--accent); color: var(--accent); }
+.hi-bulk-btn.del { color: var(--ng); border-color: var(--ng-border); }
+.hi-bulk-btn.del:hover { background: var(--ng-bg); }
 .hi-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
 .hi-meta { font-size: 12px; color: var(--text-muted); }
 .hi-meta strong { color: var(--text-main); }
