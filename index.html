@@ -318,7 +318,7 @@
   <!-- ─── VIEW: DASHBOARD ─── -->
   <div id="view-dashboard" class="hidden">
 
-    <!-- ─── สถานะ Line วันนี้ (Layout จุด check jig) — read-only, แก้ไข Layout ได้ที่ Admin Panel เท่านั้น ─── -->
+    <!-- ─── สถานะ Line วันนี้ — read-only, แก้ไข Layout ได้ที่ Admin Panel เท่านั้น ─── -->
     <div class="glass-card" style="margin-bottom:16px;">
       <div class="card-header-flex">
         <h2 class="card-title"><span class="title-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="10" rx="2"/><circle cx="12" cy="7" r="4"/></svg></span> สถานะ Line วันนี้</h2>
@@ -329,21 +329,45 @@
         </span>
       </div>
 
-      <div class="cp-map-wrap">
-        <svg id="line-status-map" viewBox="0 0 600 340" preserveAspectRatio="xMidYMid meet">
-          <defs>
-            <clipPath id="map-clip-line"><rect x="20" y="30" width="560" height="280" rx="12"/></clipPath>
-            <pattern id="line-grid" width="20" height="20" patternUnits="userSpaceOnUse">
-              <path d="M 20 0 L 0 0 0 20" fill="none" stroke="var(--svg-border)" stroke-width="0.5"/>
-            </pattern>
-          </defs>
-          <rect x="20" y="30" width="560" height="280" rx="12" fill="var(--svg-base-bg)" stroke="var(--svg-border)" stroke-width="1.5"/>
-          <rect x="20" y="30" width="560" height="280" rx="12" fill="url(#line-grid)" id="line-layout-grid-bg"/>
-          <image id="line-layout-bg-image" x="20" y="30" width="560" height="280" preserveAspectRatio="xMidYMid slice" clip-path="url(#map-clip-line)" style="display:none" href=""/>
-          <g id="line-status-points-group"></g>
-        </svg>
+      <div class="line-view-toolbar">
+        <div class="line-view-switch" id="line-view-switch">
+          <button class="lvs-btn active" data-view="layout" id="btn-line-view-layout">
+            <svg class="inline-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg> Layout
+          </button>
+          <button class="lvs-btn" data-view="list" id="btn-line-view-list">
+            <svg class="inline-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg> รายการ
+          </button>
+        </div>
+        <div class="jig-search-wrap line-search-wrap hidden" id="line-search-wrap">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          <input type="text" class="jig-search-input" id="line-search-input" placeholder="ค้นหาชื่อ Line...">
+          <button class="jig-search-clear hidden" id="line-search-clear">✕</button>
+        </div>
       </div>
-      <p style="font-size:11px; color:var(--text-muted); margin:8px 0 0;">แก้ไขรูป Layout หรือตำแหน่งจุดได้ที่ Admin Panel &rarr; "จัดการ Layout สถานะ Line"</p>
+
+      <!-- โหมด Layout รูป -->
+      <div id="line-view-layout-wrap">
+        <div class="cp-map-wrap">
+          <svg id="line-status-map" viewBox="0 0 600 340" preserveAspectRatio="xMidYMid meet">
+            <defs>
+              <clipPath id="map-clip-line"><rect x="20" y="30" width="560" height="280" rx="12"/></clipPath>
+              <pattern id="line-grid" width="20" height="20" patternUnits="userSpaceOnUse">
+                <path d="M 20 0 L 0 0 0 20" fill="none" stroke="var(--svg-border)" stroke-width="0.5"/>
+              </pattern>
+            </defs>
+            <rect x="20" y="30" width="560" height="280" rx="12" fill="var(--svg-base-bg)" stroke="var(--svg-border)" stroke-width="1.5"/>
+            <rect x="20" y="30" width="560" height="280" rx="12" fill="url(#line-grid)" id="line-layout-grid-bg"/>
+            <image id="line-layout-bg-image" x="20" y="30" width="560" height="280" preserveAspectRatio="xMidYMid slice" clip-path="url(#map-clip-line)" style="display:none" href=""/>
+            <g id="line-status-points-group"></g>
+          </svg>
+        </div>
+        <p style="font-size:11px; color:var(--text-muted); margin:8px 0 0;">แก้ไขรูป Layout หรือตำแหน่งจุดได้ที่ Admin Panel &rarr; "จัดการ Layout สถานะ Line"</p>
+      </div>
+
+      <!-- โหมดรายการ (Grid) — จัดกลุ่มตามแผนก เหมาะกับ Line จำนวนมาก -->
+      <div id="line-view-list-wrap" class="hidden">
+        <div id="line-status-list"></div>
+      </div>
     </div>
 
     <!-- Month filter + Line filter + live clock -->

@@ -534,6 +534,66 @@ h1, h2, h3, h4, label, button, input, select, textarea, p, span, div {
 }
 .line-status-pt.status-ok .pt-core { animation: none; }
 
+/* View toggle (Layout / รายการ) */
+.line-view-toolbar {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+.line-view-switch {
+  display: inline-flex; padding: 3px; gap: 2px;
+  background: var(--bg-input); border: 1px solid var(--border-card);
+  border-radius: 10px; flex-shrink: 0;
+}
+.lvs-btn {
+  display: flex; align-items: center; gap: 5px;
+  padding: 6px 12px; font-size: 12.5px; font-weight: 600;
+  border: none; border-radius: 7px; background: transparent;
+  color: var(--text-muted); cursor: pointer; font-family: var(--font-thai);
+  transition: background 0.15s, color 0.15s;
+}
+.lvs-btn:hover { color: var(--text-main); }
+.lvs-btn.active { background: var(--accent); color: #fff; }
+.line-search-wrap { flex: 1; min-width: 160px; margin-bottom: 0; }
+
+/* Grid/List view — จัดกลุ่มตามแผนก */
+.line-status-dept-group { margin-bottom: 16px; }
+.line-status-dept-group:last-child { margin-bottom: 0; }
+.line-status-dept-title {
+  font-size: 12.5px; font-weight: 700; color: var(--text-muted);
+  text-transform: uppercase; letter-spacing: 0.3px;
+  margin: 0 0 8px; padding-left: 2px;
+}
+.line-status-grid {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 8px;
+}
+.line-status-card {
+  display: flex; align-items: center; gap: 9px;
+  padding: 10px 12px; border-radius: 11px;
+  background: var(--bg-card); border: 1px solid var(--border-card);
+  transition: transform 0.15s, box-shadow 0.15s;
+}
+.line-status-card:hover { transform: translateY(-1px); box-shadow: 0 4px 14px hsla(0,0%,0%,0.18); }
+.line-status-card.status-ok { border-color: var(--ok-border); background: var(--ok-bg); }
+.line-status-card.status-ng { border-color: var(--ng-border); background: var(--ng-bg); }
+.line-status-card-dot {
+  width: 13px; height: 13px; border-radius: 50%; flex-shrink: 0;
+  background: var(--pending);
+}
+.line-status-card.status-ok .line-status-card-dot { background: var(--ok); }
+.line-status-card.status-ng .line-status-card-dot {
+  background: var(--ng); animation: ngPulse 1.2s infinite;
+}
+.line-status-card-name {
+  font-size: 12.5px; font-weight: 600; color: var(--text-main);
+  line-height: 1.3; overflow: hidden; text-overflow: ellipsis;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+}
+.line-status-empty {
+  text-align: center; color: var(--text-muted); font-size: 13px;
+  padding: 24px 0;
+}
+
 /* Stats row */
 .stats-mini-row { display: grid; grid-template-columns: repeat(3,1fr); gap: 8px; margin-top: 10px; }
 .stat-mini {

@@ -3715,6 +3715,7 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
     bindTabNav();
     bindDashboard();
     bindLineStatusLayout();
+    bindLineDashView();
     bindAiPanel();
     startDashClock();
     initPanelResize();
@@ -3905,6 +3906,86 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
     if (removeBtn) removeBtn.classList.toggle('hidden', !lineLayout.bgImage);
   }
 
+  /* ══════════════════════════════════════
+     LINE STATUS — โหมดรายการ (Grid จัดกลุ่มตามแผนก)
+     เหมาะกับกรณี Line เยอะ (20+) ที่จุดบน Layout ซ้อนกันจนอ่านยาก
+  ══════════════════════════════════════ */
+  const LINE_VIEW_KEY = 'jig_line_dash_view_v1';
+  let lineDashViewMode = localStorage.getItem(LINE_VIEW_KEY) === 'list' ? 'list' : 'layout';
+  let lineSearchQuery = '';
+
+  function renderLineStatusList() {
+    const listEl = $('line-status-list');
+    if (!listEl) return;
+    const statusMap = computeLineStatusToday();
+    const q = lineSearchQuery.trim().toLowerCase();
+
+    const filtered = catalog.lines.filter(l => !q || (l.name || l.id).toLowerCase().includes(q));
+
+    if (!filtered.length) {
+      listEl.innerHTML = `<div class="line-status-empty">${q ? 'ไม่พบ Line ที่ค้นหา' : 'ยังไม่มี Line ในระบบ'}</div>`;
+      return;
+    }
+
+    // จัดกลุ่มตามแผนก แล้วเรียงชื่อ Line ในแต่ละกลุ่มตามตัวอักษร
+    const deptOrder = catalog.depts.map(d => d.id);
+    const groups = {}; // deptId -> [lines]
+    filtered.forEach(l => {
+      const key = l.deptId || '__none__';
+      (groups[key] = groups[key] || []).push(l);
+    });
+    Object.values(groups).forEach(arr => arr.sort((a, b) => (a.name || '').localeCompare(b.name || '', 'th')));
+
+    const orderedDeptIds = [...deptOrder.filter(id => groups[id]), ...Object.keys(groups).filter(id => !deptOrder.includes(id))];
+
+    listEl.innerHTML = orderedDeptIds.map(deptId => {
+      const dept = catalog.depts.find(d => d.id === deptId);
+      const deptName = dept ? dept.name : 'ไม่ระบุแผนก';
+      const cards = groups[deptId].map(l => {
+        const status = statusMap[l.id]; // undefined | 'ok' | 'ng'
+        const statusClass = status === 'ng' ? 'status-ng' : status === 'ok' ? 'status-ok' : '';
+        const statusLabel = status === 'ng' ? 'พบ NG' : status === 'ok' ? 'ตรวจแล้ว ปกติ' : 'ยังไม่ตรวจวันนี้';
+        return `
+          <div class="line-status-card ${statusClass}" title="${escHtml(l.name || l.id)} — ${statusLabel}">
+            <span class="line-status-card-dot"></span>
+            <span class="line-status-card-name">${escHtml(l.name || l.id)}</span>
+          </div>`;
+      }).join('');
+      return `
+        <div class="line-status-dept-group">
+          <div class="line-status-dept-title">${escHtml(deptName)} <span style="opacity:.6">(${groups[deptId].length})</span></div>
+          <div class="line-status-grid">${cards}</div>
+        </div>`;
+    }).join('');
+  }
+
+  function setLineDashViewMode(mode) {
+    lineDashViewMode = mode;
+    localStorage.setItem(LINE_VIEW_KEY, mode);
+    $('btn-line-view-layout').classList.toggle('active', mode === 'layout');
+    $('btn-line-view-list').classList.toggle('active', mode === 'list');
+    $('line-view-layout-wrap').classList.toggle('hidden', mode !== 'layout');
+    $('line-view-list-wrap').classList.toggle('hidden', mode !== 'list');
+    $('line-search-wrap').classList.toggle('hidden', mode !== 'list');
+  }
+
+  function bindLineDashView() {
+    setLineDashViewMode(lineDashViewMode); // ใช้ค่าที่จำไว้จากครั้งก่อน
+    $('btn-line-view-layout').addEventListener('click', () => setLineDashViewMode('layout'));
+    $('btn-line-view-list').addEventListener('click', () => setLineDashViewMode('list'));
+    $('line-search-input').addEventListener('input', e => {
+      lineSearchQuery = e.target.value;
+      $('line-search-clear').classList.toggle('hidden', !lineSearchQuery);
+      renderLineStatusList();
+    });
+    $('line-search-clear').addEventListener('click', () => {
+      lineSearchQuery = '';
+      $('line-search-input').value = '';
+      $('line-search-clear').classList.add('hidden');
+      renderLineStatusList();
+    });
+  }
+
   /* ── ลากจุด Line เพื่อจัดตำแหน่งบน Layout (Pointer Events) — ใช้เฉพาะแผนที่ที่ editable=true ── */
   function bindLineLayoutDrag(mapId) {
     const svg = $(mapId);
@@ -3997,6 +4078,7 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
     populateDashMonthOptions(allHist);
     populateDashLineOptions();
     renderLineStatusMap();
+    renderLineStatusList();
     let hist = dashMonthFilter === 'all'
       ? allHist
       : allHist.filter(h => (h.date || '').slice(0, 7) === dashMonthFilter);
