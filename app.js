@@ -3831,16 +3831,33 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
     catch (e) { console.error('saveLineLayout error:', e); }
   }
 
-  /* คำนวณสถานะแต่ละ Line จากประวัติ "วันนี้" เท่านั้น (รวมทุก JIG ในไลน์) */
+  /* คำนวณสถานะแต่ละ Line จากประวัติ "วันนี้" เท่านั้น
+     - ต้องตรวจครบทุก JIG ในไลน์นั้น (และไม่มี NG) ถึงจะเป็นสีเขียว
+     - ตรวจไปบางส่วนแล้ว (ไม่มี NG) = 'partial' (สีเหลือง/ส้ม)
+     - เจอ NG แม้แค่ JIG เดียว = แดงทันที ไม่ต้องรอครบ
+     - ยังไม่ตรวจเลยสักจุด = ไม่มี key ใน map (แสดงสีเทา) */
   function computeLineStatusToday() {
     const todayStr = new Date().toISOString().slice(0, 10);
     const hist = loadHistory();
-    const map = {}; // lineId -> 'ok' | 'ng'
+    const checkedJigsByLine = {}; // lineId -> Set(jigId)
+    const ngByLine = {}; // lineId -> true ถ้าเจอ NG อย่างน้อย 1 JIG
+
     hist.forEach(r => {
       if (r.date !== todayStr || !r.lineId) return;
-      if (map[r.lineId] === 'ng') return; // เคยพบ NG แล้ว คงสถานะแดงไว้
+      (checkedJigsByLine[r.lineId] = checkedJigsByLine[r.lineId] || new Set()).add(r.jigId);
       const hasNg = (r.items || []).some(i => i.status === 'ng');
-      map[r.lineId] = hasNg ? 'ng' : 'ok';
+      if (hasNg) ngByLine[r.lineId] = true;
+    });
+
+    const map = {}; // lineId -> { status: 'ok'|'ng'|'partial', checked, total }
+    Object.keys(checkedJigsByLine).forEach(lineId => {
+      const totalJigs = catalog.jigs.filter(j => j.lineId === lineId).length;
+      const checked = checkedJigsByLine[lineId].size;
+      let status;
+      if (ngByLine[lineId]) status = 'ng';
+      else if (totalJigs > 0 && checked >= totalJigs) status = 'ok';
+      else status = 'partial';
+      map[lineId] = { status, checked, total: totalJigs };
     });
     return map;
   }
@@ -3877,12 +3894,17 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
     const group = $(groupId);
     group.innerHTML = catalog.lines.map(l => {
       const pos = lineLayout.points[l.id] || { x: 70, y: 70 };
-      const status = statusMap[l.id]; // undefined | 'ok' | 'ng'
-      const statusClass = status === 'ng' ? 'status-ng' : status === 'ok' ? 'status-ok' : '';
+      const info = statusMap[l.id]; // undefined | { status: 'ok'|'ng'|'partial', checked, total }
+      const status = info ? info.status : undefined;
+      const statusClass = status === 'ng' ? 'status-ng' : status === 'ok' ? 'status-ok' : status === 'partial' ? 'status-partial' : '';
       const dragClass = editable ? 'cp-drag-pt' : '';
       const name = l.name || l.id;
       const shortName = name.length > 12 ? name.slice(0, 11) + '…' : name;
-      const statusLabel = status === 'ng' ? 'พบ NG' : status === 'ok' ? 'ตรวจแล้ว ปกติ' : 'ยังไม่ตรวจวันนี้';
+      const progress = info && info.total ? ` (${info.checked}/${info.total} JIG)` : '';
+      const statusLabel = status === 'ng' ? 'พบ NG' + progress
+        : status === 'ok' ? 'ตรวจแล้ว ครบทุก JIG'
+        : status === 'partial' ? 'กำลังตรวจ' + progress
+        : 'ยังไม่ตรวจวันนี้';
       return `
         <g class="svg-pt line-status-pt ${statusClass} ${dragClass}" data-line-id="${escHtml(l.id)}" transform="translate(${pos.x},${pos.y})">
           <title>${escHtml(name)} — ${statusLabel}</title>
@@ -3942,13 +3964,21 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
       const dept = catalog.depts.find(d => d.id === deptId);
       const deptName = dept ? dept.name : 'ไม่ระบุแผนก';
       const cards = groups[deptId].map(l => {
-        const status = statusMap[l.id]; // undefined | 'ok' | 'ng'
-        const statusClass = status === 'ng' ? 'status-ng' : status === 'ok' ? 'status-ok' : '';
-        const statusLabel = status === 'ng' ? 'พบ NG' : status === 'ok' ? 'ตรวจแล้ว ปกติ' : 'ยังไม่ตรวจวันนี้';
+        const info = statusMap[l.id]; // undefined | { status: 'ok'|'ng'|'partial', checked, total }
+        const status = info ? info.status : undefined;
+        const statusClass = status === 'ng' ? 'status-ng' : status === 'ok' ? 'status-ok' : status === 'partial' ? 'status-partial' : '';
+        const progress = info && info.total ? ` (${info.checked}/${info.total} JIG)` : '';
+        const statusLabel = status === 'ng' ? 'พบ NG' + progress
+          : status === 'ok' ? 'ตรวจแล้ว ครบทุก JIG'
+          : status === 'partial' ? 'กำลังตรวจ' + progress
+          : 'ยังไม่ตรวจวันนี้';
+        const progressBadge = (status === 'partial' || status === 'ng') && info && info.total
+          ? `<span class="line-status-card-progress">${info.checked}/${info.total}</span>` : '';
         return `
           <div class="line-status-card ${statusClass}" title="${escHtml(l.name || l.id)} — ${statusLabel}">
             <span class="line-status-card-dot"></span>
             <span class="line-status-card-name">${escHtml(l.name || l.id)}</span>
+            ${progressBadge}
           </div>`;
       }).join('');
       return `
