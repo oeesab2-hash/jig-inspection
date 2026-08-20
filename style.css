@@ -370,6 +370,32 @@ h1, h2, h3, h4, label, button, input, select, textarea, p, span, div {
   font-style: italic; padding: 4px 0;
 }
 
+/* JIG chip พร้อมปุ่มมาร์ค "ไม่ได้ผลิตวันนี้" */
+.chip.jig-chip { padding: 0; gap: 0; overflow: hidden; }
+.jig-chip-main {
+  display: flex; align-items: center; gap: 6px;
+  padding: 7px 6px 7px 14px; cursor: pointer; flex: 1; min-width: 0;
+}
+.jig-skip-toggle {
+  display: flex; align-items: center; justify-content: center;
+  width: 30px; align-self: stretch; flex-shrink: 0;
+  border: none; border-left: 1px solid var(--border-input);
+  background: transparent; color: var(--text-muted);
+  cursor: pointer; transition: background 0.15s, color 0.15s;
+}
+.jig-skip-toggle:hover { background: var(--chip-hover); color: var(--accent); }
+.chip.jig-chip.jig-skipped {
+  background: var(--pending-bg); border-style: dashed; opacity: 0.85;
+}
+.chip.jig-chip.jig-skipped .jig-chip-main { color: var(--text-muted); text-decoration: line-through; text-decoration-thickness: 1px; }
+.chip.jig-chip.jig-skipped .jig-skip-toggle { color: var(--fixed); border-left-color: var(--fixed-border); }
+.jig-skip-badge {
+  font-size: 9.5px; font-weight: 700; text-decoration: none;
+  color: var(--fixed); background: var(--fixed-bg);
+  border: 1px solid var(--fixed-border); border-radius: 6px;
+  padding: 1px 6px; margin-left: 2px; white-space: nowrap;
+}
+
 /* Selected JIG Banner */
 .selected-jig-banner {
   display: flex; align-items: center; gap: 12px;

@@ -351,6 +351,11 @@
       clearTimeout(lineLayoutTimer);
       lineLayoutTimer = setTimeout(pullLineLayoutFromSupabase, 700);
     });
+    let jigSkipsTimer = null;
+    ch.on('postgres_changes', { event: '*', schema: 'public', table: 'jig_skips' }, () => {
+      clearTimeout(jigSkipsTimer);
+      jigSkipsTimer = setTimeout(pullJigSkipsFromSupabase, 700);
+    });
     ch.subscribe();
   }
 
@@ -841,6 +846,7 @@
     ensureLocalAdminPassBootstrap();
     loadLineLayout();
     pullLineLayoutFromSupabase(); // ดึง Layout ล่าสุดจากระบบกลาง (ถ้ามี) — ไม่บล็อกหน้าจอ ใช้ cache local รอไปก่อน
+    pullJigSkipsFromSupabase(); // ดึงรายการ JIG ที่มาร์คไม่ได้ผลิตวันนี้
 
     // ─── ตรวจสอบ GPS Status ───
     await checkGPSStatusOnLoad();
@@ -955,13 +961,31 @@
 
     container.innerHTML = jigs.map(j => {
       const sel = selection.jigId === j.id ? 'selected' : '';
-      return `<button class="chip ${sel}" data-jig="${escHtml(j.id)}">
-        🔧 ${escHtml(j.name)}
-        <span class="chip-code">${escHtml(j.id)}</span>
-      </button>`;
+      const skipped = isJigSkippedToday(j.id);
+      return `
+        <div class="chip jig-chip ${sel} ${skipped ? 'jig-skipped' : ''}" data-jig="${escHtml(j.id)}">
+          <span class="jig-chip-main" data-jig="${escHtml(j.id)}">
+            🔧 ${escHtml(j.name)}
+            <span class="chip-code">${escHtml(j.id)}</span>
+            ${skipped ? '<span class="jig-skip-badge">ไม่ได้ผลิตวันนี้</span>' : ''}
+          </span>
+          <button type="button" class="jig-skip-toggle" data-jig="${escHtml(j.id)}" title="${skipped ? 'ยกเลิกมาร์ค (กลับมาผลิตแล้ว)' : 'มาร์คว่าวันนี้ไม่ได้ผลิต JIG นี้'}">
+            ${skipped
+              ? '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>'
+              : '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="10" y1="9" x2="10" y2="15"/><line x1="14" y1="9" x2="14" y2="15"/></svg>'}
+          </button>
+        </div>`;
     }).join('');
-    container.querySelectorAll('.chip').forEach(btn => {
-      btn.addEventListener('click', () => selectJig(btn.dataset.jig));
+    container.querySelectorAll('.jig-chip-main').forEach(el => {
+      el.addEventListener('click', () => selectJig(el.dataset.jig));
+    });
+    container.querySelectorAll('.jig-skip-toggle').forEach(btn => {
+      btn.addEventListener('click', e => {
+        e.stopPropagation();
+        const jigId = btn.dataset.jig;
+        if (isJigSkippedToday(jigId)) unmarkJigSkipToday(jigId);
+        else markJigSkipToday(jigId, selection.lineId);
+      });
     });
 
     // Update banner
@@ -3810,9 +3834,76 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
   }
 
   /* ══════════════════════════════════════
+     JIG SKIP — มาร์ค JIG ว่า "ไม่ได้ผลิตวันนี้" (ผู้ตรวจมาร์คเองได้ที่หน้าเลือก JIG)
+     ใช้ตัดออกจากตัวหารตอนคำนวณ % ตรวจครบของ Line — รีเซ็ตทุกเช้าอัตโนมัติ (เก็บแยกตามวันที่)
+  ══════════════════════════════════════ */
+  const JIG_SKIPS_KEY = 'jig_skips_v1';
+  const todayStr = () => new Date().toISOString().slice(0, 10);
+
+  function loadJigSkips() {
+    try { return JSON.parse(localStorage.getItem(JIG_SKIPS_KEY)) || []; }
+    catch (e) { return []; }
+  }
+  function saveJigSkips(arr) {
+    try { localStorage.setItem(JIG_SKIPS_KEY, JSON.stringify(arr)); }
+    catch (e) { console.error('saveJigSkips error:', e); }
+  }
+  function isJigSkippedToday(jigId) {
+    const t = todayStr();
+    return loadJigSkips().some(s => s.jigId === jigId && s.date === t);
+  }
+  // ── ดึงรายการ JIG ที่มาร์ค "ไม่ได้ผลิต" ของวันนี้ จาก Supabase ──
+  async function pullJigSkipsFromSupabase() {
+    if (!sb) return;
+    try {
+      const t = todayStr();
+      const { data, error } = await sb.from('jig_skips').select('jig_id, line_id, skip_date, marked_by, ts').eq('skip_date', t);
+      if (error) throw error; // ตาราง jig_skips ยังไม่มี (ยังไม่ได้รัน SQL migration) — ใช้ cache local ต่อไป
+      const arr = (data || []).map(r => ({ jigId: r.jig_id, lineId: r.line_id, date: r.skip_date, markedBy: r.marked_by, ts: r.ts }));
+      saveJigSkips(arr);
+      renderFilter(); renderLineStatusMap(); renderLineStatusList(); renderAdmLineLayoutMap();
+    } catch (e) {
+      console.error('pullJigSkipsFromSupabase error (ตรวจสอบว่ารัน SQL migration jig_skips แล้วหรือยัง):', e);
+    }
+  }
+  // ── มาร์ค/ยกเลิกมาร์ค JIG ว่าไม่ได้ผลิตวันนี้ (อัปเดต local ก่อนทันที แล้วค่อย sync ขึ้น Supabase) ──
+  async function markJigSkipToday(jigId, lineId) {
+    const t = todayStr();
+    const inspector = (currentAppUser && currentAppUser.full_name) || $('inp-inspector')?.value || 'ไม่ระบุชื่อ';
+    const entry = { jigId, lineId, date: t, markedBy: inspector, ts: new Date().toISOString() };
+    saveJigSkips([...loadJigSkips().filter(s => !(s.jigId === jigId && s.date === t)), entry]);
+    renderFilter(); renderLineStatusMap(); renderLineStatusList(); renderAdmLineLayoutMap();
+    toast(`มาร์ค "ไม่ได้ผลิตวันนี้" แล้ว`, 'ok');
+    if (!sb) return;
+    try {
+      const { error } = await sb.from('jig_skips').upsert(
+        { id: `${jigId}__${t}`, jig_id: jigId, line_id: lineId, skip_date: t, marked_by: inspector, ts: entry.ts },
+        { onConflict: 'id' }
+      );
+      if (error) throw error;
+    } catch (e) {
+      console.error('markJigSkipToday sync error:', e);
+      toast('บันทึกขึ้น Supabase ไม่สำเร็จ (บันทึกไว้ในเครื่องนี้ก่อนแล้ว)', 'ng');
+    }
+  }
+  async function unmarkJigSkipToday(jigId) {
+    const t = todayStr();
+    saveJigSkips(loadJigSkips().filter(s => !(s.jigId === jigId && s.date === t)));
+    renderFilter(); renderLineStatusMap(); renderLineStatusList(); renderAdmLineLayoutMap();
+    toast('ยกเลิกมาร์คแล้ว', 'ok');
+    if (!sb) return;
+    try {
+      const { error } = await sb.from('jig_skips').delete().eq('id', `${jigId}__${t}`);
+      if (error) throw error;
+    } catch (e) {
+      console.error('unmarkJigSkipToday sync error:', e);
+    }
+  }
+
+  /* ══════════════════════════════════════
      LINE STATUS LAYOUT — สถานะ Line วันนี้ (จุด check jig บน layout ที่ลากเองได้)
-     ⚠️ เก็บไว้ local เท่านั้น (ไม่ sync ขึ้น Supabase) — ตำแหน่งจุด + รูป layout จะอยู่เฉพาะเครื่องนี้
-     สี: เทา = ยังไม่ตรวจวันนี้ | เขียว = ตรวจแล้วปกติ | แดง = พบ NG (คำนวณจากวันที่ "วันนี้" เท่านั้น รีเซ็ตทุกเช้า)
+     ⚠️ ตำแหน่งจุด + รูป layout เก็บ local + sync ขึ้น Supabase (ดู pullLineLayoutFromSupabase/pushLineLayoutToSupabase)
+     สี: เทา = ยังไม่ตรวจวันนี้ | เหลือง = ตรวจบางส่วน | เขียว = ตรวจครบปกติ | แดง = พบ NG (คำนวณจากวันที่ "วันนี้" เท่านั้น รีเซ็ตทุกเช้า)
   ══════════════════════════════════════ */
   const LINE_LAYOUT_KEY = 'jig_line_layout_v1';
   let lineLayout = { bgImage: null, points: {} }; // points: { [lineId]: {x,y} }
@@ -3832,32 +3923,39 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
   }
 
   /* คำนวณสถานะแต่ละ Line จากประวัติ "วันนี้" เท่านั้น
-     - ต้องตรวจครบทุก JIG ในไลน์นั้น (และไม่มี NG) ถึงจะเป็นสีเขียว
+     - JIG ที่มาร์ค "ไม่ได้ผลิตวันนี้" จะถูกตัดออกจากตัวหาร (ไม่นับว่าต้องตรวจ)
+     - ต้องตรวจครบทุก JIG ที่เหลือ (และไม่มี NG) ถึงจะเป็นสีเขียว
      - ตรวจไปบางส่วนแล้ว (ไม่มี NG) = 'partial' (สีเหลือง/ส้ม)
      - เจอ NG แม้แค่ JIG เดียว = แดงทันที ไม่ต้องรอครบ
      - ยังไม่ตรวจเลยสักจุด = ไม่มี key ใน map (แสดงสีเทา) */
   function computeLineStatusToday() {
-    const todayStr = new Date().toISOString().slice(0, 10);
+    const t = todayStr();
     const hist = loadHistory();
+    const skippedJigIds = new Set(loadJigSkips().filter(s => s.date === t).map(s => s.jigId));
     const checkedJigsByLine = {}; // lineId -> Set(jigId)
     const ngByLine = {}; // lineId -> true ถ้าเจอ NG อย่างน้อย 1 JIG
 
     hist.forEach(r => {
-      if (r.date !== todayStr || !r.lineId) return;
+      if (r.date !== t || !r.lineId) return;
       (checkedJigsByLine[r.lineId] = checkedJigsByLine[r.lineId] || new Set()).add(r.jigId);
       const hasNg = (r.items || []).some(i => i.status === 'ng');
       if (hasNg) ngByLine[r.lineId] = true;
     });
 
-    const map = {}; // lineId -> { status: 'ok'|'ng'|'partial', checked, total }
-    Object.keys(checkedJigsByLine).forEach(lineId => {
-      const totalJigs = catalog.jigs.filter(j => j.lineId === lineId).length;
-      const checked = checkedJigsByLine[lineId].size;
+    const map = {}; // lineId -> { status: 'ok'|'ng'|'partial', checked, total, skipped }
+    catalog.lines.forEach(line => {
+      const lineId = line.id;
+      const lineJigs = catalog.jigs.filter(j => j.lineId === lineId);
+      const skippedCount = lineJigs.filter(j => skippedJigIds.has(j.id)).length;
+      const totalJigs = lineJigs.length - skippedCount; // ตัด JIG ที่ไม่ได้ผลิตออกจากตัวหาร
+      const checkedSet = checkedJigsByLine[lineId];
+      const checked = checkedSet ? checkedSet.size : 0;
+      if (!checkedSet && totalJigs > 0) return; // ยังไม่ตรวจเลยสักจุด และยังมีของต้องตรวจ — เว้นไว้ให้แสดงสีเทา
       let status;
       if (ngByLine[lineId]) status = 'ng';
-      else if (totalJigs > 0 && checked >= totalJigs) status = 'ok';
+      else if (totalJigs === 0 || checked >= totalJigs) status = 'ok'; // ไม่มีอะไรต้องตรวจ (ทุก JIG ไม่ได้ผลิต) ถือว่าครบ
       else status = 'partial';
-      map[lineId] = { status, checked, total: totalJigs };
+      map[lineId] = { status, checked, total: totalJigs, skipped: skippedCount };
     });
     return map;
   }
@@ -3901,9 +3999,10 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
       const name = l.name || l.id;
       const shortName = name.length > 12 ? name.slice(0, 11) + '…' : name;
       const progress = info && info.total ? ` (${info.checked}/${info.total} JIG)` : '';
-      const statusLabel = status === 'ng' ? 'พบ NG' + progress
-        : status === 'ok' ? 'ตรวจแล้ว ครบทุก JIG'
-        : status === 'partial' ? 'กำลังตรวจ' + progress
+      const skipNote = info && info.skipped ? ` [ข้าม ${info.skipped} ไม่ได้ผลิต]` : '';
+      const statusLabel = status === 'ng' ? 'พบ NG' + progress + skipNote
+        : status === 'ok' ? 'ตรวจแล้ว ครบทุก JIG' + skipNote
+        : status === 'partial' ? 'กำลังตรวจ' + progress + skipNote
         : 'ยังไม่ตรวจวันนี้';
       return `
         <g class="svg-pt line-status-pt ${statusClass} ${dragClass}" data-line-id="${escHtml(l.id)}" transform="translate(${pos.x},${pos.y})">
@@ -3968,9 +4067,10 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
         const status = info ? info.status : undefined;
         const statusClass = status === 'ng' ? 'status-ng' : status === 'ok' ? 'status-ok' : status === 'partial' ? 'status-partial' : '';
         const progress = info && info.total ? ` (${info.checked}/${info.total} JIG)` : '';
-        const statusLabel = status === 'ng' ? 'พบ NG' + progress
-          : status === 'ok' ? 'ตรวจแล้ว ครบทุก JIG'
-          : status === 'partial' ? 'กำลังตรวจ' + progress
+        const skipNote = info && info.skipped ? ` [ข้าม ${info.skipped} ไม่ได้ผลิต]` : '';
+        const statusLabel = status === 'ng' ? 'พบ NG' + progress + skipNote
+          : status === 'ok' ? 'ตรวจแล้ว ครบทุก JIG' + skipNote
+          : status === 'partial' ? 'กำลังตรวจ' + progress + skipNote
           : 'ยังไม่ตรวจวันนี้';
         const progressBadge = (status === 'partial' || status === 'ng') && info && info.total
           ? `<span class="line-status-card-progress">${info.checked}/${info.total}</span>` : '';
