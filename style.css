@@ -472,8 +472,6 @@ h1, h2, h3, h4, label, button, input, select, textarea, p, span, div {
 .svg-pt.status-ng .pt-core   { fill: var(--ng); }
 .svg-pt.status-fixed .pt-pulse { fill: var(--fixed-bg); stroke: var(--fixed); }
 .svg-pt.status-fixed .pt-core  { fill: var(--fixed); }
-.svg-pt.status-partial .pt-pulse { fill: var(--fixed-bg); stroke: var(--fixed); }
-.svg-pt.status-partial .pt-core  { fill: var(--fixed); }
 
 @keyframes ngPulse { 0%,100%{opacity:.5} 50%{opacity:1} }
 
@@ -551,36 +549,13 @@ h1, h2, h3, h4, label, button, input, select, textarea, p, span, div {
 .cp-drag-pt.dragging .pt-pulse { fill: var(--accent-dim); stroke: var(--accent); transform: scale(1.3); }
 .cp-drag-pt.dragging .pt-core  { fill: var(--accent); }
 
-/* ── Line Status Layout (Dashboard) ── */
+/* ── Line Status (Dashboard) ── */
 .line-status-legend { gap: 12px; flex-wrap: wrap; }
-.line-status-pt .pt-name-label {
-  text-anchor: middle; font-size: 10px; font-weight: 600;
-  fill: var(--text-main); font-family: var(--font-thai); pointer-events: none;
-}
-.line-status-pt .pt-name-bg {
-  fill: var(--bg-card); opacity: 0.82; pointer-events: none;
-}
-.line-status-pt.status-ok .pt-core { animation: none; }
 
-/* View toggle (Layout / รายการ) */
 .line-view-toolbar {
   display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
   margin-bottom: 12px;
 }
-.line-view-switch {
-  display: inline-flex; padding: 3px; gap: 2px;
-  background: var(--bg-input); border: 1px solid var(--border-card);
-  border-radius: 10px; flex-shrink: 0;
-}
-.lvs-btn {
-  display: flex; align-items: center; gap: 5px;
-  padding: 6px 12px; font-size: 12.5px; font-weight: 600;
-  border: none; border-radius: 7px; background: transparent;
-  color: var(--text-muted); cursor: pointer; font-family: var(--font-thai);
-  transition: background 0.15s, color 0.15s;
-}
-.lvs-btn:hover { color: var(--text-main); }
-.lvs-btn.active { background: var(--accent); color: #fff; }
 .line-search-wrap { flex: 1; min-width: 160px; margin-bottom: 0; }
 
 /* Grid/List view — จัดกลุ่มตามแผนก */
