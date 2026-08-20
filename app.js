@@ -2083,6 +2083,9 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
       localStorage.removeItem('jig_admin_user');
       closePanel('admin-panel');
       toast('ออกจากระบบเรียบร้อยแล้ว', 'ok');
+      // 🆕 เคลียร์การเลือกรายการ history ทันที เผื่อพนักงานคนถัดไปมาใช้เครื่องต่อ
+      _histSelected.clear();
+      if ($('history-panel').classList.contains('open')) populateHistoryPanel();
     });
 
     /* Change Pass — ต้องยืนยันรหัสเดิมก่อนเสมอ (ผ่าน RPC ฝั่ง DB) */
@@ -3035,7 +3038,19 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
   }
 
   // ── อัปเดตแถบเลือกทั้งหมด + bulk bar ให้ตรงกับ _histSelected ปัจจุบัน ──
+  // 🔒 ฟีเจอร์เลือกหลายรายการ/bulk action ทั้งหมด ใช้ได้เฉพาะตอน login เป็น Admin แล้วเท่านั้น
+  //    (พนักงานตรวจเช็คทั่วไปจะไม่เห็น checkbox/แถบนี้เลย กันกดพลาดข้อมูลหาย)
   function refreshSelectionUI(hist) {
+    const selectRow = $('hist-select-row');
+    const bar = $('hist-bulk-bar');
+
+    if (!admLoggedIn) {
+      selectRow.classList.add('hidden');
+      bar.classList.add('hidden');
+      return;
+    }
+
+    selectRow.classList.remove('hidden');
     const total = hist.length;
     const selInView = hist.filter(h => _histSelected.has(String(h.id))).length;
     const selAllCb = $('hf-select-all');
@@ -3043,7 +3058,6 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
     selAllCb.indeterminate = selInView > 0 && selInView < total;
     $('hist-select-count').textContent = _histSelected.size ? `เลือกอยู่ ${_histSelected.size} รายการ` : '';
 
-    const bar = $('hist-bulk-bar');
     if (_histSelected.size > 0) {
       bar.classList.remove('hidden');
       $('hist-bulk-count').textContent = `เลือกไว้ ${_histSelected.size} รายการ`;
@@ -3139,10 +3153,10 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
       }
       
       const isSel = _histSelected.has(String(h.id));
-      return `<div class="history-item ${isSel ? 'sel' : ''}" data-hist-id="${escHtml(h.id)}">
-        <div class="hi-select-wrap">
+      return `<div class="history-item ${isSel ? 'sel' : ''} ${admLoggedIn ? 'has-select' : ''}" data-hist-id="${escHtml(h.id)}">
+        ${admLoggedIn ? `<div class="hi-select-wrap">
           <input type="checkbox" class="hi-select-cb" data-sel="${escHtml(h.id)}" ${isSel ? 'checked' : ''}>
-        </div>
+        </div>` : ''}
         <div class="hi-path">${escHtml(h.deptName || '')}  ›  ${escHtml(h.lineName || '')}  ›  ${escHtml(h.jigName || '')}</div>
         <div class="hi-head">
           <div class="hi-meta"><strong>${escHtml(h.date)}</strong> เวลา: ${new Date(h.timestamp).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' })} · ${escHtml(h.shift)} · ผู้ตรวจ: ${escHtml(h.inspector)}</div>

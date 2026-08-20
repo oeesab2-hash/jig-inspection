@@ -1163,11 +1163,12 @@ h1, h2, h3, h4, label, button, input, select, textarea, p, span, div {
 .hist-select-count { font-size: 11px; color: var(--accent); font-weight: 600; }
 
 .history-item {
-  padding: 12px; padding-left: 34px; position: relative;
+  padding: 12px; position: relative;
   border: 1px solid var(--border-card);
   border-radius: 10px; margin-bottom: 8px;
   background: var(--bg-card); transition: border-color 0.2s, background 0.2s;
 }
+.history-item.has-select { padding-left: 34px; }
 .history-item:hover { border-color: var(--accent); }
 .history-item.sel { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 6%, var(--bg-card)); }
 .hi-select-wrap { position: absolute; top: 12px; left: 10px; }
