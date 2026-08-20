@@ -829,6 +829,7 @@
     bindHistoryPanel();
     bindPanelOverlay();
     subscribeRealtime();
+    restoreAutoSaveFolder(); // กู้ค่าโฟลเดอร์บันทึก PDF อัตโนมัติที่เคยตั้งไว้ (ถ้ามี)
   }
 
   /* ══════════════════════════════════════
@@ -2316,6 +2317,12 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
     });
     $('btn-export-excel').addEventListener('click', exportHistoryToExcel);
     $('btn-export-master-list').addEventListener('click', exportMasterListToExcel);
+    // 🆕 PDF Auto-Save Folder
+    if ($('btn-autosave-choose')) $('btn-autosave-choose').addEventListener('click', chooseAutoSaveFolder);
+    if ($('btn-autosave-confirm')) $('btn-autosave-confirm').addEventListener('click', reconfirmAutoSavePermission);
+    if ($('btn-autosave-clear')) $('btn-autosave-clear').addEventListener('click', () => {
+      if (confirm('ยกเลิกการตั้งค่าโฟลเดอร์บันทึก PDF อัตโนมัติหรือไม่? (PDF จะกลับไปดาวน์โหลดแบบปกติ)')) clearAutoSaveFolder();
+    });
     // 🆕 JIG Document-Control Modal — ปิด/บันทึก
     $('btn-jig-doc-modal-close').addEventListener('click', closeJigDocModal);
     $('jig-doc-modal').addEventListener('click', (e) => { if (e.target.id === 'jig-doc-modal') closeJigDocModal(); });
@@ -3384,6 +3391,169 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
   }
 
 
+  /* ══════════════════════════════════════
+     PDF AUTO-SAVE TO LOCAL FOLDER (File System Access API)
+     — เลือกโฟลเดอร์หลักครั้งเดียว ระบบจะสร้าง subfolder ตามชื่อ Line
+       ให้อัตโนมัติ (เช่น เลือก JIG ของ Line "Beam" → เซฟลง .../Beam/)
+       แล้วเซฟไฟล์ PDF ลงไปโดยไม่มี dialog ถามซ้ำอีกในครั้งถัดไป
+     — รองรับเฉพาะ Chrome / Edge (Chromium) บนคอมพิวเตอร์เท่านั้น
+       ถ้า browser ไม่รองรับ หรือยังไม่ได้ตั้งค่า จะ fallback ไปดาวน์โหลดไฟล์แบบปกติ
+  ══════════════════════════════════════ */
+  const AUTOSAVE_DB_NAME = 'jig-autosave-db';
+  const AUTOSAVE_STORE   = 'handles';
+  const AUTOSAVE_KEY     = 'pdf-root-dir';
+
+  let autosaveDirHandle = null; // cache ใน memory หลังได้รับสิทธิ์แล้ว
+
+  function autosaveSupported() {
+    return !!window.showDirectoryPicker;
+  }
+
+  function openAutosaveDB() {
+    return new Promise((resolve, reject) => {
+      const req = indexedDB.open(AUTOSAVE_DB_NAME, 1);
+      req.onupgradeneeded = () => req.result.createObjectStore(AUTOSAVE_STORE);
+      req.onsuccess = () => resolve(req.result);
+      req.onerror   = () => reject(req.error);
+    });
+  }
+  async function idbGet(key) {
+    const db = await openAutosaveDB();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction(AUTOSAVE_STORE, 'readonly');
+      const rq = tx.objectStore(AUTOSAVE_STORE).get(key);
+      rq.onsuccess = () => resolve(rq.result || null);
+      rq.onerror   = () => reject(rq.error);
+    });
+  }
+  async function idbSet(key, val) {
+    const db = await openAutosaveDB();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction(AUTOSAVE_STORE, 'readwrite');
+      tx.objectStore(AUTOSAVE_STORE).put(val, key);
+      tx.oncomplete = () => resolve();
+      tx.onerror    = () => reject(tx.error);
+    });
+  }
+  async function idbDel(key) {
+    const db = await openAutosaveDB();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction(AUTOSAVE_STORE, 'readwrite');
+      tx.objectStore(AUTOSAVE_STORE).delete(key);
+      tx.oncomplete = () => resolve();
+      tx.onerror    = () => reject(tx.error);
+    });
+  }
+
+  async function verifyDirPermission(handle, requestIfNeeded) {
+    const opts = { mode: 'readwrite' };
+    try {
+      let perm = await handle.queryPermission(opts);
+      if (perm === 'granted') return true;
+      if (perm === 'prompt' && requestIfNeeded) {
+        perm = await handle.requestPermission(opts); // ต้องเรียกจาก user gesture (คลิกปุ่ม) เท่านั้น
+        return perm === 'granted';
+      }
+      return false;
+    } catch (e) {
+      console.error('verifyDirPermission error:', e);
+      return false;
+    }
+  }
+
+  // กันชื่อโฟลเดอร์/ไฟล์มีอักขระที่ระบบไฟล์ไม่รับ (เช่น / \ : * ? " < > |)
+  function sanitizeFolderName(name) {
+    return (name || '').toString().trim()
+      .replace(/[\\/:*?"<>|]/g, '-')
+      .replace(/\s+/g, ' ')
+      .slice(0, 80) || 'ไม่ระบุไลน์';
+  }
+
+  async function chooseAutoSaveFolder() {
+    if (!autosaveSupported()) {
+      toast('เบราว์เซอร์นี้ไม่รองรับการเลือกโฟลเดอร์อัตโนมัติ — ใช้ได้เฉพาะ Chrome / Edge บนคอมพิวเตอร์เท่านั้น', 'ng');
+      return;
+    }
+    try {
+      const handle = await window.showDirectoryPicker({ mode: 'readwrite' });
+      const ok = await verifyDirPermission(handle, true);
+      if (!ok) { toast('ไม่ได้รับสิทธิ์เขียนไฟล์ในโฟลเดอร์ที่เลือก', 'ng'); return; }
+      autosaveDirHandle = handle;
+      await idbSet(AUTOSAVE_KEY, handle);
+      updateAutoSaveFolderUI();
+      toast(`✅ ตั้งค่าโฟลเดอร์บันทึก PDF อัตโนมัติแล้ว: "${handle.name}" (PDF จะแยกเก็บเป็น subfolder ตามชื่อ Line)`, 'ok');
+    } catch (e) {
+      if (e && e.name === 'AbortError') return; // ผู้ใช้กดยกเลิก dialog เฉยๆ
+      console.error('chooseAutoSaveFolder error:', e);
+      toast('เลือกโฟลเดอร์ไม่สำเร็จ: ' + (e.message || e), 'ng');
+    }
+  }
+
+  async function clearAutoSaveFolder() {
+    autosaveDirHandle = null;
+    try { await idbDel(AUTOSAVE_KEY); } catch (e) { /* ignore */ }
+    updateAutoSaveFolderUI();
+    toast('ยกเลิกการตั้งค่าโฟลเดอร์อัตโนมัติแล้ว — ต่อไปนี้ PDF จะดาวน์โหลดแบบปกติ', 'ok');
+  }
+
+  // เรียกตอนเปิดหน้าเว็บ — กู้ค่าโฟลเดอร์ที่เคยเลือกไว้จาก IndexedDB
+  // หมายเหตุ: requestPermission ต้องมาจาก user gesture เท่านั้น ตอนโหลดหน้าเว็บจึงทำได้แค่ "เช็คเงียบๆ"
+  // (queryPermission) — ถ้าสิทธิ์หลุด จะโชว์ปุ่มให้กดยืนยันอีกครั้ง
+  async function restoreAutoSaveFolder() {
+    if (!autosaveSupported()) return;
+    try {
+      const handle = await idbGet(AUTOSAVE_KEY);
+      if (!handle) { updateAutoSaveFolderUI(); return; }
+      autosaveDirHandle = handle;
+      const granted = await verifyDirPermission(handle, false);
+      updateAutoSaveFolderUI(granted ? 'ok' : 'needs-permission');
+    } catch (e) {
+      console.error('restoreAutoSaveFolder error:', e);
+      updateAutoSaveFolderUI();
+    }
+  }
+
+  async function reconfirmAutoSavePermission() {
+    if (!autosaveDirHandle) { chooseAutoSaveFolder(); return; }
+    const ok = await verifyDirPermission(autosaveDirHandle, true);
+    updateAutoSaveFolderUI(ok ? 'ok' : 'needs-permission');
+    toast(ok ? '✅ ยืนยันสิทธิ์เรียบร้อย — พร้อมบันทึก PDF อัตโนมัติ' : 'ยังไม่ได้รับสิทธิ์เขียนไฟล์ในโฟลเดอร์นี้', ok ? 'ok' : 'ng');
+  }
+
+  function updateAutoSaveFolderUI(status) {
+    const nameEl     = document.getElementById('autosave-folder-name');
+    const statusEl   = document.getElementById('autosave-folder-status');
+    const btnConfirm = document.getElementById('btn-autosave-confirm');
+    const btnClear   = document.getElementById('btn-autosave-clear');
+    if (!nameEl || !statusEl) return;
+    if (!autosaveDirHandle) {
+      nameEl.textContent = 'ยังไม่ได้ตั้งค่า';
+      statusEl.textContent = 'PDF จะดาวน์โหลดแบบปกติ (ยังไม่ auto-save)';
+      if (btnConfirm) btnConfirm.style.display = 'none';
+      if (btnClear)   btnClear.style.display   = 'none';
+      return;
+    }
+    nameEl.textContent = '📁 ' + autosaveDirHandle.name;
+    if (btnClear) btnClear.style.display = 'inline-flex';
+    if (status === 'needs-permission') {
+      statusEl.textContent = '⚠️ ต้องกดยืนยันสิทธิ์อีกครั้ง (browser รีเซ็ตสิทธิ์เมื่อเปิดแท็บ/รีสตาร์ท browser ใหม่)';
+      if (btnConfirm) btnConfirm.style.display = 'inline-flex';
+    } else {
+      statusEl.textContent = '✅ พร้อมใช้งาน — PDF จะถูกบันทึกลง subfolder ตามชื่อ Line อัตโนมัติ';
+      if (btnConfirm) btnConfirm.style.display = 'none';
+    }
+  }
+
+  async function saveFileToAutosaveFolder(rootHandle, subfolderName, filename, blob) {
+    const folderName  = sanitizeFolderName(subfolderName);
+    const subHandle   = await rootHandle.getDirectoryHandle(folderName, { create: true });
+    const fileHandle  = await subHandle.getFileHandle(filename, { create: true });
+    const writable    = await fileHandle.createWritable();
+    await writable.write(blob);
+    await writable.close();
+    return folderName;
+  }
+
   async function generatePdf(record) {
     if (!window.jspdf) { toast('jsPDF โหลดไม่สำเร็จ', 'ng'); return; }
     if (!window.html2canvas) { toast('html2canvas โหลดไม่สำเร็จ', 'ng'); return; }
@@ -3451,8 +3621,30 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
         heightLeft -= (pageH - margin * 2);
       }
 
-      doc.save(filename);
-      toast(`📄 PDF บันทึกสำเร็จ! (${filename})`, 'ok');
+      // ── บันทึกไฟล์: ถ้าตั้งค่าโฟลเดอร์อัตโนมัติไว้ (และได้สิทธิ์) จะเซฟลง subfolder
+      //    ตามชื่อ Line ให้เองแบบเงียบๆ ไม่มี dialog ถาม — ถ้าไม่ได้ตั้งค่า หรือเซฟอัตโนมัติ
+      //    ไม่สำเร็จ (เช่นสิทธิ์หลุด) จะ fallback ไปดาวน์โหลดไฟล์แบบปกติแทน
+      let autosaved = false;
+      if (autosaveDirHandle) {
+        try {
+          const permitted = await verifyDirPermission(autosaveDirHandle, true);
+          if (permitted) {
+            const pdfBlob    = doc.output('blob');
+            const folderUsed = await saveFileToAutosaveFolder(autosaveDirHandle, record.lineName, filename, pdfBlob);
+            autosaved = true;
+            toast(`📄 บันทึก PDF อัตโนมัติสำเร็จ → 📁 ${autosaveDirHandle.name}/${folderUsed}/${filename}`, 'ok');
+          } else {
+            updateAutoSaveFolderUI('needs-permission');
+          }
+        } catch (autoErr) {
+          console.error('autosave PDF error:', autoErr);
+          toast('บันทึกอัตโนมัติไม่สำเร็จ จะดาวน์โหลดไฟล์แทน: ' + (autoErr.message || autoErr), 'ng');
+        }
+      }
+      if (!autosaved) {
+        doc.save(filename);
+        toast(`📄 PDF บันทึกสำเร็จ! (${filename})`, 'ok');
+      }
     } catch (err) {
       console.error('generatePdf error:', err);
       toast('สร้าง PDF ไม่สำเร็จ: ' + (err.message || err), 'ng');

@@ -729,6 +729,23 @@
       <button id="btn-export-excel" class="btn-sec" style="width:100%; margin-top:8px;"><svg class="inline-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg> Export ประวัติการตรวจเป็น Excel (.xlsx)</button>
     </div>
 
+    <!-- 🆕 PDF Auto-Save Folder -->
+    <div class="admin-section">
+      <div class="admin-section-title"><svg class="inline-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg> บันทึก PDF อัตโนมัติลงโฟลเดอร์ในเครื่อง</div>
+      <div style="font-size:11px; color:var(--text-muted); margin-bottom:8px; line-height:1.5;">
+        เลือกโฟลเดอร์หลักในคอมพิวเตอร์ครั้งเดียว ระบบจะสร้าง subfolder ตามชื่อ Line ให้อัตโนมัติ (เช่น Line "Beam" → บันทึกลง <code>โฟลเดอร์ที่เลือก/Beam/</code>) แล้วเซฟไฟล์ PDF ลงไปทันทีที่กด Export โดยไม่มี dialog ถามซ้ำอีก<br>
+        <b>รองรับเฉพาะ Chrome / Edge บนคอมพิวเตอร์เท่านั้น</b> (มือถือ/Safari/Firefox จะดาวน์โหลดไฟล์แบบปกติ)
+      </div>
+      <div style="display:flex; align-items:center; gap:8px; font-size:12px; margin-bottom:8px;">
+        <span style="color:var(--text-muted)">โฟลเดอร์ปัจจุบัน:</span>
+        <strong id="autosave-folder-name">ยังไม่ได้ตั้งค่า</strong>
+      </div>
+      <div id="autosave-folder-status" style="font-size:11px; color:var(--text-muted); margin-bottom:8px;"></div>
+      <button id="btn-autosave-choose" class="btn-sec" style="width:100%;"><svg class="inline-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg> เลือกโฟลเดอร์บันทึก PDF อัตโนมัติ</button>
+      <button id="btn-autosave-confirm" class="btn-sec" style="width:100%; margin-top:8px; display:none;">🔓 ยืนยันสิทธิ์เขียนไฟล์อีกครั้ง</button>
+      <button id="btn-autosave-clear" class="btn-sec" style="width:100%; margin-top:8px; display:none;">🗑 ยกเลิกการบันทึกอัตโนมัติ</button>
+    </div>
+
 
 
     <!-- Sticky Save-All confirmation bar -->
