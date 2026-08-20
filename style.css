@@ -1175,17 +1175,24 @@ h1, h2, h3, h4, label, button, input, select, textarea, p, span, div {
 .hi-select-cb { width: 16px; height: 16px; cursor: pointer; accent-color: var(--accent); }
 .badge.protected { background: var(--accent); color: #fff; }
 
-/* ── Sticky bulk-action bar ── */
+/* ── Sticky bulk-action bar — อยู่ภายใน history-panel เอง (ไม่ล้นเต็มจอ) ── */
 .hist-bulk-bar {
   position: sticky; bottom: 0; left: 0; right: 0;
-  display: flex; align-items: center; justify-content: space-between;
-  gap: 8px; flex-wrap: wrap;
-  background: var(--bg-card); border-top: 1px solid var(--border-card);
-  border-radius: 10px 10px 0 0; box-shadow: 0 -4px 12px rgba(0,0,0,0.08);
-  padding: 10px 12px; margin-top: 8px;
+  display: flex; flex-direction: column; gap: 8px;
+  background: var(--bg-card); border: 1px solid var(--border-card);
+  border-radius: 12px; box-shadow: 0 -6px 20px hsla(0,0%,0%,0.12);
+  padding: 10px 12px; margin-top: 10px;
 }
 .hist-bulk-bar.hidden { display: none; }
+.hist-bulk-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .hist-bulk-count { font-size: 12px; font-weight: 600; color: var(--text-main); font-family: var(--font-thai); }
+.hi-bulk-clear-btn {
+  width: 22px; height: 22px; border-radius: 50%;
+  border: 1px solid var(--border-input); background: var(--bg-input);
+  color: var(--text-muted); font-size: 12px; line-height: 1; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+}
+.hi-bulk-clear-btn:hover { border-color: var(--ng); color: var(--ng); }
 .hist-bulk-actions { display: flex; gap: 6px; flex-wrap: wrap; }
 .hi-bulk-btn {
   padding: 6px 10px; border-radius: 6px;

@@ -3021,6 +3021,7 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
     $('btn-bulk-protect').addEventListener('click', () => bulkSetProtected(true));
     $('btn-bulk-unprotect').addEventListener('click', () => bulkSetProtected(false));
     $('btn-bulk-del').addEventListener('click', bulkDeleteSelected);
+    $('btn-bulk-clear').addEventListener('click', () => { _histSelected.clear(); populateHistoryPanel(); });
   }
 
   // ── ดึงประวัติตาม filter ปัจจุบัน (ใช้ร่วมกันระหว่าง populateHistoryPanel และ select-all) ──
