@@ -397,6 +397,9 @@
      STATE
   ══════════════════════════════════════ */
   let catalog = { depts: [], lines: [], jigs: [], templates: [] };
+  // 🆕 แยกสถานะ "กำลังโหลด" ออกจาก "โหลดเสร็จแล้วแต่ไม่มีข้อมูลจริงๆ" — กันไม่ให้ข้อความ
+  // "ยังไม่มีแผนก" ขึ้นพร่ำเพรื่อระหว่างรอข้อมูลจาก Supabase ตอนเปิดแอปครั้งแรก
+  let catalogLoading = true;
   // ── ค่ากลางทั้งระบบ (ตาม ISO — Doc No. ของแบบฟอร์มตรวจ JIG มีค่าเดียวทั้งบริษัท ไม่ผูกกับ JIG ตัวไหน) ──
   let appSettings = { docNo: 'DDM4-2-002', formRevLevel: 'Rev.01', revLevel: 'Rev.00', revDate: '', issueDate: '' };
   let selection = { deptId: null, lineId: null, jigId: null };
@@ -809,6 +812,7 @@
     if (remoteCat) localStorage.setItem(SK.catalog, JSON.stringify(remoteCat));
     if (remoteHist) localStorage.setItem(SK.history, JSON.stringify(remoteHist));
     loadCatalog();
+    catalogLoading = false; // ✅ ข้อมูลตั้งต้นพร้อมแล้ว (จาก Supabase หรือ cache local) — เลิกถือว่า "กำลังโหลด"
     loadAppSettings();               // ใช้ค่า cache/default ไปก่อนระหว่างรอ Supabase
     renderAppSettingsForm();
     pullAppSettingsFromSupabase();   // แล้วอัปเดตให้ล่าสุดทันทีที่ดึงเสร็จ (ไม่บล็อกหน้าจอ)
@@ -840,7 +844,9 @@
   function renderDeptChips() {
     const container = $('chips-dept');
     if (!catalog.depts.length) {
-      container.innerHTML = '<span class="chip-empty">ยังไม่มีแผนก — ไปที่ Admin Panel เพื่อเพิ่ม หรือกด "โหลดข้อมูลทดสอบ"</span>';
+      container.innerHTML = catalogLoading
+        ? '<span class="chip-loading"><span class="chip-loading-spinner"></span>กำลังโหลดข้อมูล...</span>'
+        : '<span class="chip-empty">ยังไม่มีแผนก — ไปที่ Admin Panel เพื่อเพิ่ม หรือกด "โหลดข้อมูลทดสอบ"</span>';
       return;
     }
     container.innerHTML = catalog.depts.map(d => {
