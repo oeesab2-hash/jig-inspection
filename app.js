@@ -15,6 +15,9 @@
     catalog:  'jig_catalog_v2',   // { depts, lines, jigs }
     history:  'jig_history_v2',   // array of report records
     settings: 'jig_app_settings_v1', // { docNo, revLevel } — ค่ากลางทั้งระบบ (cache ไว้ใช้ offline)
+    pdfLocalLog: 'jig_pdf_local_log_v1', // 🆕 บันทึกว่า "เครื่องนี้" เคย export PDF ของประวัติ id ไหนไปแล้วบ้าง
+    // — เก็บเฉพาะ local (ไม่ sync ขึ้น Supabase) เพราะเป็นสถานะเฉพาะเครื่อง/browser นี้เท่านั้น
+    // ไม่ได้แปลว่าคนอื่นในทีมจะเห็นสถานะเดียวกัน
   };
 
   // โลโก้บริษัท (embed เป็น base64 ไว้ในไฟล์เลย จะได้ไม่ต้องพึ่งไฟล์แยกตอน deploy/print PDF)
@@ -3020,6 +3023,7 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
 
     const list = $('hist-list');
     if (!hist.length) { list.innerHTML = '<div class="no-records">ไม่พบประวัติ</div>'; return; }
+    const pdfLocalLog = loadPdfLocalLog(); // 🆕 เช็คว่ารายการไหน export PDF ลงเครื่องนี้ไปแล้วบ้าง
     list.innerHTML = hist.map(h => {
       const ngItems = h.items.filter(i => i.status === 'ng');
       const okCount = h.items.filter(i => i.status === 'ok' || i.status === 'fixed').length;
@@ -3058,6 +3062,15 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
               return `<span class="badge ${st.badgeClass}" title="${title}">${st.badge}</span>`;
             })()}
             ${gpsDisplay}
+            ${(() => {
+              const saved = pdfLocalLog[h.id];
+              if (!saved) return '';
+              const when = new Date(saved.at).toLocaleString('th-TH');
+              const where = saved.method === 'auto'
+                ? `บันทึกอัตโนมัติลงเครื่องนี้แล้ว — 📁 ${escHtml(saved.folder || '')} เมื่อ ${when}`
+                : `ดาวน์โหลด PDF ลงเครื่องนี้แล้ว เมื่อ ${when} (ตรวจสอบโฟลเดอร์ Downloads)`;
+              return `<span class="badge saved" title="${where}">💾 บันทึกแล้ว</span>`;
+            })()}
           </div>
         </div>
         ${h.supervisorComment ? `<div class="hi-supervisor-comment">💬 <strong>ความเห็นหัวหน้างาน:</strong> ${escHtml(h.supervisorComment)}</div>` : ''}
@@ -3554,6 +3567,27 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
     return folderName;
   }
 
+  /* ══════════════════════════════════════
+     PDF LOCAL-SAVE LOG (เฉพาะเครื่องนี้ — ไม่ sync ขึ้น Supabase)
+     — ใช้บอกในหน้า "ประวัติการตรวจ" ว่ารายการไหนเคย export/บันทึก PDF
+       ลงเครื่องนี้ไปแล้วบ้าง (ทั้งแบบ auto-save และดาวน์โหลดปกติ)
+     — เป็นสถานะเฉพาะเครื่อง/browser นี้เท่านั้น คนอื่นในทีมที่เปิดระบบ
+       จากเครื่องอื่นจะไม่เห็นสถานะเดียวกัน (เพราะไฟล์อยู่คนละเครื่องกัน)
+  ══════════════════════════════════════ */
+  function loadPdfLocalLog() {
+    try { return JSON.parse(localStorage.getItem(SK.pdfLocalLog) || '{}'); }
+    catch (e) { return {}; }
+  }
+  function savePdfLocalLog(log) {
+    try { localStorage.setItem(SK.pdfLocalLog, JSON.stringify(log)); }
+    catch (e) { console.error('savePdfLocalLog error:', e); }
+  }
+  function markPdfSavedLocally(recordId, info) {
+    const log = loadPdfLocalLog();
+    log[recordId] = { at: new Date().toISOString(), method: info.method, folder: info.folder || null };
+    savePdfLocalLog(log);
+  }
+
   async function generatePdf(record) {
     if (!window.jspdf) { toast('jsPDF โหลดไม่สำเร็จ', 'ng'); return; }
     if (!window.html2canvas) { toast('html2canvas โหลดไม่สำเร็จ', 'ng'); return; }
@@ -3632,6 +3666,7 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
             const pdfBlob    = doc.output('blob');
             const folderUsed = await saveFileToAutosaveFolder(autosaveDirHandle, record.lineName, filename, pdfBlob);
             autosaved = true;
+            markPdfSavedLocally(record.id, { method: 'auto', folder: `${autosaveDirHandle.name}/${folderUsed}` });
             toast(`📄 บันทึก PDF อัตโนมัติสำเร็จ → 📁 ${autosaveDirHandle.name}/${folderUsed}/${filename}`, 'ok');
           } else {
             updateAutoSaveFolderUI('needs-permission');
@@ -3643,8 +3678,10 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
       }
       if (!autosaved) {
         doc.save(filename);
+        markPdfSavedLocally(record.id, { method: 'download' });
         toast(`📄 PDF บันทึกสำเร็จ! (${filename})`, 'ok');
       }
+      populateHistoryPanel(); // 🆕 รีเฟรช badge "บันทึกแล้ว" ในประวัติทันที (ถ้าเปิดหน้าประวัติอยู่)
     } catch (err) {
       console.error('generatePdf error:', err);
       toast('สร้าง PDF ไม่สำเร็จ: ' + (err.message || err), 'ng');
