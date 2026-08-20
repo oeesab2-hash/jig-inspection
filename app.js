@@ -491,6 +491,7 @@
         lineLayout = { bgImage: data.bg_image || null, points: data.points || {} };
         saveLineLayout(); // cache local ไว้ใช้ offline
         renderLineStatusMap();
+        renderAdmLineLayoutMap();
       }
     } catch (e) {
       console.error('pullLineLayoutFromSupabase error (ตรวจสอบว่ารัน SQL migration line_layout แล้วหรือยัง):', e);
@@ -2856,6 +2857,8 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
   }
 
   function renderAdminLists() {
+    renderAdmLineLayoutMap();
+
     /* Dept list */
     $('adm-dept-list').innerHTML = catalog.depts.length
       ? catalog.depts.map(d => `
@@ -3812,7 +3815,6 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
   ══════════════════════════════════════ */
   const LINE_LAYOUT_KEY = 'jig_line_layout_v1';
   let lineLayout = { bgImage: null, points: {} }; // points: { [lineId]: {x,y} }
-  let lineLayoutEditMode = false;
 
   function loadLineLayout() {
     try {
@@ -3861,21 +3863,22 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
     if (changed) saveLineLayout();
   }
 
-  function renderLineStatusMap() {
-    if (!$('line-status-map')) return; // กันพัง ถ้ายังไม่ได้ render DOM (เช่นตอน login ยังไม่เสร็จ)
+  function renderLineStatusMapInto(mapId, bgImageId, groupId, editable) {
+    const mapEl = $(mapId);
+    if (!mapEl) return; // กันพัง ถ้ายังไม่ได้ render DOM ส่วนนั้น (เช่น Admin Panel ยังไม่เคยเปิด)
     ensureLineLayoutDefaults();
 
-    const bgImg = $('line-layout-bg-image');
+    const bgImg = $(bgImageId);
     if (lineLayout.bgImage) { bgImg.setAttribute('href', lineLayout.bgImage); bgImg.style.display = ''; }
     else { bgImg.style.display = 'none'; }
 
     const statusMap = computeLineStatusToday();
-    const group = $('line-status-points-group');
+    const group = $(groupId);
     group.innerHTML = catalog.lines.map(l => {
       const pos = lineLayout.points[l.id] || { x: 70, y: 70 };
       const status = statusMap[l.id]; // undefined | 'ok' | 'ng'
       const statusClass = status === 'ng' ? 'status-ng' : status === 'ok' ? 'status-ok' : '';
-      const dragClass = lineLayoutEditMode ? 'cp-drag-pt' : '';
+      const dragClass = editable ? 'cp-drag-pt' : '';
       const name = l.name || l.id;
       const shortName = name.length > 12 ? name.slice(0, 11) + '…' : name;
       const statusLabel = status === 'ng' ? 'พบ NG' : status === 'ok' ? 'ตรวจแล้ว ปกติ' : 'ยังไม่ตรวจวันนี้';
@@ -3888,12 +3891,23 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
         </g>`;
     }).join('');
 
-    if (lineLayoutEditMode) bindLineLayoutDrag();
+    if (editable) bindLineLayoutDrag(mapId);
   }
 
-  /* ── ลากจุด Line เพื่อจัดตำแหน่งบน Layout (Pointer Events) — ใช้เฉพาะตอน edit mode ── */
-  function bindLineLayoutDrag() {
-    const svg = $('line-status-map');
+  // Dashboard — read-only เท่านั้น แสดงสถานะให้ทุกคนดู แก้ไขไม่ได้
+  function renderLineStatusMap() {
+    renderLineStatusMapInto('line-status-map', 'line-layout-bg-image', 'line-status-points-group', false);
+  }
+  // Admin Panel — ลากจุด/อัปโหลดรูปได้ (เข้าถึงได้เฉพาะหลัง Login Admin สำเร็จอยู่แล้ว)
+  function renderAdmLineLayoutMap() {
+    renderLineStatusMapInto('adm-line-layout-map', 'adm-line-layout-bg-image', 'adm-line-status-points-group', true);
+    const removeBtn = $('btn-adm-line-layout-bg-remove');
+    if (removeBtn) removeBtn.classList.toggle('hidden', !lineLayout.bgImage);
+  }
+
+  /* ── ลากจุด Line เพื่อจัดตำแหน่งบน Layout (Pointer Events) — ใช้เฉพาะแผนที่ที่ editable=true ── */
+  function bindLineLayoutDrag(mapId) {
+    const svg = $(mapId);
     svg.querySelectorAll('.cp-drag-pt').forEach(g => {
       g.addEventListener('pointerdown', e => {
         e.preventDefault();
@@ -3929,36 +3943,21 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
     });
   }
 
-  function setLineLayoutEditMode(on) {
-    lineLayoutEditMode = on;
-    $('line-layout-upload-label').classList.toggle('hidden', !on);
-    $('btn-line-layout-bg-remove').classList.toggle('hidden', !on || !lineLayout.bgImage);
-    $('btn-line-layout-save').classList.toggle('hidden', !on);
-    $('btn-line-layout-done').classList.toggle('hidden', !on);
-    $('btn-line-layout-edit').classList.toggle('hidden', on);
-    $('line-layout-hint').classList.toggle('hidden', !on);
-    renderLineStatusMap();
-  }
-
+  // ── ควบคุมโดย Admin Panel เท่านั้น (หน้านี้เข้าได้หลัง Login Admin สำเร็จอยู่แล้ว จึงไม่ต้องขอรหัสผ่านซ้ำ) ──
   function bindLineStatusLayout() {
-    $('btn-line-layout-edit').addEventListener('click', () => {
-      const pass = getAdminPass(); // ขอรหัสผ่าน Admin ก่อนอนุญาตให้แก้ไข Layout (กันแก้เผลอ)
-      if (!pass) return;
-      setLineLayoutEditMode(true);
-    });
-    $('btn-line-layout-done').addEventListener('click', () => setLineLayoutEditMode(false));
-    $('btn-line-layout-save').addEventListener('click', () => {
+    $('btn-adm-line-layout-save').addEventListener('click', () => {
       saveLineLayout(); // cache local ไว้ก่อนเสมอ (ใช้ได้ offline)
-      pushLineLayoutToSupabase(); // แล้ว sync ขึ้นระบบกลางให้ทุกเครื่องเห็นเหมือนกัน
+      pushLineLayoutToSupabase(); // แล้ว sync ขึ้นระบบกลางให้ทุกเครื่องเห็นเหมือนกัน (ใช้ _adminSessionPass ที่ login ไว้แล้ว)
     });
-    $('line-layout-bg-input').addEventListener('change', async e => {
+    $('adm-line-layout-bg-input').addEventListener('change', async e => {
       const file = e.target.files[0];
       if (!file) return;
       try {
         const dataUrl = await resizeImageToDataURL(file, 1200, 0.75);
         lineLayout.bgImage = dataUrl;
         saveLineLayout();
-        $('btn-line-layout-bg-remove').classList.remove('hidden');
+        $('btn-adm-line-layout-bg-remove').classList.remove('hidden');
+        renderAdmLineLayoutMap();
         renderLineStatusMap();
         toast('อัปโหลดรูป Layout สำเร็จ — กำลังบันทึกขึ้นระบบกลาง...', 'ok');
         pushLineLayoutToSupabase();
@@ -3967,11 +3966,12 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
       }
       e.target.value = '';
     });
-    $('btn-line-layout-bg-remove').addEventListener('click', () => {
+    $('btn-adm-line-layout-bg-remove').addEventListener('click', () => {
       if (!confirm('ลบรูปพื้นหลัง Layout นี้?')) return;
       lineLayout.bgImage = null;
       saveLineLayout();
-      $('btn-line-layout-bg-remove').classList.add('hidden');
+      $('btn-adm-line-layout-bg-remove').classList.add('hidden');
+      renderAdmLineLayoutMap();
       renderLineStatusMap();
       pushLineLayoutToSupabase();
     });
