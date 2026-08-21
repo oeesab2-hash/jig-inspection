@@ -16,6 +16,9 @@
     history:  'jig_history_v2',   // array of report records
     settings: 'jig_app_settings_v1', // { docNo, revLevel } — ค่ากลางทั้งระบบ (cache ไว้ใช้ offline)
     pdfLocalLog: 'jig_pdf_local_log_v1', // 🆕 บันทึกว่า "เครื่องนี้" เคย export PDF ของประวัติ id ไหนไปแล้วบ้าง
+    // 🆕 flag บอกว่ามี history ที่บันทึกในเครื่องแล้วแต่ยังส่งขึ้น Supabase ไม่สำเร็จ (เช่น เน็ตหลุดหน้างาน)
+    // ใช้ retry อัตโนมัติตอนเปิดแอป/ตอนเน็ตกลับมา — ดู retryPendingHistorySync()
+    historySyncPending: 'jig_history_sync_pending_v1',
     // — เก็บเฉพาะ local (ไม่ sync ขึ้น Supabase) เพราะเป็นสถานะเฉพาะเครื่อง/browser นี้เท่านั้น
     // ไม่ได้แปลว่าคนอื่นในทีมจะเห็นสถานะเดียวกัน
   };
@@ -208,7 +211,7 @@
   // บันทึก/ลบรายการจากเครื่องที่มี local cache ไม่ครบ จะไปลบของเก่าที่เกิน 100 ทิ้งถาวร
   // จาก Supabase ด้วย! เปลี่ยนมาใช้ upsert แทน เพื่อไม่ให้แถวอื่นที่ไม่ได้ส่งมาถูกลบ
   async function pushHistoryToSupabase(arr) {
-    if (!sb) return;
+    if (!sb) return false;
     _syncing = true;
     try {
       const rows = (arr || []).map(h => ({
@@ -244,11 +247,31 @@
         const { error } = await sb.from('history').upsert(rows.slice(i, i + 40), { onConflict: 'id' });
         if (error) throw error;
       }
+      // ✅ ขึ้น Supabase สำเร็จ — ล้าง flag ค้าง sync (ถ้ามีจากรอบก่อนหน้าที่เคย fail)
+      localStorage.removeItem(SK.historySyncPending);
+      return true;
     } catch (e) {
       console.error('pushHistoryToSupabase error:', e);
+      // ⚠️ push ไม่สำเร็จ (เช่น เน็ตหลุดหน้างาน) — จำไว้เพื่อ retry อัตโนมัติรอบหน้า
+      // (ดู retryPendingHistorySync() ที่เรียกตอนเปิดแอป / เน็ตกลับมา / ทุก 30 วิ)
+      localStorage.setItem(SK.historySyncPending, String(Date.now()));
+      return false;
     } finally {
       setTimeout(() => { _syncing = false; }, 1500);
     }
+  }
+
+  // 🆕 ลองส่ง history ที่ค้างอยู่ (sync ไม่สำเร็จรอบก่อน) ขึ้น Supabase ใหม่อีกครั้ง
+  // เรียกตอน: (1) เปิดแอป (2) เน็ตกลับมา (online event) (3) ทุก 30 วินาทีระหว่างที่ยังค้างอยู่
+  async function retryPendingHistorySync() {
+    if (!sb) return;
+    if (!localStorage.getItem(SK.historySyncPending)) return; // ไม่มีอะไรค้าง ไม่ต้องทำอะไร
+    if (_syncing) return; // กำลัง sync งานอื่นอยู่ รอรอบหน้า
+    const ok = await pushHistoryToSupabase(loadHistory());
+    if (ok) {
+      toast('☁️ ซิงค์ประวัติที่ค้างอยู่ขึ้นระบบสำเร็จแล้ว — เครื่องอื่นเห็นข้อมูลแล้ว', 'ok');
+    }
+    // ถ้ายัง fail อีก ก็ปล่อยให้ interval/online event รอบถัดไปลองใหม่ต่อไป โดยไม่รบกวนผู้ใช้ซ้ำๆ
   }
 
   // ── ลบ history รายการเดียวออกจาก Supabase (ใช้ตอนกดลบใน History Panel) ──
@@ -753,7 +776,16 @@
   function saveHistory(arr) {
     try {
       localStorage.setItem(SK.history, JSON.stringify(arr));
-      debouncedPush('history', () => pushHistoryToSupabase(arr));
+      // 🆕 แจ้งผลจริงตอน sync เสร็จ — ถ้า push ขึ้น Supabase ไม่สำเร็จ (เช่น เน็ตหน้างานหลุด)
+      // ต้องบอกผู้ใช้ตรงๆ ว่าข้อมูลยังไม่ขึ้นระบบ ไม่ใช่ปล่อยให้เข้าใจผิดว่า "บันทึกสำเร็จ" แล้วจบ
+      // (ตัว pushHistoryToSupabase เองก็จะตั้ง flag ไว้ให้ retryPendingHistorySync ลองใหม่อัตโนมัติต่อด้วย)
+      debouncedPush('history', () => {
+        pushHistoryToSupabase(arr).then(ok => {
+          if (!ok) {
+            toast('⚠️ บันทึกในเครื่องนี้แล้ว แต่ยังไม่ขึ้นระบบกลาง (เช็คสัญญาณเน็ต) — ระบบจะลองส่งซ้ำอัตโนมัติ', 'ng');
+          }
+        });
+      });
       return true;
     } catch (e) {
       console.error('saveHistory error:', e);
@@ -836,6 +868,11 @@
     bindPanelOverlay();
     subscribeRealtime();
     restoreAutoSaveFolder(); // กู้ค่าโฟลเดอร์บันทึก PDF อัตโนมัติที่เคยตั้งไว้ (ถ้ามี)
+
+    // 🆕 RETRY QUEUE — กันเคสเน็ตหลุดหน้างานตอนบันทึก แล้วข้อมูลค้างอยู่แค่ในเครื่อง
+    retryPendingHistorySync(); // (1) ลองส่งของที่ค้างทันทีที่เปิดแอป
+    window.addEventListener('online', retryPendingHistorySync); // (2) ลองอีกครั้งทันทีที่เน็ตกลับมา
+    setInterval(retryPendingHistorySync, 30000); // (3) สำรอง — เผื่อ browser มือถือไม่ยิง 'online' event ให้ (ฟังก์ชันเช็ค flag เองก่อน จะไม่ทำอะไรถ้าไม่มีอะไรค้าง)
   }
 
   /* ══════════════════════════════════════
@@ -1436,7 +1473,7 @@
     hist.unshift(record);
     if (hist.length > 100) hist = hist.slice(0, 100);
     if (saveHistory(hist)) {
-      toast(`✅ บันทึกสำเร็จ! GPS: ${gpsData.latitude.toFixed(6)}, ${gpsData.longitude.toFixed(6)} (±${Math.round(gpsData.accuracy)}m)`, 'ok');
+      toast(`✅ บันทึกในเครื่องสำเร็จ! (กำลังซิงค์ขึ้นระบบ...) GPS: ${gpsData.latitude.toFixed(6)}, ${gpsData.longitude.toFixed(6)} (±${Math.round(gpsData.accuracy)}m)`, 'ok');
       
       // ─── ส่ง Telegram Notification ───
       const okCount = checkState.filter(i => i.status === 'ok' || i.status === 'fixed').length;
