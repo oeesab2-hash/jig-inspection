@@ -247,7 +247,12 @@
         const { error } = await sb.from('history').upsert(rows.slice(i, i + 40), { onConflict: 'id' });
         if (error) throw error;
       }
-      // ✅ ขึ้น Supabase สำเร็จ — ล้าง flag ค้าง sync (ถ้ามีจากรอบก่อนหน้าที่เคย fail)
+      // ✅ ขึ้น Supabase สำเร็จ — mark เฉพาะ record ที่เพิ่ง push เป็น synced:true
+      // (merge เข้ากับ local ล่าสุด แทนที่จะ overwrite ทั้งก้อน กันเขียนทับข้อมูลอื่นที่อาจเปลี่ยนระหว่างรอ push)
+      const pushedIds = new Set((arr || []).map(h => String(h.id)));
+      const merged = loadHistory().map(h => pushedIds.has(String(h.id)) ? { ...h, synced: true } : h);
+      localStorage.setItem(SK.history, JSON.stringify(merged));
+      if (typeof populateHistoryPanel === 'function') populateHistoryPanel(); // 🆕 รีเฟรช badge "รอซิงค์" ทันทีถ้าเปิดหน้าประวัติอยู่
       localStorage.removeItem(SK.historySyncPending);
       return true;
     } catch (e) {
@@ -272,6 +277,14 @@
       toast('☁️ ซิงค์ประวัติที่ค้างอยู่ขึ้นระบบสำเร็จแล้ว — เครื่องอื่นเห็นข้อมูลแล้ว', 'ok');
     }
     // ถ้ายัง fail อีก ก็ปล่อยให้ interval/online event รอบถัดไปลองใหม่ต่อไป โดยไม่รบกวนผู้ใช้ซ้ำๆ
+  }
+
+  // 🆕 ปุ่ม "ส่งซ้ำ" ที่ผู้ใช้กดเองจากหน้า History (บังคับลอง push ทันที ไม่ต้องรอ retry อัตโนมัติ)
+  async function manualRetryHistorySync() {
+    if (!sb) { toast('ไม่ได้เชื่อมต่อ Supabase', 'ng'); return; }
+    toast('🔄 กำลังลองส่งขึ้นระบบอีกครั้ง...', 'ok');
+    const ok = await pushHistoryToSupabase(loadHistory());
+    toast(ok ? '☁️ ซิงค์ขึ้นระบบสำเร็จแล้ว' : '⚠️ ยังส่งไม่สำเร็จ เช็คสัญญาณเน็ตแล้วลองใหม่อีกครั้ง', ok ? 'ok' : 'ng');
   }
 
   // ── ลบ history รายการเดียวออกจาก Supabase (ใช้ตอนกดลบใน History Panel) ──
@@ -1466,7 +1479,10 @@
         accuracy:   gpsData.accuracy,
         timestamp:  gpsData.timestamp,
         status:     gpsData.status // 'success' เท่านั้น
-      }
+      },
+      // 🆕 สถานะซิงค์ขึ้น Supabase (เฉพาะ local ไม่ถูกส่งขึ้น Supabase — ดู pushHistoryToSupabase)
+      // เริ่มต้น false เสมอตอนสร้างใหม่ แล้วจะถูกเปลี่ยนเป็น true เมื่อ push ขึ้น Supabase สำเร็จ
+      synced: false,
     };
 
     let hist = loadHistory();
@@ -3235,6 +3251,7 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
               return `<span class="badge ${st.badgeClass}" title="${title}">${st.badge}</span>`;
             })()}
             ${gpsDisplay}
+            ${h.synced === false ? `<button type="button" class="badge sync-pending" data-resync="${escHtml(h.id)}" title="ยังไม่ได้อัปโหลดขึ้น Supabase — เครื่องอื่นในทีมจะยังไม่เห็นรายการนี้ กดเพื่อลองส่งอีกครั้ง">🔄 รอซิงค์ — กดส่งซ้ำ</button>` : ''}
             ${(() => {
               const saved = pdfLocalLog[h.id];
               if (!saved) return '';
@@ -3284,6 +3301,11 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
     list.querySelectorAll('.hi-photo').forEach(img => {
       img.addEventListener('click', () => openLightbox(img.dataset.src));
     });
+    // 🆕 ปุ่ม badge "รอซิงค์" — กดเพื่อลองส่งขึ้น Supabase ใหม่ทันที
+    list.querySelectorAll('[data-resync]').forEach(b => b.addEventListener('click', e => {
+      e.stopPropagation();
+      manualRetryHistorySync();
+    }));
     // 🆕 checkbox เลือกรายการ (เฉพาะตอน admin login)
     list.querySelectorAll('.hi-select-cb').forEach(cb => cb.addEventListener('change', () => {
       const id = cb.dataset.sel;

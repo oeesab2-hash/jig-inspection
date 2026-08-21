@@ -688,6 +688,23 @@ h1, h2, h3, h4, label, button, input, select, textarea, p, span, div {
   border: 1px solid hsla(265, 55%, 65%, 0.4);
 }
 
+/* 🆕 badge บอกว่า record นี้ยังไม่ขึ้น Supabase (เช่น เน็ตหลุดตอนบันทึกหน้างาน)
+   ทำเป็น <button> ให้กดเองเพื่อลองส่งซ้ำได้ทันที ไม่ต้องรอ retry อัตโนมัติ */
+.badge.sync-pending {
+  background: hsla(0, 84%, 60%, 0.12); color: hsl(0, 70%, 50%);
+  border: 1px solid hsla(0, 84%, 60%, 0.4); cursor: pointer;
+  font-family: inherit; animation: syncPendingPulse 2s ease-in-out infinite;
+}
+.badge.sync-pending:hover { background: hsla(0, 84%, 60%, 0.22); }
+[data-theme="dark"] .badge.sync-pending {
+  background: hsla(0, 75%, 65%, 0.16); color: hsl(0, 80%, 75%);
+  border: 1px solid hsla(0, 75%, 65%, 0.45);
+}
+@keyframes syncPendingPulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
+}
+
 /* ─── GPS Badge Styles ─── */
 .gps-badge {
   display: inline-block; font-size: 10px; padding: 3px 8px; border-radius: 6px;
