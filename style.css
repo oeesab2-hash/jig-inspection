@@ -1264,8 +1264,8 @@ h1, h2, h3, h4, label, button, input, select, textarea, p, span, div {
 .hi-bulk-btn:hover { border-color: var(--accent); color: var(--accent); }
 .hi-bulk-btn.del { color: var(--ng); border-color: var(--ng-border); }
 .hi-bulk-btn.del:hover { background: var(--ng-bg); }
-.hi-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
-.hi-meta { font-size: 12px; color: var(--text-muted); display: flex; flex-wrap: wrap; align-items: baseline; }
+.hi-head { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 6px; flex-wrap: wrap; gap: 6px; }
+.hi-meta { font-size: 12px; color: var(--text-muted); display: flex; flex-wrap: wrap; align-items: baseline; justify-content: flex-start; flex: 1 1 auto; min-width: 0; }
 .hi-meta strong { color: var(--text-main); }
 .hi-meta-item { white-space: nowrap; }
 .hi-meta-item:not(:first-child)::before { content: "\00b7"; margin: 0 6px; color: var(--text-muted); }
