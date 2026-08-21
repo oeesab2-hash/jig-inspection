@@ -3230,13 +3230,14 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
         }
       }
       
+      const _stage = approvalStage(h);
       return `<div class="history-item ${_histSelected.has(String(h.id)) ? 'sel' : ''} ${admLoggedIn ? 'has-select' : ''}" data-hist-id="${escHtml(h.id)}">
         ${admLoggedIn ? `<div class="hi-select-wrap">
           <input type="checkbox" class="hi-select-cb" data-sel="${escHtml(h.id)}" ${_histSelected.has(String(h.id)) ? 'checked' : ''}>
         </div>` : ''}
         <div class="hi-path">${escHtml(h.deptName || '')}  ›  ${escHtml(h.lineName || '')}  ›  ${escHtml(h.jigName || '')}</div>
         <div class="hi-head">
-          <div class="hi-meta"><span class="hi-meta-item"><strong>${escHtml(h.date)}</strong></span><span class="hi-meta-item">เวลา: ${new Date(h.timestamp).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' })}</span><span class="hi-meta-item">${escHtml(h.shift)}</span><span class="hi-meta-item">ผู้ตรวจ: ${escHtml(h.inspector)}</span></div>
+          <div class="hi-meta"><span class="hi-meta-item"><strong>${escHtml(h.date)}</strong></span><span class="hi-meta-item">เวลา: ${new Date(h.timestamp).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' })}</span><span class="hi-meta-item">${escHtml(h.shift)}</span>${_stage.key !== 'approved' ? `<span class="hi-meta-item">ผู้ตรวจ: ${escHtml(h.inspector)}</span>` : ''}</div>
           <div class="hi-badges">
             ${h.protected ? `<span class="badge protected" title="รายการนี้ถูกกันไว้ไม่ให้ลบอัตโนมัติ">🔒 กันลบ</span>` : ''}
             <span class="badge ok">OK ${okCount}</span>
