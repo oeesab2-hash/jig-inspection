@@ -235,8 +235,6 @@
         gps_accuracy: h.gps?.accuracy || null,
         gps_timestamp: h.gps?.timestamp || null,
         gps_status: h.gps?.status || 'unknown',
-        // 🆕 กันลบอัตโนมัติ — ต้องมีคอลัมน์ protected boolean บนตาราง history (ดูหมายเหตุท้ายไฟล์)
-        protected: h.protected || false,
       }));
       // แบ่งส่งเป็นชุดๆ (มีรูปถ่าย base64 อยู่ในนั้น ก้อนใหญ่ได้) กันพัง request เดียวโตเกินไป
       // upsert ตาม id — แถวที่มีอยู่แล้วจะถูกอัปเดตทับ ส่วนแถวอื่นในตารางที่ไม่ได้ส่งมาจะไม่ถูกแตะต้อง
@@ -306,7 +304,6 @@
           timestamp: row.gps_timestamp,
           status: row.gps_status || 'unknown'
         } : undefined,
-        protected: !!row.protected, // 🆕
       }));
     } catch (e) {
       console.warn('pullHistoryFromSupabase error (ใช้ข้อมูล local แทน):', e);
@@ -2083,9 +2080,6 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
       localStorage.removeItem('jig_admin_user');
       closePanel('admin-panel');
       toast('ออกจากระบบเรียบร้อยแล้ว', 'ok');
-      // 🆕 เคลียร์การเลือกรายการ history ทันที เผื่อพนักงานคนถัดไปมาใช้เครื่องต่อ
-      _histSelected.clear();
-      if ($('history-panel').classList.contains('open')) populateHistoryPanel();
     });
 
     /* Change Pass — ต้องยืนยันรหัสเดิมก่อนเสมอ (ผ่าน RPC ฝั่ง DB) */
@@ -2989,17 +2983,15 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
   /* ══════════════════════════════════════
      HISTORY PANEL
   ══════════════════════════════════════ */
-  // 🆕 เก็บ id ของรายการที่ติ๊กเลือกไว้ (เฉพาะระหว่างเปิด panel — ไม่ persist)
-  let _histSelected = new Set();
-
   function bindHistoryPanel() {
-    $('tab-history').addEventListener('click', () => { _histSelected.clear(); openPanel('history-panel'); populateHistoryPanel(); });
-    $('btn-close-hist').addEventListener('click', () => { _histSelected.clear(); closePanel('history-panel'); });
-    $('btn-hf-apply').addEventListener('click', () => { _histSelected.clear(); populateHistoryPanel(); });
+    $('tab-history').addEventListener('click', () => { openPanel('history-panel'); populateHistoryPanel(); });
+    $('btn-close-hist').addEventListener('click', () => closePanel('history-panel'));
+    $('btn-hf-apply').addEventListener('click', populateHistoryPanel);
+    $('hf-dept').addEventListener('change', () => { populateHistLineOptions(); populateHistoryPanel(); });
     $('btn-hf-clear').addEventListener('click', () => {
       $('hf-start').value = ''; $('hf-end').value = '';
-      $('hf-dept').value = ''; $('hf-shift').value = '';
-      _histSelected.clear();
+      $('hf-dept').value = ''; $('hf-shift').value = ''; $('hf-line').value = '';
+      populateHistLineOptions();
       populateHistoryPanel();
     });
     $('btn-hf-pdf').addEventListener('click', () => {
@@ -3007,121 +2999,39 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
       if (!hist.length) { toast('ไม่มีประวัติให้ส่งออก', 'ng'); return; }
       generatePdf(hist[0]);
     });
-
-    // ── เลือกทั้งหมด (เฉพาะรายการที่กำลังแสดงตาม filter ปัจจุบัน) ──
-    $('hf-select-all').addEventListener('change', (e) => {
-      const visibleIds = getFilteredHistory().map(h => String(h.id));
-      if (e.target.checked) visibleIds.forEach(id => _histSelected.add(id));
-      else visibleIds.forEach(id => _histSelected.delete(id));
-      populateHistoryPanel();
-    });
-
-    // ── ปุ่ม bulk actions ──
-    $('btn-bulk-pdf').addEventListener('click', bulkExportPdf);
-    $('btn-bulk-protect').addEventListener('click', () => bulkSetProtected(true));
-    $('btn-bulk-unprotect').addEventListener('click', () => bulkSetProtected(false));
-    $('btn-bulk-del').addEventListener('click', bulkDeleteSelected);
-    $('btn-bulk-clear').addEventListener('click', () => { _histSelected.clear(); populateHistoryPanel(); });
   }
 
-  // ── ดึงประวัติตาม filter ปัจจุบัน (ใช้ร่วมกันระหว่าง populateHistoryPanel และ select-all) ──
-  function getFilteredHistory() {
-    let hist = loadHistory();
-    const start = $('hf-start').value;
-    const end   = $('hf-end').value;
-    const dept  = $('hf-dept').value;
-    const shift = $('hf-shift').value;
-    if (start) hist = hist.filter(h => h.date >= start);
-    if (end)   hist = hist.filter(h => h.date <= end);
-    if (dept)  hist = hist.filter(h => h.deptId === dept);
-    if (shift) hist = hist.filter(h => h.shift === shift);
-    return hist;
-  }
-
-  // ── อัปเดตแถบเลือกทั้งหมด + bulk bar ให้ตรงกับ _histSelected ปัจจุบัน ──
-  // 🔒 ฟีเจอร์เลือกหลายรายการ/bulk action ทั้งหมด ใช้ได้เฉพาะตอน login เป็น Admin แล้วเท่านั้น
-  //    (พนักงานตรวจเช็คทั่วไปจะไม่เห็น checkbox/แถบนี้เลย กันกดพลาดข้อมูลหาย)
-  function refreshSelectionUI(hist) {
-    const selectRow = $('hist-select-row');
-    const bar = $('hist-bulk-bar');
-
-    if (!admLoggedIn) {
-      selectRow.classList.add('hidden');
-      bar.classList.add('hidden');
-      return;
-    }
-
-    selectRow.classList.remove('hidden');
-    const total = hist.length;
-    const selInView = hist.filter(h => _histSelected.has(String(h.id))).length;
-    const selAllCb = $('hf-select-all');
-    selAllCb.checked = total > 0 && selInView === total;
-    selAllCb.indeterminate = selInView > 0 && selInView < total;
-    $('hist-select-count').textContent = _histSelected.size ? `เลือกอยู่ ${_histSelected.size} รายการ` : '';
-
-    if (_histSelected.size > 0) {
-      bar.classList.remove('hidden');
-      $('hist-bulk-count').textContent = `เลือกไว้ ${_histSelected.size} รายการ`;
-    } else {
-      bar.classList.add('hidden');
-    }
-  }
-
-  // ── Bulk: Export PDF ทีละไฟล์ (ดาวน์โหลดหลายไฟล์ต่อกัน) ──
-  async function bulkExportPdf() {
-    const ids = Array.from(_histSelected);
-    if (!ids.length) return;
-    const hist = loadHistory();
-    const recs = ids.map(id => hist.find(h => String(h.id) === id)).filter(Boolean);
-    if (!recs.length) { toast('ไม่พบรายการที่เลือก', 'ng'); return; }
-    toast(`⏳ กำลังสร้าง PDF ${recs.length} ไฟล์...`, 'ok');
-    for (const rec of recs) {
-      await generatePdf(rec);
-      await new Promise(r => setTimeout(r, 400)); // เว้นจังหวะกันเบราว์เซอร์บล็อกดาวน์โหลดรัว ๆ
-    }
-    toast(`✅ Export PDF ครบ ${recs.length} ไฟล์แล้ว`, 'ok');
-  }
-
-  // ── Bulk: mark/unmark "กันลบอัตโนมัติ" (protected) ──
-  // 🔒 protected = true จะถูกกันไว้ไม่ให้ deleteOldHistory()/RPC admin_purge_old_history ลบทิ้ง
-  //    ต้องเพิ่มคอลัมน์ protected boolean ในตาราง Supabase และแก้ RPC ให้เช็คคอลัมน์นี้ด้วย (ดูหมายเหตุท้าย app.js)
-  async function bulkSetProtected(val) {
-    const ids = Array.from(_histSelected);
-    if (!ids.length) return;
-    const hist = loadHistory();
-    const touched = [];
-    hist.forEach(h => {
-      if (ids.includes(String(h.id))) { h.protected = val; touched.push(h); }
-    });
-    localStorage.setItem(SK.history, JSON.stringify(hist));
-    populateHistoryPanel();
-    toast(val ? `🔒 กันลบแล้ว ${touched.length} รายการ` : `🔓 ยกเลิกกันลบแล้ว ${touched.length} รายการ`, 'ok');
-    if (sb) pushHistoryToSupabase(touched); // sync ขึ้น Supabase เบื้องหลัง
-  }
-
-  // ── Bulk: ลบรายการที่เลือกทั้งหมด (ผ่าน RPC admin_delete_history ทีละแถวเหมือนเดิม เพื่อความปลอดภัย) ──
-  async function bulkDeleteSelected() {
-    const ids = Array.from(_histSelected);
-    if (!ids.length) return;
-    if (!confirm(`ลบ ${ids.length} รายการที่เลือกไว้? การลบนี้ย้อนกลับไม่ได้`)) return;
-    let remaining = loadHistory();
-    for (const id of ids) {
-      await deleteHistoryFromSupabase(id);
-      remaining = remaining.filter(h => String(h.id) !== id);
-      localStorage.setItem(SK.history, JSON.stringify(remaining));
-    }
-    _histSelected.clear();
-    populateHistoryPanel();
-    toast(`🗑 ลบแล้ว ${ids.length} รายการ`, 'ok');
+  // 🆕 เติม dropdown "Line" — ถ้าเลือกแผนกไว้แล้ว จะโชว์เฉพาะ Line ในแผนกนั้น (cascading เหมือนหน้าเลือกจิ๊ก)
+  function populateHistLineOptions() {
+    const lineSel = $('hf-line');
+    const prevVal = lineSel.value;
+    const deptId  = $('hf-dept').value;
+    const lines   = deptId ? catalog.lines.filter(l => l.deptId === deptId) : catalog.lines;
+    lineSel.innerHTML = '<option value="">ทั้งหมด</option>' +
+      lines.map(l => `<option value="${escHtml(l.id)}">${escHtml(l.name)}</option>`).join('');
+    if (lines.some(l => l.id === prevVal)) lineSel.value = prevVal; // เก็บค่าที่เลือกไว้ ถ้ายังอยู่ในลิสต์ใหม่
   }
 
   function populateHistoryPanel() {
     // Populate dept filter
     const deptSel = $('hf-dept');
+    const prevDept = deptSel.value;
     deptSel.innerHTML = '<option value="">ทั้งหมด</option>' +
       catalog.depts.map(d => `<option value="${escHtml(d.id)}">${escHtml(d.name)}</option>`).join('');
+    if (catalog.depts.some(d => d.id === prevDept)) deptSel.value = prevDept;
+    populateHistLineOptions();
 
-    const hist = getFilteredHistory();
+    let hist = loadHistory();
+    const start = $('hf-start').value;
+    const end   = $('hf-end').value;
+    const dept  = $('hf-dept').value;
+    const shift = $('hf-shift').value;
+    const line  = $('hf-line').value;
+    if (start) hist = hist.filter(h => h.date >= start);
+    if (end)   hist = hist.filter(h => h.date <= end);
+    if (dept)  hist = hist.filter(h => h.deptId === dept);
+    if (shift) hist = hist.filter(h => h.shift === shift);
+    if (line)  hist = hist.filter(h => h.lineId === line);
 
     const totalOk = hist.filter(h => h.items.every(i => i.status === 'ok' || i.status === 'fixed')).length;
     $('hist-summary').innerHTML = `
@@ -3130,7 +3040,7 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
       <div class="hist-stat ng"><span class="n">${hist.length - totalOk}</span><span class="l">มี NG</span></div>`;
 
     const list = $('hist-list');
-    if (!hist.length) { list.innerHTML = '<div class="no-records">ไม่พบประวัติ</div>'; refreshSelectionUI(hist); return; }
+    if (!hist.length) { list.innerHTML = '<div class="no-records">ไม่พบประวัติ</div>'; return; }
     const pdfLocalLog = loadPdfLocalLog(); // 🆕 เช็คว่ารายการไหน export PDF ลงเครื่องนี้ไปแล้วบ้าง
     list.innerHTML = hist.map(h => {
       const ngItems = h.items.filter(i => i.status === 'ng');
@@ -3153,16 +3063,11 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
         }
       }
       
-      const isSel = _histSelected.has(String(h.id));
-      return `<div class="history-item ${isSel ? 'sel' : ''} ${admLoggedIn ? 'has-select' : ''}" data-hist-id="${escHtml(h.id)}">
-        ${admLoggedIn ? `<div class="hi-select-wrap">
-          <input type="checkbox" class="hi-select-cb" data-sel="${escHtml(h.id)}" ${isSel ? 'checked' : ''}>
-        </div>` : ''}
+      return `<div class="history-item">
         <div class="hi-path">${escHtml(h.deptName || '')}  ›  ${escHtml(h.lineName || '')}  ›  ${escHtml(h.jigName || '')}</div>
         <div class="hi-head">
           <div class="hi-meta"><strong>${escHtml(h.date)}</strong> เวลา: ${new Date(h.timestamp).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' })} · ${escHtml(h.shift)} · ผู้ตรวจ: ${escHtml(h.inspector)}</div>
           <div class="hi-badges">
-            ${h.protected ? `<span class="badge protected" title="รายการนี้ถูกกันไว้ไม่ให้ลบอัตโนมัติ">🔒 กันลบ</span>` : ''}
             <span class="badge ok">OK ${okCount}</span>
             ${ngItems.length ? `<span class="badge ng">NG ${ngItems.length}</span>` : ''}
             ${(() => {
@@ -3224,15 +3129,6 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
     list.querySelectorAll('.hi-photo').forEach(img => {
       img.addEventListener('click', () => openLightbox(img.dataset.src));
     });
-    // 🆕 checkbox เลือกรายการ
-    list.querySelectorAll('.hi-select-cb').forEach(cb => cb.addEventListener('change', () => {
-      const id = cb.dataset.sel;
-      if (cb.checked) _histSelected.add(id); else _histSelected.delete(id);
-      cb.closest('.history-item').classList.toggle('sel', cb.checked);
-      refreshSelectionUI(hist);
-    }));
-
-    refreshSelectionUI(hist);
   }
 
   /* ══════════════════════════════════════
@@ -4950,22 +4846,6 @@ ${JSON.stringify(summary, null, 2)}
 
   // ✅ ฟังก์ชัน: ลบ history เก่า
   // ✅ SECURITY: ผ่าน RPC 'admin_purge_old_history' (เช็ค password admin) แทนการ delete ตรง
-  // 🆕 หมายเหตุ (feature "เก็บไว้/กันลบ" ในหน้า History): ต้องรัน SQL นี้บน Supabase
-  //    ครั้งเดียว ไม่งั้นรายการที่ติ๊ก "เก็บไว้" จะยังโดน purge อัตโนมัติอยู่ดี:
-  //
-  //    ALTER TABLE history ADD COLUMN IF NOT EXISTS protected boolean NOT NULL DEFAULT false;
-  //
-  //    CREATE OR REPLACE FUNCTION admin_purge_old_history(p_password text, p_cutoff timestamptz)
-  //    RETURNS integer LANGUAGE plpgsql SECURITY DEFINER AS $$
-  //    DECLARE v_count integer;
-  //    BEGIN
-  //      IF NOT check_admin_password(p_password) THEN RETURN -1; END IF;
-  //      DELETE FROM history WHERE ts < p_cutoff AND protected = false;
-  //      GET DIAGNOSTICS v_count = ROW_COUNT;
-  //      RETURN v_count;
-  //    END; $$;
-  //
-  //    (ถ้าฟังก์ชัน check_admin_password เดิมชื่ออื่น ให้ใช้ logic เดิมที่มีอยู่แทนบรรทัดนั้น)
   async function deleteOldHistory(daysOld = 30) {
     if (!sb) return;
     const pass = getAdminPass();
