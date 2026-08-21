@@ -3251,7 +3251,6 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
               return `<span class="badge ${st.badgeClass}" title="${title}">${st.badge}</span>`;
             })()}
             ${gpsDisplay}
-            ${h.synced === false ? `<button type="button" class="badge sync-pending" data-resync="${escHtml(h.id)}" title="ยังไม่ได้อัปโหลดขึ้น Supabase — เครื่องอื่นในทีมจะยังไม่เห็นรายการนี้ กดเพื่อลองส่งอีกครั้ง">🔄 รอซิงค์ — กดส่งซ้ำ</button>` : ''}
             ${(() => {
               const saved = pdfLocalLog[h.id];
               if (!saved) return '';
@@ -3279,8 +3278,14 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
           ${h.managerApprovedBy?`<div><strong>ผู้จัดการ:</strong> ${escHtml(h.managerApprovedBy)}</div>`:''}
         </div>` : ''}
         <div class="hi-actions">
-          <button class="hi-btn" data-pdf="${escHtml(h.id)}">📄 PDF</button>
-          <button class="hi-btn del" data-del="${escHtml(h.id)}">🗑 ลบ</button>
+          <div class="hi-actions-left">
+            <button class="hi-btn" data-pdf="${escHtml(h.id)}">📄 PDF</button>
+            <button class="hi-btn del" data-del="${escHtml(h.id)}">🗑 ลบ</button>
+          </div>
+          ${h.synced === false
+            ? `<button type="button" class="hi-sync-status pending" data-resync="${escHtml(h.id)}" title="ยังไม่ได้อัปโหลดขึ้น Supabase — เครื่องอื่นในทีมจะยังไม่เห็นรายการนี้ กดเพื่อลองส่งอีกครั้ง">🔄 รอซิงค์</button>`
+            : `<span class="hi-sync-status synced" title="ขึ้น Supabase แล้ว — ทีมอื่นเห็นรายการนี้แล้ว">☁️ ซิงค์แล้ว</span>`
+          }
         </div>
       </div>`;
     }).join('');
