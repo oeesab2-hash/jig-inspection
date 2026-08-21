@@ -4825,15 +4825,62 @@ ${JSON.stringify(summary, null, 2)}
           <button id="btn-backup-storage" style="flex: 1; padding: 6px 8px; background: #4dabf7; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 11px; font-weight: bold;">💾 Backup</button>
         </div>
 
+        <!-- 🆕 ปุ่มดูขนาดรูปพื้นหลังแยกตาม JIG — หาตัวที่กินพื้นที่เยอะผิดปกติ -->
+        <button id="btn-jig-image-sizes" style="width: 100%; margin-top: 6px; padding: 6px 8px; background: var(--bg-tertiary); color: var(--text-main); border: 1px solid var(--border-color); border-radius: 4px; cursor: pointer; font-size: 11px;">🔍 ดูขนาดรูปพื้นหลังแยกตาม JIG</button>
+        <div id="jig-image-sizes-list" style="margin-top: 6px;"></div>
+
         ${usagePercent > 90 ? `<div style="margin-top: 8px; padding: 8px; background: #ffe066; border-left: 3px solid #ff6b6b; border-radius: 3px; color: #333; font-size: 11px;">⚠️ <strong>Warning:</strong> Almost full! Delete old history or upgrade plan</div>` : ''}
       </div>
     `;
 
     const refreshBtn = $('btn-refresh-storage');
     const backupBtn = $('btn-backup-storage');
-    
+    const jigSizesBtn = $('btn-jig-image-sizes');
+
     if (refreshBtn) refreshBtn.addEventListener('click', () => renderStorageStatus());
     if (backupBtn) backupBtn.addEventListener('click', () => backupStorageData());
+    if (jigSizesBtn) jigSizesBtn.addEventListener('click', showJigImageSizeBreakdown);
+  }
+
+  // 🆕 ดึงขนาดรูปพื้นหลังของแต่ละ JIG มาเรียงจากใหญ่ไปเล็ก — ช่วยหา "ตัวการ" ที่กินพื้นที่เยอะผิดปกติ
+  // (เช่น รูปที่อัปโหลดก่อนมีระบบบีบอัดอัตโนมัติ หรือรูปที่หลุดผ่านมาแบบไม่ย่อขนาด)
+  async function showJigImageSizeBreakdown() {
+    const listEl = $('jig-image-sizes-list');
+    if (!listEl || !sb) return;
+    listEl.innerHTML = `<div style="padding: 8px; text-align: center; color: var(--text-muted); font-size: 11px;">⏳ กำลังโหลด...</div>`;
+    try {
+      const { data, error } = await sb.from('jigs').select('id, name, bg_image');
+      if (error) throw error;
+      const rows = (data || [])
+        .map(j => ({ name: j.name, id: j.id, bytes: j.bg_image ? new Blob([j.bg_image]).size : 0 }))
+        .filter(j => j.bytes > 0)
+        .sort((a, b) => b.bytes - a.bytes);
+
+      if (!rows.length) {
+        listEl.innerHTML = `<div style="padding: 8px; text-align: center; color: var(--text-muted); font-size: 11px;">ไม่มี JIG ที่ตั้งรูปพื้นหลังไว้</div>`;
+        return;
+      }
+
+      // ค่าเฉลี่ย — ใช้เทียบหา "ตัวผิดปกติ" ที่ใหญ่กว่าค่าเฉลี่ยมากๆ (สัญญาณว่าอาจไม่ผ่านการบีบอัด)
+      const avg = rows.reduce((s, r) => s + r.bytes, 0) / rows.length;
+      const rowsHtml = rows.slice(0, 15).map(r => {
+        const isOutlier = r.bytes > avg * 2.5; // ใหญ่กว่าค่าเฉลี่ย 2.5 เท่า+ ถือว่าน่าสงสัย
+        return `<div style="display:flex; justify-content:space-between; padding: 3px 0; ${isOutlier ? 'color:#ff6b6b; font-weight:600;' : ''}">
+          <span>${isOutlier ? '⚠️ ' : ''}${escHtml(r.name)}</span>
+          <span>${formatBytes(r.bytes)}</span>
+        </div>`;
+      }).join('');
+
+      listEl.innerHTML = `
+        <div style="background: var(--bg-tertiary); padding: 8px; border-radius: 4px; font-size: 11px;">
+          <div style="margin-bottom: 4px; color: var(--text-muted);">📷 ขนาดรูปพื้นหลัง แยกตาม JIG (${rows.length} รูป, เฉลี่ย ${formatBytes(avg)}/รูป, แสดง 15 อันดับแรก):</div>
+          ${rowsHtml}
+          ${rows.some(r => r.bytes > avg * 2.5) ? `<div style="margin-top:6px; padding-top:6px; border-top:1px solid var(--border-color); color:#ff6b6b; font-size:10px;">⚠️ รายการที่ไฮไลต์ใหญ่กว่าค่าเฉลี่ยมาก อาจเป็นรูปที่ไม่ผ่านการบีบอัด — ลองอัปโหลดรูปพื้นหลังใหม่อีกครั้งเพื่อให้ระบบบีบอัดให้</div>` : `<div style="margin-top:6px; padding-top:6px; border-top:1px solid var(--border-color); color: var(--text-muted); font-size:10px;">✅ ขนาดใกล้เคียงกันทุกรูป ไม่พบตัวที่ผิดปกติ — ระบบบีบอัดทำงานปกติ</div>`}
+        </div>`;
+    } catch (e) {
+      console.error('showJigImageSizeBreakdown error:', e);
+      listEl.innerHTML = `<div style="padding: 8px; color: var(--text-muted); font-size: 11px;">⚠️ ดึงข้อมูลไม่สำเร็จ</div>`;
+    }
   }
 
   // ✅ ฟังก์ชัน: Backup ข้อมูล (SAFE - ดาวน์โหลดเท่านั้น ไม่ลบ)
