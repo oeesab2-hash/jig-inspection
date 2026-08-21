@@ -925,12 +925,18 @@
     container.innerHTML = jigs.map(j => {
       const sel = selection.jigId === j.id ? 'selected' : '';
       const skipped = isJigSkippedToday(j.id);
+      const thumb = j.bgImage
+        ? `<img src="${escHtml(j.bgImage)}" alt="" loading="lazy" decoding="async">`
+        : `<span class="jig-chip-thumb-icon">🔧</span>`;
       return `
         <div class="chip jig-chip ${sel} ${skipped ? 'jig-skipped' : ''}" data-jig="${escHtml(j.id)}">
           <span class="jig-chip-main" data-jig="${escHtml(j.id)}">
-            🔧 ${escHtml(j.name)}
-            <span class="chip-code">${escHtml(j.id)}</span>
-            ${skipped ? '<span class="jig-skip-badge">ไม่ได้ผลิตวันนี้</span>' : ''}
+            <span class="jig-chip-thumb${j.bgImage ? '' : ' jig-chip-thumb-empty'}">${thumb}</span>
+            <span class="jig-chip-text">
+              ${escHtml(j.name)}
+              <span class="chip-code">${escHtml(j.id)}</span>
+              ${skipped ? '<span class="jig-skip-badge">ไม่ได้ผลิตวันนี้</span>' : ''}
+            </span>
           </span>
           <button type="button" class="jig-skip-toggle" data-jig="${escHtml(j.id)}" title="${skipped ? 'ยกเลิกมาร์ค (กลับมาผลิตแล้ว)' : 'มาร์คว่าวันนี้ไม่ได้ผลิต JIG นี้'}">
             ${skipped
