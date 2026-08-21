@@ -210,6 +210,8 @@
   async function pushHistoryToSupabase(arr) {
     if (!sb) return;
     _syncing = true;
+    const allIds = (arr || []).map(h => h.id);
+    const succeededIds = [];
     try {
       const rows = (arr || []).map(h => ({
         id: h.id, ts: h.timestamp,
@@ -239,14 +241,50 @@
       // แบ่งส่งเป็นชุดๆ (มีรูปถ่าย base64 อยู่ในนั้น ก้อนใหญ่ได้) กันพัง request เดียวโตเกินไป
       // upsert ตาม id — แถวที่มีอยู่แล้วจะถูกอัปเดตทับ ส่วนแถวอื่นในตารางที่ไม่ได้ส่งมาจะไม่ถูกแตะต้อง
       for (let i = 0; i < rows.length; i += 40) {
-        const { error } = await sb.from('history').upsert(rows.slice(i, i + 40), { onConflict: 'id' });
+        const batch = rows.slice(i, i + 40);
+        const { error } = await sb.from('history').upsert(batch, { onConflict: 'id' });
         if (error) throw error;
+        succeededIds.push(...batch.map(r => r.id)); // 🆕 บันทึกว่า id ไหนส่งสำเร็จแล้วบ้าง (ทีละ batch)
       }
+      markHistorySyncStatus(succeededIds, 'synced'); // 🆕 ยืนยันว่าขึ้นคลาวด์แล้ว — อัปเดต badge ในหน้าประวัติ
     } catch (e) {
       console.error('pushHistoryToSupabase error:', e);
+      // 🆕 batch ที่ส่งไปก่อนพังให้ถือว่า synced แล้ว ส่วนที่เหลือ (รวม batch ที่พัง) ให้ mark เป็น failed
+      markHistorySyncStatus(succeededIds, 'synced');
+      const failedIds = allIds.filter(id => !succeededIds.includes(id));
+      markHistorySyncStatus(failedIds, 'failed');
     } finally {
       setTimeout(() => { _syncing = false; }, 1500);
     }
+  }
+
+  // 🆕 อัปเดตสถานะ sync (_syncStatus) ของแต่ละรายการในแคชเครื่อง แล้วรีเฟรช badge ในหน้าประวัติถ้าเปิดอยู่
+  function markHistorySyncStatus(ids, status) {
+    if (!ids || !ids.length) return;
+    const idSet = new Set(ids);
+    const hist = loadHistory();
+    let changed = false;
+    hist.forEach(h => {
+      if (idSet.has(h.id) && h._syncStatus !== status) { h._syncStatus = status; changed = true; }
+    });
+    if (!changed) return;
+    try { localStorage.setItem(SK.history, JSON.stringify(hist)); }
+    catch (e) { console.error('markHistorySyncStatus error:', e); }
+    const panel = $('history-panel');
+    if (panel && !panel.classList.contains('hidden') && typeof populateHistoryPanel === 'function') {
+      populateHistoryPanel(); // อัปเดต badge สดๆ ถ้าเปิดหน้าประวัติค้างอยู่พอดี
+    }
+  }
+
+  // 🆕 ลองส่งรายการที่ค้าง (pending/failed) ขึ้น Supabase ใหม่ทั้งหมดในครั้งเดียว (ใช้กับปุ่ม "ลองส่งใหม่")
+  function retryHistorySync(id) {
+    const hist = loadHistory();
+    const record = hist.find(h => h.id === id);
+    if (!record) return;
+    record._syncStatus = 'pending';
+    localStorage.setItem(SK.history, JSON.stringify(hist));
+    populateHistoryPanel();
+    pushHistoryToSupabase([record]);
   }
 
   // ── ลบ history รายการเดียวออกจาก Supabase (ใช้ตอนกดลบใน History Panel) ──
@@ -304,11 +342,22 @@
           timestamp: row.gps_timestamp,
           status: row.gps_status || 'unknown'
         } : undefined,
+        _syncStatus: 'synced', // 🆕 มาจาก Supabase ตรงๆ = ยืนยันว่าขึ้นคลาวด์แล้วแน่นอน
       }));
     } catch (e) {
       console.warn('pullHistoryFromSupabase error (ใช้ข้อมูล local แทน):', e);
       return null;
     }
+  }
+
+  // 🆕 รวมข้อมูลจาก Supabase เข้ากับ cache local — คง "รายการที่ยังไม่ synced" (pending/failed) ของเครื่องนี้ไว้เสมอ
+  // กันไม่ให้ถูกเขียนทับหายไปตอน pull สดจากคลาวด์ (เช่น เพิ่งบันทึกผลตรวจตอนไม่มีเน็ต ยังไม่ทันขึ้น Supabase)
+  function mergeHistoryWithLocalPending(remote) {
+    const local = loadHistory();
+    const remoteIds = new Set((remote || []).map(h => h.id));
+    const localOnlyPending = local.filter(h => !remoteIds.has(h.id) && h._syncStatus !== 'synced');
+    return [...localOnlyPending, ...(remote || [])]
+      .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
   }
 
   // ฟังการเปลี่ยนแปลง realtime จากเพื่อนร่วมทีมคนอื่น แล้วรีเฟรชหน้าจอให้อัตโนมัติ
@@ -331,7 +380,7 @@
       if (_syncing) return;
       const remote = await pullHistoryFromSupabase();
       if (remote) {
-        localStorage.setItem(SK.history, JSON.stringify(remote));
+        localStorage.setItem(SK.history, JSON.stringify(mergeHistoryWithLocalPending(remote)));
         if (typeof populateHistoryPanel === 'function') populateHistoryPanel();
         if (typeof refreshDashboard === 'function') refreshDashboard();
         toast('📥 มีข้อมูลตรวจสอบใหม่จากทีม', 'ok');
@@ -813,7 +862,7 @@
     // ดึงข้อมูลล่าสุดจากทีมมาก่อน แล้วค่อย render (ถ้ายังไม่เคย sync ขึ้นเลยจะได้ null แล้วใช้ local ต่อ)
     const [remoteCat, remoteHist] = await Promise.all([pullCatalogFromSupabase(), pullHistoryFromSupabase()]);
     if (remoteCat) localStorage.setItem(SK.catalog, JSON.stringify(remoteCat));
-    if (remoteHist) localStorage.setItem(SK.history, JSON.stringify(remoteHist));
+    if (remoteHist) localStorage.setItem(SK.history, JSON.stringify(mergeHistoryWithLocalPending(remoteHist)));
     loadCatalog();
     catalogLoading = false; // ✅ ข้อมูลตั้งต้นพร้อมแล้ว (จาก Supabase หรือ cache local) — เลิกถือว่า "กำลังโหลด"
     loadAppSettings();               // ใช้ค่า cache/default ไปก่อนระหว่างรอ Supabase
@@ -1426,7 +1475,10 @@
         accuracy:   gpsData.accuracy,
         timestamp:  gpsData.timestamp,
         status:     gpsData.status // 'success' เท่านั้น
-      }
+      },
+      // 🆕 สถานะ sync ขึ้น Supabase — ใช้แสดง badge ในหน้าประวัติ (ค่านี้เป็น local-only ไม่ถูกส่งขึ้น Supabase)
+      // 'pending' = เพิ่งบันทึก กำลังพยายามส่ง | 'synced' = ยืนยันว่าขึ้นคลาวด์แล้ว | 'failed' = ส่งไม่สำเร็จ ยังค้างอยู่ในเครื่องนี้
+      _syncStatus: 'pending',
     };
 
     let hist = loadHistory();
@@ -2990,7 +3042,7 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
      HISTORY PANEL
   ══════════════════════════════════════ */
   function bindHistoryPanel() {
-    $('tab-history').addEventListener('click', () => { openPanel('history-panel'); populateHistoryPanel(); });
+    $('tab-history').addEventListener('click', () => { openPanel('history-panel'); refreshHistoryPanelFromCloud(); });
     $('btn-close-hist').addEventListener('click', () => closePanel('history-panel'));
     $('btn-hf-apply').addEventListener('click', populateHistoryPanel);
     $('hf-dept').addEventListener('change', () => { populateHistLineOptions(); populateHistoryPanel(); });
@@ -3006,6 +3058,24 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
       generatePdf(hist[0]);
     });
   }
+
+  // 🆕 เปิดหน้าประวัติ = ดึงข้อมูลสดจาก Supabase มาโชว์เสมอ ไม่พึ่ง cache ในเครื่องอย่างเดียว
+  // (cache ในเครื่องถูกตัดเหลือ 100 รายการล่าสุดหลังบันทึกผลตรวจแต่ละครั้ง เพื่อกัน localStorage เต็ม —
+  //  ข้อมูลจริงบน Supabase ไม่ได้ถูกตัดทิ้งตามไปด้วย แต่ถ้าไม่ pull สดใหม่ หน้าประวัติ/PDF อาจโชว์ไม่ครบ)
+  async function refreshHistoryPanelFromCloud() {
+    populateHistoryPanel(); // แสดงผลจาก cache ทันทีก่อน (เร็ว ไม่มีจอว่างรอเน็ต)
+    if (!sb) return; // ไม่ได้ต่อ Supabase — ใช้ cache local อย่างเดียว
+    try {
+      const remote = await pullHistoryFromSupabase();
+      if (remote) {
+        localStorage.setItem(SK.history, JSON.stringify(mergeHistoryWithLocalPending(remote)));
+        populateHistoryPanel(); // เรนเดอร์ใหม่ด้วยข้อมูลครบจากคลาวด์
+      }
+    } catch (e) {
+      console.error('refreshHistoryPanelFromCloud error:', e);
+    }
+  }
+
 
   // 🆕 เติม dropdown "Line" — ถ้าเลือกแผนกไว้แล้ว จะโชว์เฉพาะ Line ในแผนกนั้น (cascading เหมือนหน้าเลือกจิ๊ก)
   function populateHistLineOptions() {
@@ -3074,6 +3144,12 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
         <div class="hi-head">
           <div class="hi-meta"><strong>${escHtml(h.date)}</strong> เวลา: ${new Date(h.timestamp).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' })} · ${escHtml(h.shift)} · ผู้ตรวจ: ${escHtml(h.inspector)}</div>
           <div class="hi-badges">
+            ${(() => {
+              const st = h._syncStatus || 'synced'; // ไม่มีค่า = ข้อมูลเก่าก่อนมีฟีเจอร์นี้ ถือว่า synced ไปก่อน
+              if (st === 'synced')  return `<span class="badge sync-ok" title="ยืนยันแล้วว่าข้อมูลนี้ขึ้น Supabase (ระบบกลาง) เรียบร้อย">☁️ ขึ้นคลาวด์แล้ว</span>`;
+              if (st === 'pending') return `<span class="badge sync-pending" title="เพิ่งบันทึก กำลังพยายามส่งขึ้น Supabase">⏳ กำลังส่ง...</span>`;
+              return `<span class="badge sync-failed" title="ส่งขึ้น Supabase ไม่สำเร็จ — ข้อมูลยังอยู่แค่ในเครื่องนี้เท่านั้น กดเพื่อลองส่งใหม่">⚠️ ยังไม่ขึ้นคลาวด์ <button class="hi-retry-sync" data-retry="${escHtml(h.id)}">ลองส่งใหม่</button></span>`;
+            })()}
             <span class="badge ok">OK ${okCount}</span>
             ${ngItems.length ? `<span class="badge ng">NG ${ngItems.length}</span>` : ''}
             ${(() => {
@@ -3123,6 +3199,10 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
     list.querySelectorAll('[data-pdf]').forEach(b => b.addEventListener('click', () => {
       const rec = loadHistory().find(h => String(h.id) === b.dataset.pdf);
       if (rec) generatePdf(rec);
+    }));
+    list.querySelectorAll('[data-retry]').forEach(b => b.addEventListener('click', e => {
+      e.stopPropagation();
+      retryHistorySync(b.dataset.retry);
     }));
     list.querySelectorAll('[data-del]').forEach(b => b.addEventListener('click', () => {
       if (!confirm('ลบรายการนี้?')) return;
