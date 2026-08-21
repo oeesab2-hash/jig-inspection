@@ -1265,9 +1265,10 @@ h1, h2, h3, h4, label, button, input, select, textarea, p, span, div {
 .hi-bulk-btn.del { color: var(--ng); border-color: var(--ng-border); }
 .hi-bulk-btn.del:hover { background: var(--ng-bg); }
 .hi-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
-.hi-meta { font-size: 12px; color: var(--text-muted); }
+.hi-meta { font-size: 12px; color: var(--text-muted); display: flex; flex-wrap: wrap; align-items: baseline; }
 .hi-meta strong { color: var(--text-main); }
-.hi-meta-nowrap { white-space: nowrap; }
+.hi-meta-item { white-space: nowrap; }
+.hi-meta-item:not(:first-child)::before { content: "\00b7"; margin: 0 6px; color: var(--text-muted); }
 .hi-badges { display: flex; gap: 4px; flex-wrap: wrap; align-items: flex-start; }
 .hi-path { font-size: 11px; color: var(--text-muted); margin-bottom: 4px; font-family: var(--font-en); }
 .hi-doc-refs { font-size: 10px; color: var(--text-muted); margin-bottom: 6px; font-family: var(--font-en); opacity: 0.85; }
