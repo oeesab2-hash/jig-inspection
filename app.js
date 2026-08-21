@@ -3284,8 +3284,8 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
             <button class="hi-btn del" data-del="${escHtml(h.id)}">🗑 ลบ</button>
           </div>
           ${h.synced === false
-            ? `<button type="button" class="hi-sync-status pending" data-resync="${escHtml(h.id)}" title="ยังไม่ได้อัปโหลดขึ้น Supabase — เครื่องอื่นในทีมจะยังไม่เห็นรายการนี้ กดเพื่อลองส่งอีกครั้ง">🔄 รอซิงค์</button>`
-            : `<span class="hi-sync-status synced" title="ขึ้น Supabase แล้ว — ทีมอื่นเห็นรายการนี้แล้ว">☁️ ซิงค์แล้ว</span>`
+            ? `<button type="button" class="hi-sync-status pending" data-resync="${escHtml(h.id)}" title="ยังไม่ได้อัปโหลดขึ้น Supabase — เครื่องอื่นในทีมจะยังไม่เห็นรายการนี้ กดเพื่อลองส่งอีกครั้ง">🔄 Pending sync</button>`
+            : `<span class="hi-sync-status synced" title="ขึ้น Supabase แล้ว — ทีมอื่นเห็นรายการนี้แล้ว">☁️ Synced</span>`
           }
         </div>
       </div>`;
