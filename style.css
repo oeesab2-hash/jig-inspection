@@ -301,6 +301,23 @@ h1, h2, h3, h4, label, button, input, select, textarea, p, span, div {
 /* Chips */
 .filter-chips { display: flex; flex-wrap: wrap; gap: 8px; }
 
+/* JIG chip list (Level 3) — ใช้ grid คอลัมน์เท่ากันแทน flex-wrap
+   กันปัญหาชื่อ JIG ยาว/สั้นไม่เท่ากันแล้วเรียงดูไม่เป็นระเบียบ */
+.filter-chips.jig-chips-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  align-items: stretch;
+}
+.jig-chips-grid .chip.jig-chip { width: 100%; }
+.jig-chips-grid .jig-chip-text { width: 100%; }
+.jig-chips-grid .jig-chip-name {
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+  overflow: hidden; line-height: 1.3;
+}
+@media (max-width: 560px) {
+  .filter-chips.jig-chips-grid { grid-template-columns: 1fr; }
+}
+
 .jig-search-wrap {
   position: relative;
   display: flex; align-items: center;

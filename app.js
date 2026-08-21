@@ -933,7 +933,7 @@
           <span class="jig-chip-main" data-jig="${escHtml(j.id)}">
             <span class="jig-chip-thumb${j.bgImage ? '' : ' jig-chip-thumb-empty'}">${thumb}</span>
             <span class="jig-chip-text">
-              ${escHtml(j.name)}
+              <span class="jig-chip-name">${escHtml(j.name)}</span>
               <span class="chip-code">${escHtml(j.id)}</span>
               ${skipped ? '<span class="jig-skip-badge">ไม่ได้ผลิตวันนี้</span>' : ''}
             </span>
