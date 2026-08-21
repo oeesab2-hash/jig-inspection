@@ -781,7 +781,25 @@
       <button id="btn-hf-pdf" class="btn-export-pdf"><svg class="inline-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg> PDF</button>
     </div>
     <div class="hist-summary" id="hist-summary"></div>
+    <div class="hist-select-row hidden" id="hist-select-row">
+      <label class="hist-select-all"><input type="checkbox" id="hf-select-all"> เลือกทั้งหมด</label>
+      <span id="hist-select-count" class="hist-select-count"></span>
+    </div>
     <div id="hist-list"></div>
+
+    <!-- ─── Sticky bulk-action bar (แสดงเมื่อติ๊กเลือกอย่างน้อย 1 รายการ) — อยู่ใน panel นี้เอง ไม่ล้นออกไปนอกจอ ─── -->
+    <div id="hist-bulk-bar" class="hist-bulk-bar hidden">
+      <div class="hist-bulk-top">
+        <span id="hist-bulk-count" class="hist-bulk-count"></span>
+        <button id="btn-bulk-clear" class="hi-bulk-clear-btn" title="ยกเลิกการเลือกทั้งหมด">✕</button>
+      </div>
+      <div class="hist-bulk-actions">
+        <button id="btn-bulk-pdf" class="hi-bulk-btn"><svg class="inline-ico" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg> Export PDF</button>
+        <button id="btn-bulk-protect" class="hi-bulk-btn"><svg class="inline-ico" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg> เก็บไว้ (กันลบ)</button>
+        <button id="btn-bulk-unprotect" class="hi-bulk-btn"><svg class="inline-ico" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 9.9-2"/></svg> ยกเลิกกันลบ</button>
+        <button id="btn-bulk-del" class="hi-bulk-btn del"><svg class="inline-ico" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg> ลบที่เลือก</button>
+      </div>
+    </div>
   </div>
 
   <!-- ─── OVERLAY (backdrop for panels) ─── -->

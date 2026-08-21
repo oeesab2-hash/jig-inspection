@@ -210,8 +210,6 @@
   async function pushHistoryToSupabase(arr) {
     if (!sb) return;
     _syncing = true;
-    const allIds = (arr || []).map(h => h.id);
-    const succeededIds = [];
     try {
       const rows = (arr || []).map(h => ({
         id: h.id, ts: h.timestamp,
@@ -237,54 +235,20 @@
         gps_accuracy: h.gps?.accuracy || null,
         gps_timestamp: h.gps?.timestamp || null,
         gps_status: h.gps?.status || 'unknown',
+        // 🆕 กันลบอัตโนมัติ — ต้องมีคอลัมน์ protected boolean บนตาราง history (ดูหมายเหตุใน deleteOldHistory)
+        protected: h.protected || false,
       }));
       // แบ่งส่งเป็นชุดๆ (มีรูปถ่าย base64 อยู่ในนั้น ก้อนใหญ่ได้) กันพัง request เดียวโตเกินไป
       // upsert ตาม id — แถวที่มีอยู่แล้วจะถูกอัปเดตทับ ส่วนแถวอื่นในตารางที่ไม่ได้ส่งมาจะไม่ถูกแตะต้อง
       for (let i = 0; i < rows.length; i += 40) {
-        const batch = rows.slice(i, i + 40);
-        const { error } = await sb.from('history').upsert(batch, { onConflict: 'id' });
+        const { error } = await sb.from('history').upsert(rows.slice(i, i + 40), { onConflict: 'id' });
         if (error) throw error;
-        succeededIds.push(...batch.map(r => r.id)); // 🆕 บันทึกว่า id ไหนส่งสำเร็จแล้วบ้าง (ทีละ batch)
       }
-      markHistorySyncStatus(succeededIds, 'synced'); // 🆕 ยืนยันว่าขึ้นคลาวด์แล้ว — อัปเดต badge ในหน้าประวัติ
     } catch (e) {
       console.error('pushHistoryToSupabase error:', e);
-      // 🆕 batch ที่ส่งไปก่อนพังให้ถือว่า synced แล้ว ส่วนที่เหลือ (รวม batch ที่พัง) ให้ mark เป็น failed
-      markHistorySyncStatus(succeededIds, 'synced');
-      const failedIds = allIds.filter(id => !succeededIds.includes(id));
-      markHistorySyncStatus(failedIds, 'failed');
     } finally {
       setTimeout(() => { _syncing = false; }, 1500);
     }
-  }
-
-  // 🆕 อัปเดตสถานะ sync (_syncStatus) ของแต่ละรายการในแคชเครื่อง แล้วรีเฟรช badge ในหน้าประวัติถ้าเปิดอยู่
-  function markHistorySyncStatus(ids, status) {
-    if (!ids || !ids.length) return;
-    const idSet = new Set(ids);
-    const hist = loadHistory();
-    let changed = false;
-    hist.forEach(h => {
-      if (idSet.has(h.id) && h._syncStatus !== status) { h._syncStatus = status; changed = true; }
-    });
-    if (!changed) return;
-    try { localStorage.setItem(SK.history, JSON.stringify(hist)); }
-    catch (e) { console.error('markHistorySyncStatus error:', e); }
-    const panel = $('history-panel');
-    if (panel && !panel.classList.contains('hidden') && typeof populateHistoryPanel === 'function') {
-      populateHistoryPanel(); // อัปเดต badge สดๆ ถ้าเปิดหน้าประวัติค้างอยู่พอดี
-    }
-  }
-
-  // 🆕 ลองส่งรายการที่ค้าง (pending/failed) ขึ้น Supabase ใหม่ทั้งหมดในครั้งเดียว (ใช้กับปุ่ม "ลองส่งใหม่")
-  function retryHistorySync(id) {
-    const hist = loadHistory();
-    const record = hist.find(h => h.id === id);
-    if (!record) return;
-    record._syncStatus = 'pending';
-    localStorage.setItem(SK.history, JSON.stringify(hist));
-    populateHistoryPanel();
-    pushHistoryToSupabase([record]);
   }
 
   // ── ลบ history รายการเดียวออกจาก Supabase (ใช้ตอนกดลบใน History Panel) ──
@@ -342,22 +306,12 @@
           timestamp: row.gps_timestamp,
           status: row.gps_status || 'unknown'
         } : undefined,
-        _syncStatus: 'synced', // 🆕 มาจาก Supabase ตรงๆ = ยืนยันว่าขึ้นคลาวด์แล้วแน่นอน
+        protected: !!row.protected, // 🆕
       }));
     } catch (e) {
       console.warn('pullHistoryFromSupabase error (ใช้ข้อมูล local แทน):', e);
       return null;
     }
-  }
-
-  // 🆕 รวมข้อมูลจาก Supabase เข้ากับ cache local — คง "รายการที่ยังไม่ synced" (pending/failed) ของเครื่องนี้ไว้เสมอ
-  // กันไม่ให้ถูกเขียนทับหายไปตอน pull สดจากคลาวด์ (เช่น เพิ่งบันทึกผลตรวจตอนไม่มีเน็ต ยังไม่ทันขึ้น Supabase)
-  function mergeHistoryWithLocalPending(remote) {
-    const local = loadHistory();
-    const remoteIds = new Set((remote || []).map(h => h.id));
-    const localOnlyPending = local.filter(h => !remoteIds.has(h.id) && h._syncStatus !== 'synced');
-    return [...localOnlyPending, ...(remote || [])]
-      .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
   }
 
   // ฟังการเปลี่ยนแปลง realtime จากเพื่อนร่วมทีมคนอื่น แล้วรีเฟรชหน้าจอให้อัตโนมัติ
@@ -380,7 +334,7 @@
       if (_syncing) return;
       const remote = await pullHistoryFromSupabase();
       if (remote) {
-        localStorage.setItem(SK.history, JSON.stringify(mergeHistoryWithLocalPending(remote)));
+        localStorage.setItem(SK.history, JSON.stringify(remote));
         if (typeof populateHistoryPanel === 'function') populateHistoryPanel();
         if (typeof refreshDashboard === 'function') refreshDashboard();
         toast('📥 มีข้อมูลตรวจสอบใหม่จากทีม', 'ok');
@@ -862,7 +816,7 @@
     // ดึงข้อมูลล่าสุดจากทีมมาก่อน แล้วค่อย render (ถ้ายังไม่เคย sync ขึ้นเลยจะได้ null แล้วใช้ local ต่อ)
     const [remoteCat, remoteHist] = await Promise.all([pullCatalogFromSupabase(), pullHistoryFromSupabase()]);
     if (remoteCat) localStorage.setItem(SK.catalog, JSON.stringify(remoteCat));
-    if (remoteHist) localStorage.setItem(SK.history, JSON.stringify(mergeHistoryWithLocalPending(remoteHist)));
+    if (remoteHist) localStorage.setItem(SK.history, JSON.stringify(remoteHist));
     loadCatalog();
     catalogLoading = false; // ✅ ข้อมูลตั้งต้นพร้อมแล้ว (จาก Supabase หรือ cache local) — เลิกถือว่า "กำลังโหลด"
     loadAppSettings();               // ใช้ค่า cache/default ไปก่อนระหว่างรอ Supabase
@@ -1475,10 +1429,7 @@
         accuracy:   gpsData.accuracy,
         timestamp:  gpsData.timestamp,
         status:     gpsData.status // 'success' เท่านั้น
-      },
-      // 🆕 สถานะ sync ขึ้น Supabase — ใช้แสดง badge ในหน้าประวัติ (ค่านี้เป็น local-only ไม่ถูกส่งขึ้น Supabase)
-      // 'pending' = เพิ่งบันทึก กำลังพยายามส่ง | 'synced' = ยืนยันว่าขึ้นคลาวด์แล้ว | 'failed' = ส่งไม่สำเร็จ ยังค้างอยู่ในเครื่องนี้
-      _syncStatus: 'pending',
+      }
     };
 
     let hist = loadHistory();
@@ -2138,6 +2089,9 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
       localStorage.removeItem('jig_admin_user');
       closePanel('admin-panel');
       toast('ออกจากระบบเรียบร้อยแล้ว', 'ok');
+      // 🆕 เคลียร์การเลือกรายการ history ทันที เผื่อพนักงานคนถัดไปมาใช้เครื่องต่อ
+      _histSelected.clear();
+      if ($('history-panel').classList.contains('open')) populateHistoryPanel();
     });
 
     /* Change Pass — ต้องยืนยันรหัสเดิมก่อนเสมอ (ผ่าน RPC ฝั่ง DB) */
@@ -3041,15 +2995,19 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
   /* ══════════════════════════════════════
      HISTORY PANEL
   ══════════════════════════════════════ */
+  // 🆕 เก็บ id ของรายการที่ติ๊กเลือกไว้ (เฉพาะระหว่างเปิด panel — ไม่ persist)
+  let _histSelected = new Set();
+
   function bindHistoryPanel() {
-    $('tab-history').addEventListener('click', () => { openPanel('history-panel'); refreshHistoryPanelFromCloud(); });
-    $('btn-close-hist').addEventListener('click', () => closePanel('history-panel'));
-    $('btn-hf-apply').addEventListener('click', populateHistoryPanel);
+    $('tab-history').addEventListener('click', () => { _histSelected.clear(); openPanel('history-panel'); populateHistoryPanel(); });
+    $('btn-close-hist').addEventListener('click', () => { _histSelected.clear(); closePanel('history-panel'); });
+    $('btn-hf-apply').addEventListener('click', () => { _histSelected.clear(); populateHistoryPanel(); });
     $('hf-dept').addEventListener('change', () => { populateHistLineOptions(); populateHistoryPanel(); });
     $('btn-hf-clear').addEventListener('click', () => {
       $('hf-start').value = ''; $('hf-end').value = '';
       $('hf-dept').value = ''; $('hf-shift').value = ''; $('hf-line').value = '';
       populateHistLineOptions();
+      _histSelected.clear();
       populateHistoryPanel();
     });
     $('btn-hf-pdf').addEventListener('click', () => {
@@ -3057,25 +3015,22 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
       if (!hist.length) { toast('ไม่มีประวัติให้ส่งออก', 'ng'); return; }
       generatePdf(hist[0]);
     });
-  }
 
-  // 🆕 เปิดหน้าประวัติ = ดึงข้อมูลสดจาก Supabase มาโชว์เสมอ ไม่พึ่ง cache ในเครื่องอย่างเดียว
-  // (cache ในเครื่องถูกตัดเหลือ 100 รายการล่าสุดหลังบันทึกผลตรวจแต่ละครั้ง เพื่อกัน localStorage เต็ม —
-  //  ข้อมูลจริงบน Supabase ไม่ได้ถูกตัดทิ้งตามไปด้วย แต่ถ้าไม่ pull สดใหม่ หน้าประวัติ/PDF อาจโชว์ไม่ครบ)
-  async function refreshHistoryPanelFromCloud() {
-    populateHistoryPanel(); // แสดงผลจาก cache ทันทีก่อน (เร็ว ไม่มีจอว่างรอเน็ต)
-    if (!sb) return; // ไม่ได้ต่อ Supabase — ใช้ cache local อย่างเดียว
-    try {
-      const remote = await pullHistoryFromSupabase();
-      if (remote) {
-        localStorage.setItem(SK.history, JSON.stringify(mergeHistoryWithLocalPending(remote)));
-        populateHistoryPanel(); // เรนเดอร์ใหม่ด้วยข้อมูลครบจากคลาวด์
-      }
-    } catch (e) {
-      console.error('refreshHistoryPanelFromCloud error:', e);
-    }
-  }
+    // ── เลือกทั้งหมด (เฉพาะรายการที่กำลังแสดงตาม filter ปัจจุบัน) ──
+    $('hf-select-all').addEventListener('change', (e) => {
+      const visibleIds = getFilteredHistory().map(h => String(h.id));
+      if (e.target.checked) visibleIds.forEach(id => _histSelected.add(id));
+      else visibleIds.forEach(id => _histSelected.delete(id));
+      populateHistoryPanel();
+    });
 
+    // ── ปุ่ม bulk actions ──
+    $('btn-bulk-pdf').addEventListener('click', bulkExportPdf);
+    $('btn-bulk-protect').addEventListener('click', () => bulkSetProtected(true));
+    $('btn-bulk-unprotect').addEventListener('click', () => bulkSetProtected(false));
+    $('btn-bulk-del').addEventListener('click', bulkDeleteSelected);
+    $('btn-bulk-clear').addEventListener('click', () => { _histSelected.clear(); populateHistoryPanel(); });
+  }
 
   // 🆕 เติม dropdown "Line" — ถ้าเลือกแผนกไว้แล้ว จะโชว์เฉพาะ Line ในแผนกนั้น (cascading เหมือนหน้าเลือกจิ๊ก)
   function populateHistLineOptions() {
@@ -3088,15 +3043,8 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
     if (lines.some(l => l.id === prevVal)) lineSel.value = prevVal; // เก็บค่าที่เลือกไว้ ถ้ายังอยู่ในลิสต์ใหม่
   }
 
-  function populateHistoryPanel() {
-    // Populate dept filter
-    const deptSel = $('hf-dept');
-    const prevDept = deptSel.value;
-    deptSel.innerHTML = '<option value="">ทั้งหมด</option>' +
-      catalog.depts.map(d => `<option value="${escHtml(d.id)}">${escHtml(d.name)}</option>`).join('');
-    if (catalog.depts.some(d => d.id === prevDept)) deptSel.value = prevDept;
-    populateHistLineOptions();
-
+  // ── ดึงประวัติตาม filter ปัจจุบัน (ใช้ร่วมกันระหว่าง populateHistoryPanel และ select-all) ──
+  function getFilteredHistory() {
     let hist = loadHistory();
     const start = $('hf-start').value;
     const end   = $('hf-end').value;
@@ -3108,6 +3056,96 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
     if (dept)  hist = hist.filter(h => h.deptId === dept);
     if (shift) hist = hist.filter(h => h.shift === shift);
     if (line)  hist = hist.filter(h => h.lineId === line);
+    return hist;
+  }
+
+  // ── อัปเดตแถบเลือกทั้งหมด + bulk bar ให้ตรงกับ _histSelected ปัจจุบัน ──
+  // 🔒 ฟีเจอร์เลือกหลายรายการ/bulk action ทั้งหมด ใช้ได้เฉพาะตอน login เป็น Admin แล้วเท่านั้น
+  //    (พนักงานตรวจเช็คทั่วไปจะไม่เห็น checkbox/แถบนี้เลย กันกดพลาดข้อมูลหาย)
+  function refreshSelectionUI(hist) {
+    const selectRow = $('hist-select-row');
+    const bar = $('hist-bulk-bar');
+
+    if (!admLoggedIn) {
+      selectRow.classList.add('hidden');
+      bar.classList.add('hidden');
+      return;
+    }
+
+    selectRow.classList.remove('hidden');
+    const total = hist.length;
+    const selInView = hist.filter(h => _histSelected.has(String(h.id))).length;
+    const selAllCb = $('hf-select-all');
+    selAllCb.checked = total > 0 && selInView === total;
+    selAllCb.indeterminate = selInView > 0 && selInView < total;
+    $('hist-select-count').textContent = _histSelected.size ? `เลือกอยู่ ${_histSelected.size} รายการ` : '';
+
+    if (_histSelected.size > 0) {
+      bar.classList.remove('hidden');
+      $('hist-bulk-count').textContent = `เลือกไว้ ${_histSelected.size} รายการ`;
+    } else {
+      bar.classList.add('hidden');
+    }
+  }
+
+  // ── Bulk: Export PDF ทีละไฟล์ (ดาวน์โหลดหลายไฟล์ต่อกัน) ──
+  async function bulkExportPdf() {
+    const ids = Array.from(_histSelected);
+    if (!ids.length) return;
+    const hist = loadHistory();
+    const recs = ids.map(id => hist.find(h => String(h.id) === id)).filter(Boolean);
+    if (!recs.length) { toast('ไม่พบรายการที่เลือก', 'ng'); return; }
+    toast(`⏳ กำลังสร้าง PDF ${recs.length} ไฟล์...`, 'ok');
+    for (const rec of recs) {
+      await generatePdf(rec);
+      await new Promise(r => setTimeout(r, 400)); // เว้นจังหวะกันเบราว์เซอร์บล็อกดาวน์โหลดรัว ๆ
+    }
+    toast(`✅ Export PDF ครบ ${recs.length} ไฟล์แล้ว`, 'ok');
+  }
+
+  // ── Bulk: mark/unmark "กันลบอัตโนมัติ" (protected) ──
+  // 🔒 protected = true จะถูกกันไว้ไม่ให้ deleteOldHistory()/RPC admin_purge_old_history ลบทิ้ง
+  //    ต้องมีคอลัมน์ protected boolean บนตาราง Supabase (ดูหมายเหตุใน deleteOldHistory)
+  async function bulkSetProtected(val) {
+    const ids = Array.from(_histSelected);
+    if (!ids.length) return;
+    const hist = loadHistory();
+    const touched = [];
+    hist.forEach(h => {
+      if (ids.includes(String(h.id))) { h.protected = val; touched.push(h); }
+    });
+    localStorage.setItem(SK.history, JSON.stringify(hist));
+    populateHistoryPanel();
+    toast(val ? `🔒 กันลบแล้ว ${touched.length} รายการ` : `🔓 ยกเลิกกันลบแล้ว ${touched.length} รายการ`, 'ok');
+    if (sb) pushHistoryToSupabase(touched); // sync ขึ้น Supabase เบื้องหลัง
+  }
+
+  // ── Bulk: ลบรายการที่เลือกทั้งหมด (ผ่าน RPC admin_delete_history ทีละแถวเหมือนเดิม เพื่อความปลอดภัย) ──
+  async function bulkDeleteSelected() {
+    const ids = Array.from(_histSelected);
+    if (!ids.length) return;
+    if (!confirm(`ลบ ${ids.length} รายการที่เลือกไว้? การลบนี้ย้อนกลับไม่ได้`)) return;
+    let remaining = loadHistory();
+    for (const id of ids) {
+      await deleteHistoryFromSupabase(id);
+      remaining = remaining.filter(h => String(h.id) !== id);
+      localStorage.setItem(SK.history, JSON.stringify(remaining));
+    }
+    _histSelected.clear();
+    populateHistoryPanel();
+    toast(`🗑 ลบแล้ว ${ids.length} รายการ`, 'ok');
+  }
+
+  function populateHistoryPanel() {
+    // Populate dept filter
+    const deptSel = $('hf-dept');
+    const prevDept = deptSel.value;
+    deptSel.innerHTML = '<option value="">ทั้งหมด</option>' +
+      catalog.depts.map(d => `<option value="${escHtml(d.id)}">${escHtml(d.name)}</option>`).join('');
+    if (catalog.depts.some(d => d.id === prevDept)) deptSel.value = prevDept;
+    populateHistLineOptions();
+
+    const hist = getFilteredHistory();
 
     const totalOk = hist.filter(h => h.items.every(i => i.status === 'ok' || i.status === 'fixed')).length;
     $('hist-summary').innerHTML = `
@@ -3116,7 +3154,7 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
       <div class="hist-stat ng"><span class="n">${hist.length - totalOk}</span><span class="l">มี NG</span></div>`;
 
     const list = $('hist-list');
-    if (!hist.length) { list.innerHTML = '<div class="no-records">ไม่พบประวัติ</div>'; return; }
+    if (!hist.length) { list.innerHTML = '<div class="no-records">ไม่พบประวัติ</div>'; refreshSelectionUI(hist); return; }
     const pdfLocalLog = loadPdfLocalLog(); // 🆕 เช็คว่ารายการไหน export PDF ลงเครื่องนี้ไปแล้วบ้าง
     list.innerHTML = hist.map(h => {
       const ngItems = h.items.filter(i => i.status === 'ng');
@@ -3139,17 +3177,15 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
         }
       }
       
-      return `<div class="history-item">
+      return `<div class="history-item ${_histSelected.has(String(h.id)) ? 'sel' : ''} ${admLoggedIn ? 'has-select' : ''}" data-hist-id="${escHtml(h.id)}">
+        ${admLoggedIn ? `<div class="hi-select-wrap">
+          <input type="checkbox" class="hi-select-cb" data-sel="${escHtml(h.id)}" ${_histSelected.has(String(h.id)) ? 'checked' : ''}>
+        </div>` : ''}
         <div class="hi-path">${escHtml(h.deptName || '')}  ›  ${escHtml(h.lineName || '')}  ›  ${escHtml(h.jigName || '')}</div>
         <div class="hi-head">
           <div class="hi-meta"><strong>${escHtml(h.date)}</strong> เวลา: ${new Date(h.timestamp).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' })} · ${escHtml(h.shift)} · ผู้ตรวจ: ${escHtml(h.inspector)}</div>
           <div class="hi-badges">
-            ${(() => {
-              const st = h._syncStatus || 'synced'; // ไม่มีค่า = ข้อมูลเก่าก่อนมีฟีเจอร์นี้ ถือว่า synced ไปก่อน
-              if (st === 'synced')  return `<span class="badge sync-ok" title="ยืนยันแล้วว่าข้อมูลนี้ขึ้น Supabase (ระบบกลาง) เรียบร้อย">☁️ ขึ้นคลาวด์แล้ว</span>`;
-              if (st === 'pending') return `<span class="badge sync-pending" title="เพิ่งบันทึก กำลังพยายามส่งขึ้น Supabase">⏳ กำลังส่ง...</span>`;
-              return `<span class="badge sync-failed" title="ส่งขึ้น Supabase ไม่สำเร็จ — ข้อมูลยังอยู่แค่ในเครื่องนี้เท่านั้น กดเพื่อลองส่งใหม่">⚠️ ยังไม่ขึ้นคลาวด์ <button class="hi-retry-sync" data-retry="${escHtml(h.id)}">ลองส่งใหม่</button></span>`;
-            })()}
+            ${h.protected ? `<span class="badge protected" title="รายการนี้ถูกกันไว้ไม่ให้ลบอัตโนมัติ">🔒 กันลบ</span>` : ''}
             <span class="badge ok">OK ${okCount}</span>
             ${ngItems.length ? `<span class="badge ng">NG ${ngItems.length}</span>` : ''}
             ${(() => {
@@ -3200,10 +3236,6 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
       const rec = loadHistory().find(h => String(h.id) === b.dataset.pdf);
       if (rec) generatePdf(rec);
     }));
-    list.querySelectorAll('[data-retry]').forEach(b => b.addEventListener('click', e => {
-      e.stopPropagation();
-      retryHistorySync(b.dataset.retry);
-    }));
     list.querySelectorAll('[data-del]').forEach(b => b.addEventListener('click', () => {
       if (!confirm('ลบรายการนี้?')) return;
       const delId = b.dataset.del;
@@ -3215,6 +3247,15 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
     list.querySelectorAll('.hi-photo').forEach(img => {
       img.addEventListener('click', () => openLightbox(img.dataset.src));
     });
+    // 🆕 checkbox เลือกรายการ (เฉพาะตอน admin login)
+    list.querySelectorAll('.hi-select-cb').forEach(cb => cb.addEventListener('change', () => {
+      const id = cb.dataset.sel;
+      if (cb.checked) _histSelected.add(id); else _histSelected.delete(id);
+      cb.closest('.history-item').classList.toggle('sel', cb.checked);
+      refreshSelectionUI(hist);
+    }));
+
+    refreshSelectionUI(hist);
   }
 
   /* ══════════════════════════════════════
@@ -5015,6 +5056,9 @@ ${JSON.stringify(summary, null, 2)}
 
   // ✅ ฟังก์ชัน: ลบ history เก่า
   // ✅ SECURITY: ผ่าน RPC 'admin_purge_old_history' (เช็ค password admin) แทนการ delete ตรง
+  // 🆕 หมายเหตุ (feature "เก็บไว้/กันลบ" ในหน้า History): ต้องมีคอลัมน์ protected boolean บนตาราง
+  //    history + RPC admin_purge_old_history ต้องข้ามแถวที่ protected = true (พี่บีรันไปแล้วรอบก่อน
+  //    ไม่ต้องรันซ้ำ เว้นแต่ทำงานกับ Supabase project คนละตัว)
   async function deleteOldHistory(daysOld = 30) {
     if (!sb) return;
     const pass = getAdminPass();
