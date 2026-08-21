@@ -4675,28 +4675,46 @@ ${JSON.stringify(summary, null, 2)}
      STORAGE STATUS MONITOR — แสดงข้อมูล storage usage ใน Admin Panel
      ═══════════════════════════════════════════════════════════════ */
 
-  // ✅ ฟังก์ชัน: ดึงข้อมูลสถิติ storage จาก Supabase
+  // ✅ ฟังก์ชัน: ดึงข้อมูลสถิติ storage จาก Supabase — คำนวณขนาดจริงจากข้อมูลจริง (ไม่ใช่ประมาณการหยาบๆ)
   async function getStorageStats() {
     if (!sb) return null;
     try {
-      const [deptCount, lineCount, jigCount, cpCount, historyCount, templateCount] = await Promise.all([
-        sb.from('departments').select('id', { count: 'exact', head: true }),
-        sb.from('lines').select('id', { count: 'exact', head: true }),
-        sb.from('jigs').select('id', { count: 'exact', head: true }),
-        sb.from('checkpoints').select('id', { count: 'exact', head: true }),
-        sb.from('history').select('id', { count: 'exact', head: true }),
-        sb.from('templates').select('id', { count: 'exact', head: true }),
+      // ── ดึงข้อมูล "เต็ม" ของทุกตาราง (ไม่ใช่แค่นับจำนวนแถว) เพื่อคำนวณขนาดไบต์จริง
+      //    รวมรูปถ่าย base64 ที่ฝังอยู่ใน history.items และ jigs.bg_image ด้วย — เป็นตัวกินพื้นที่หลัก
+      const [dep, lin, jig, cp, hist, tpl] = await Promise.all([
+        sb.from('departments').select('*'),
+        sb.from('lines').select('*'),
+        sb.from('jigs').select('*'),
+        sb.from('checkpoints').select('*'),
+        sb.from('history').select('*'),
+        sb.from('templates').select('*'),
       ]);
+      const err = dep.error || lin.error || jig.error || cp.error || hist.error || tpl.error;
+      if (err) throw err;
+
+      // คำนวณขนาดไบต์จริงของแต่ละตาราง ด้วย Blob (นับ UTF-8 byte length ตรงตามจริง)
+      const byteSizeOf = (rows) => new Blob([JSON.stringify(rows || [])]).size;
+      const sizeByTable = {
+        departments: byteSizeOf(dep.data),
+        lines:       byteSizeOf(lin.data),
+        jigs:        byteSizeOf(jig.data),   // รวม bg_image (base64 พื้นหลัง JIG)
+        checkpoints: byteSizeOf(cp.data),
+        history:     byteSizeOf(hist.data),  // รวมรูปถ่าย base64 ที่แนบในแต่ละใบตรวจ — ตัวใหญ่สุด
+        templates:   byteSizeOf(tpl.data),
+      };
+      const totalBytes = Object.values(sizeByTable).reduce((a, b) => a + b, 0);
 
       const stats = {
-        departments: deptCount.count || 0,
-        lines: lineCount.count || 0,
-        jigs: jigCount.count || 0,
-        checkpoints: cpCount.count || 0,
-        history: historyCount.count || 0,
-        templates: templateCount.count || 0,
-        totalRecords: (deptCount.count || 0) + (lineCount.count || 0) + (jigCount.count || 0) + 
-                      (cpCount.count || 0) + (historyCount.count || 0) + (templateCount.count || 0),
+        departments: (dep.data || []).length,
+        lines:       (lin.data || []).length,
+        jigs:        (jig.data || []).length,
+        checkpoints: (cp.data || []).length,
+        history:     (hist.data || []).length,
+        templates:   (tpl.data || []).length,
+        totalRecords: (dep.data || []).length + (lin.data || []).length + (jig.data || []).length +
+                      (cp.data || []).length + (hist.data || []).length + (tpl.data || []).length,
+        sizeByTable,
+        totalBytes, // ✅ ขนาดจริงจากข้อมูลจริง (ไม่ใช่ประมาณการ record × 500 bytes แบบเดิม)
         timestamp: new Date().toLocaleString('th-TH'),
       };
 
@@ -4730,7 +4748,7 @@ ${JSON.stringify(summary, null, 2)}
     }
 
     const SUPABASE_FREE_LIMIT = 1073741824; // 1GB
-    const estimatedSize = stats.totalRecords * 500;
+    const estimatedSize = stats.totalBytes; // ✅ ขนาดจริงจากข้อมูลจริง (Blob byte size) ไม่ใช่ประมาณการหยาบๆ อีกต่อไป
     const usagePercent = Math.min((estimatedSize / SUPABASE_FREE_LIMIT) * 100, 100);
     const remainingBytes = Math.max(SUPABASE_FREE_LIMIT - estimatedSize, 0);
 
@@ -4777,6 +4795,24 @@ ${JSON.stringify(summary, null, 2)}
           <div style="margin-top: 4px; padding-top: 4px; border-top: 1px solid var(--border-color); color: var(--text-main); text-align: center;">
             📊 Total: <strong>${stats.totalRecords}</strong> records
           </div>
+        </div>
+
+        <!-- 🆕 Byte-size breakdown ต่อตาราง (ขนาดจริง ไม่ใช่ประมาณการ) -->
+        <div style="background: var(--bg-tertiary); padding: 8px; border-radius: 4px; font-size: 10px; margin-bottom: 8px;">
+          <div style="margin-bottom: 4px; color: var(--text-muted);">📦 ขนาดจริงแยกตามตาราง:</div>
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 4px;">
+            <div>📁 Dept: <strong>${formatBytes(stats.sizeByTable.departments)}</strong></div>
+            <div>📍 Lines: <strong>${formatBytes(stats.sizeByTable.lines)}</strong></div>
+            <div>🔧 JIGs: <strong>${formatBytes(stats.sizeByTable.jigs)}</strong></div>
+            <div>✓ Points: <strong>${formatBytes(stats.sizeByTable.checkpoints)}</strong></div>
+            <div>📋 History: <strong>${formatBytes(stats.sizeByTable.history)}</strong></div>
+            <div>📝 Tpl: <strong>${formatBytes(stats.sizeByTable.templates)}</strong></div>
+          </div>
+        </div>
+
+        <div style="color: var(--text-muted); font-size: 9px; text-align: center; margin-bottom: 8px; line-height: 1.4;">
+          💡 คำนวณจากขนาดข้อมูลจริง (รวมรูปถ่าย base64) — แม่นยำกว่าประมาณการเดิมมาก<br>
+          แต่ยังไม่รวม overhead ของ index/database internals ของ Supabase ซึ่งจริงอาจสูงกว่านี้เล็กน้อย
         </div>
 
         <div style="color: var(--text-muted); font-size: 9px; text-align: right; margin-bottom: 8px;">
