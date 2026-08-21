@@ -3236,7 +3236,7 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
         </div>` : ''}
         <div class="hi-path">${escHtml(h.deptName || '')}  ›  ${escHtml(h.lineName || '')}  ›  ${escHtml(h.jigName || '')}</div>
         <div class="hi-head">
-          <div class="hi-meta"><strong>${escHtml(h.date)}</strong> เวลา: ${new Date(h.timestamp).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' })} · ${escHtml(h.shift)} · ผู้ตรวจ: ${escHtml(h.inspector)}</div>
+          <div class="hi-meta"><strong>${escHtml(h.date)}</strong> เวลา: ${new Date(h.timestamp).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' })} · ${escHtml(h.shift)} · <span class="hi-meta-nowrap">ผู้ตรวจ: ${escHtml(h.inspector)}</span></div>
           <div class="hi-badges">
             ${h.protected ? `<span class="badge protected" title="รายการนี้ถูกกันไว้ไม่ให้ลบอัตโนมัติ">🔒 กันลบ</span>` : ''}
             <span class="badge ok">OK ${okCount}</span>
