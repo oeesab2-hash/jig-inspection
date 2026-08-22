@@ -4724,6 +4724,7 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
       // Fallback to smart engine
       const report = analyzeWithSmartEngine(hist);
       $('ai-result').innerHTML = `<div class="ai-report">${sanitizeReportHtml(report)}</div>`;
+      toast('⚠️ เรียก Gemini API ไม่สำเร็จ (' + err.message + ') — ใช้ Smart Analysis Engine (offline) แทน', 'ng');
     }
 
     btn.classList.remove('loading');
@@ -4747,7 +4748,7 @@ ${JSON.stringify(summary, null, 2)}
 
 ตอบเป็น HTML โดยใช้ tag: <h3>, <p>, <ul>, <li> และ class="tag-risk tag-high/tag-med/tag-low" เท่านั้น`;
 
-    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`, {
+    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${apiKey}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
