@@ -490,7 +490,8 @@
   async function notifyBulkManagerPending(lineName, count, approverName) {
     const managerDashUrl = window.location.href.replace(/approve\.html.*$/, '').replace(/\/?$/, '/') + `manager-approve.html`;
     const text = `
-🔵 *รอผู้จัดการฝ่ายผลิตอนุมัติ (ขั้นที่ 2) — ตรวจสอบแบบกลุ่ม*
+📊 *JIG Inspection Report*
+🔵 สถานะ: รอผู้จัดการฝ่ายผลิตอนุมัติ (ขั้นที่ 2) — ตรวจสอบแบบกลุ่ม
 ━━━━━━━━━━━━━━━━━━━━━━━━━
 🏭 Line: ${esc(lineName)}
 📦 จำนวน: ${count} รายการ (ผ่านทั้งหมด ไม่มี NG)
@@ -713,7 +714,8 @@
     const time = row.ts ? new Date(row.ts).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' }) : '';
 
     const text = `
-🔵 *รอผู้จัดการฝ่ายผลิตอนุมัติ (ขั้นที่ 2)*
+📊 *JIG Inspection Report*
+🔵 สถานะ: รอผู้จัดการฝ่ายผลิตอนุมัติ (ขั้นที่ 2)
 ━━━━━━━━━━━━━━━━━━━━━━━━━
 *${esc(row.jig_name)}*
 ${esc(row.jig_id || '')}

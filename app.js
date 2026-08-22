@@ -1503,6 +1503,7 @@
       
       let telegramMsg = `
 📊 *JIG Inspection Report*
+🟡 สถานะ: รอหัวหน้างานตรวจสอบ
 ━━━━━━━━━━━━━━━━━━━━━━━━━
 *${escHtml(record.jigName)}*
 ${escHtml(record.jigId)}
@@ -1530,8 +1531,6 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
 
       telegramMsg += `
 📍 GPS: ${gpsData.latitude.toFixed(6)}, ${gpsData.longitude.toFixed(6)}
-
-🟡 สถานะ: รอหัวหน้างานตรวจสอบ
 ━━━━━━━━━━━━━━━━━━━━━━━━━
 `;
 
