@@ -4739,14 +4739,19 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
 
 ${JSON.stringify(summary, null, 2)}
 
-ให้รายงานครอบคลุม:
-1. สรุปภาพรวม (ใช้ emoji นำหน้า)
-2. จุดเสี่ยงสูงที่ต้องแก้ไขเร่งด่วน
-3. แนวโน้ม (ดีขึ้น/แย่ลง/คงที่)
-4. คำแนะนำเชิงป้องกัน (PM)
-5. สรุป action items
+ให้รายงานครอบคลุม 5 หัวข้อตามลำดับนี้ (ใช้ <h3> และต้องขึ้นต้นด้วย emoji ตามที่กำหนดทุกหัวข้อ ห้ามละ):
+1. 📊 สรุปภาพรวม
+2. 🔴 จุดเสี่ยงสูงที่ต้องแก้ไขเร่งด่วน
+3. 📈 แนวโน้ม (เลือก emoji ให้ตรงทิศทาง: 📈 ดีขึ้น / 📉 แย่ลง / ➡️ คงที่)
+4. 🛡️ คำแนะนำเชิงป้องกัน (PM)
+5. ✅ สรุป Action Items
 
-ตอบเป็น HTML โดยใช้ tag: <h3>, <p>, <ul>, <li> และ class="tag-risk tag-high/tag-med/tag-low" เท่านั้น`;
+กติกาการใส่ emoji (สำคัญมาก ต้องทำทุกบรรทัด):
+- ทุกหัวข้อ <h3> ต้องขึ้นต้นด้วย emoji ตามข้อ 1-5 ด้านบน
+- ทุกบรรทัด <li> ต้องขึ้นต้นด้วย emoji ที่สื่อความหมายของเนื้อหาบรรทัดนั้น (เช่น 🔧 สำหรับ maintenance, 📋 สำหรับ audit/checklist, ⚠️ สำหรับคำเตือน, 📅 สำหรับกำหนดเวลา, 🏭 สำหรับ Line การผลิต) ห้ามมี <li> ที่ไม่มี emoji นำหน้า
+- ใช้ <strong> เน้นตัวเลข/ชื่อที่สำคัญ และใช้ span class="tag-risk tag-high/tag-med/tag-low" ประกอบเมื่อมีระดับความเสี่ยง
+
+ตอบเป็น HTML โดยใช้ tag: <h3>, <p>, <ul>, <li>, <strong> และ class="tag-risk tag-high/tag-med/tag-low" เท่านั้น`;
 
     const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${apiKey}`, {
       method: 'POST',
