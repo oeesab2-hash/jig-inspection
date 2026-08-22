@@ -1609,6 +1609,16 @@ h1, h2, h3, h4, label, button, input, select, textarea, p, span, div {
 }
 .btn-ai-sec:hover { border-color: var(--accent); color: var(--accent); }
 
+.ai-period-select {
+  padding: 9px 10px; border-radius: 10px;
+  border: 1px solid var(--border-input);
+  background: var(--bg-input); color: var(--text-main);
+  font-size: 12px; cursor: pointer; font-family: var(--font-thai);
+  transition: all 0.2s;
+}
+.ai-period-select:hover { border-color: var(--accent); }
+.ai-period-select:focus { outline: none; border-color: var(--accent); }
+
 /* AI Result Area */
 .ai-result {
   min-height: 120px;

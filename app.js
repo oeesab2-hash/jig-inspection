@@ -4699,9 +4699,33 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
     return escHtml(html);
   }
 
+  // ── กรองประวัติตามช่วงเวลาที่เลือกในหน้า AI (เดือนนี้ / เดือนที่แล้ว / ทั้งหมด) ──
+  function filterHistoryByPeriod(hist, period) {
+    if (period === 'all') return hist;
+    const now = new Date();
+    let targetMonth = now.getMonth(); // 0-indexed
+    let targetYear  = now.getFullYear();
+    if (period === 'last_month') {
+      targetMonth -= 1;
+      if (targetMonth < 0) { targetMonth = 11; targetYear -= 1; }
+    }
+    return hist.filter(h => {
+      const d = h.date ? new Date(h.date) : (h.timestamp ? new Date(h.timestamp) : null);
+      if (!d || isNaN(d)) return false;
+      return d.getMonth() === targetMonth && d.getFullYear() === targetYear;
+    });
+  }
+  function aiPeriodLabel(period) {
+    return period === 'this_month' ? 'เดือนนี้' : period === 'last_month' ? 'เดือนที่แล้ว' : 'ทั้งหมด';
+  }
+
   async function runAiAnalysis() {
-    const hist = loadHistory();
-    if (!hist.length) { toast('ยังไม่มีข้อมูลการตรวจ', 'ng'); return; }
+    const periodSel = $('sel-ai-period');
+    const period = periodSel ? periodSel.value : 'all';
+    const periodLabel = aiPeriodLabel(period);
+    const histAll = loadHistory();
+    const hist = filterHistoryByPeriod(histAll, period);
+    if (!hist.length) { toast(`ไม่มีข้อมูลการตรวจในช่วง "${periodLabel}"`, 'ng'); return; }
 
     const btn = $('btn-ai-analyze');
     btn.classList.add('loading');
@@ -4713,16 +4737,16 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
     try {
       let report;
       if (apiKey) {
-        report = await analyzeWithGemini(hist, apiKey);
+        report = await analyzeWithGemini(hist, apiKey, periodLabel);
       } else {
         await new Promise(r => setTimeout(r, 600)); // simulate
-        report = analyzeWithSmartEngine(hist);
+        report = analyzeWithSmartEngine(hist, periodLabel);
       }
       $('ai-result').innerHTML = `<div class="ai-report">${sanitizeReportHtml(report)}</div>`;
     } catch (err) {
       console.error('AI error:', err);
       // Fallback to smart engine
-      const report = analyzeWithSmartEngine(hist);
+      const report = analyzeWithSmartEngine(hist, periodLabel);
       $('ai-result').innerHTML = `<div class="ai-report">${sanitizeReportHtml(report)}</div>`;
       toast('⚠️ เรียก Gemini API ไม่สำเร็จ (' + err.message + ') — ใช้ Smart Analysis Engine (offline) แทน', 'ng');
     }
@@ -4732,10 +4756,10 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
   }
 
   /* ── Gemini API ── */
-  async function analyzeWithGemini(hist, apiKey) {
+  async function analyzeWithGemini(hist, apiKey, periodLabel) {
     const summary = buildDataSummary(hist);
     const prompt = `คุณเป็น AI วิเคราะห์คุณภาพโรงงานผลิตชิ้นส่วนยานยนต์
-วิเคราะห์ข้อมูลการตรวจสอบ JIG ต่อไปนี้ และให้รายงานเป็นภาษาไทย (HTML fragment):
+วิเคราะห์ข้อมูลการตรวจสอบ JIG ต่อไปนี้ (ช่วงเวลาที่วิเคราะห์: ${escHtml(periodLabel || 'ทั้งหมด')}) และให้รายงานเป็นภาษาไทย (HTML fragment):
 
 ${JSON.stringify(summary, null, 2)}
 
@@ -4806,7 +4830,7 @@ ${JSON.stringify(summary, null, 2)}
     return { total, passRate, passCount, tally, byLine, oldRate: Math.round(oldRate*100), recRate: Math.round(recRate*100), byShift };
   }
 
-  function analyzeWithSmartEngine(hist) {
+  function analyzeWithSmartEngine(hist, periodLabel) {
     const s = buildDataSummary(hist);
     const topNg = Object.entries(s.tally).sort((a,b)=>b[1].n-a[1].n).slice(0,3);
     const topLine = Object.entries(s.byLine).sort((a,b)=>b[1]-a[1]).slice(0,2);
@@ -4829,7 +4853,7 @@ ${JSON.stringify(summary, null, 2)}
 
     return `
       <h3>📊 สรุปภาพรวม</h3>
-      <p>วิเคราะห์ข้อมูล <strong>${s.total} รายการตรวจสอบ</strong> ณ วันที่ ${now}<br>
+      <p>วิเคราะห์ข้อมูล <strong>${s.total} รายการตรวจสอบ</strong> ช่วง <strong>${escHtml(periodLabel || 'ทั้งหมด')}</strong> ณ วันที่ ${now}<br>
       อัตราผ่าน <strong>${s.passRate}%</strong> (ผ่าน ${s.passCount}/${s.total} ครั้ง)
       &nbsp;—&nbsp; แนวโน้ม: ${trendIcon} <span class="tag-risk ${trendTag}">${trend}</span></p>
 
