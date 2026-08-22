@@ -1502,7 +1502,7 @@
       const time = new Date(record.timestamp).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' });
       
       let telegramMsg = `
-📊 *JIG Inspection Report*
+📋 *JIG Inspection Report*
 🟡 สถานะ: รอหัวหน้างานตรวจสอบ
 ━━━━━━━━━━━━━━━━━━━━━━━━━
 *${escHtml(record.jigName)}*

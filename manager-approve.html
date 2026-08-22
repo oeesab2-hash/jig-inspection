@@ -490,7 +490,7 @@
   // ── แจ้งผลอนุมัติครบทุกขั้นตอนแล้ว (อนุมัติแบบกลุ่มโดยผู้จัดการฝ่ายผลิต) ──
   async function notifyBulkFullyApproved(lineName, count, approverName) {
     const text = `
-📊 *JIG Inspection Report*
+📋 *JIG Inspection Report*
 ✅ สถานะ: อนุมัติครบทุกขั้นตอนแล้ว — อนุมัติแบบกลุ่ม
 ━━━━━━━━━━━━━━━━━━━━━━━━━
 🏭 Line: ${esc(lineName)}
@@ -716,7 +716,7 @@
     const time = row.ts ? new Date(row.ts).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' }) : '';
 
     const text = `
-📊 *JIG Inspection Report*
+📋 *JIG Inspection Report*
 ✅ สถานะ: อนุมัติครบทุกขั้นตอนแล้ว
 ━━━━━━━━━━━━━━━━━━━━━━━━━
 *${esc(row.jig_name)}*
