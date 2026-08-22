@@ -4447,18 +4447,12 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
     if (dashLineFilter !== 'all') hist = hist.filter(h => h.lineId === dashLineFilter);
     renderKpis(hist);
     renderTrendChart(hist, dashMonthFilter);
-    // กราฟรายเดือน: แสดงทุกเดือนเสมอ ไม่ผูกกับตัวกรองเดือนด้านบน (ใช้ตัวกรอง Line เดียวกัน)
-    const histForMonthly = dashLineFilter !== 'all'
-      ? allHist.filter(h => h.lineId === dashLineFilter)
-      : allHist;
-    renderMonthlyTrendChart(histForMonthly);
     renderByLineChart(hist);
     renderDeptDonut(hist);
     renderNgRanking(hist);
   }
 
   const TH_MONTHS_FULL = ['มกราคม','กุมภาพันธ์','มีนาคม','เมษายน','พฤษภาคม','มิถุนายน','กรกฎาคม','สิงหาคม','กันยายน','ตุลาคม','พฤศจิกายน','ธันวาคม'];
-  const TH_MONTHS_SHORT = ['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
 
   function formatMonthLabel(ym) {
     const [y, m] = ym.split('-').map(Number);
@@ -4529,55 +4523,6 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
 
     if (charts.trend) charts.trend.destroy();
     charts.trend = new Chart($('chart-trend'), {
-      type: 'line',
-      data: {
-        labels,
-        datasets: [
-          { label: 'ผ่าน', data: passData, borderColor: ok, backgroundColor: withAlpha(ok, 0.13), fill: true, tension: 0.4, pointRadius: 3 },
-          { label: 'NG',   data: ngData,   borderColor: ng, backgroundColor: withAlpha(ng, 0.13), fill: true, tension: 0.4, pointRadius: 3 },
-        ]
-      },
-      options: {
-        responsive: true, maintainAspectRatio: false,
-        plugins: { legend: { display: false } },
-        scales: {
-          x: { ticks: { color: muted, font: { size: 10 } }, grid: { color: 'rgba(128,128,128,0.08)' } },
-          y: { ticks: { color: muted, font: { size: 10 }, stepSize: 1 }, grid: { color: 'rgba(128,128,128,0.08)' }, beginAtZero: true }
-        }
-      }
-    });
-  }
-
-  /* ── Monthly Trend Chart (ใหม่) ──
-     รวมประวัติทั้งหมดเป็นรายเดือน (ไม่จำกัด 30 วัน) เพื่อดูภาพรวมระยะยาวแยกต่างหาก
-     จากกราฟ 30 วันด้านบน — แสดงทุกเดือนที่มีข้อมูลเสมอ ไม่ผูกกับตัวกรองเดือน */
-  function renderMonthlyTrendChart(hist) {
-    const isPass = h => h.items.every(i => i.status === 'ok' || i.status === 'fixed');
-    const isNg   = h => h.items.some(i => i.status === 'ng');
-
-    const labels = [], passData = [], ngData = [];
-    const monthKeys = Array.from(new Set(hist.map(h => (h.date || '').slice(0, 7)).filter(Boolean))).sort();
-
-    if (!monthKeys.length) {
-      // ยังไม่มีข้อมูลเลย — ใส่เดือนปัจจุบันไว้ก่อนกันกราฟว่างเปล่า
-      monthKeys.push(currentYearMonth());
-    }
-
-    monthKeys.forEach(ym => {
-      const [yy, mm] = ym.split('-').map(Number);
-      labels.push(`${TH_MONTHS_SHORT[mm - 1]} ${String(yy + 543).slice(-2)}`);
-      const monthRecs = hist.filter(h => (h.date || '').slice(0, 7) === ym);
-      passData.push(monthRecs.filter(isPass).length);
-      ngData.push(monthRecs.filter(isNg).length);
-    });
-
-    const style = getComputedStyle(document.documentElement);
-    const ok  = style.getPropertyValue('--ok').trim();
-    const ng  = style.getPropertyValue('--ng').trim();
-    const muted = style.getPropertyValue('--text-muted').trim();
-
-    if (charts.monthlyTrend) charts.monthlyTrend.destroy();
-    charts.monthlyTrend = new Chart($('chart-monthly-trend'), {
       type: 'line',
       data: {
         labels,
