@@ -1938,7 +1938,7 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
   function syncSigInspectorFromInpInspector() {
     const inspInp = $('inp-inspector');
     const sigInp = $('sig-inspector');
-    if (inspInp && sigInp) sigInp.value = inspInp.value;
+    if (inspInp && sigInp) sigInp.value = (inspInp.value.trim().split(/\s+/)[0] || '');
   }
 
   async function attemptAppLogin() {
