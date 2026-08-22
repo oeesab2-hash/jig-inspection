@@ -878,6 +878,10 @@
     bindActionButtons();
     bindLightbox();
     bindHistoryPanel();
+    // พิมพ์ชื่อผู้ตรวจสอบที่ช่อง "ข้อมูลทั่วไป" แล้วให้ช่อง "ลายเซ็นรับรอง" โชว์ตามอัตโนมัติ
+    const inspInpEl = $('inp-inspector');
+    if (inspInpEl) inspInpEl.addEventListener('input', syncSigInspectorFromInpInspector);
+    syncSigInspectorFromInpInspector();
     bindPanelOverlay();
     subscribeRealtime();
     restoreAutoSaveFolder(); // กู้ค่าโฟลเดอร์บันทึก PDF อัตโนมัติที่เคยตั้งไว้ (ถ้ามี)
@@ -1925,7 +1929,16 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
     // Auto-fill ชื่อผู้ตรวจสอบจากบัญชีที่ Login (ยังแก้ไขเองได้ภายหลังถ้าจำเป็น)
     const inspInp = $('inp-inspector');
     if (inspInp && !inspInp.value.trim() && currentAppUser) inspInp.value = currentAppUser.full_name;
+    syncSigInspectorFromInpInspector(); // ให้ช่องลายเซ็นรับรองโชว์ชื่อเดียวกันทันที ไม่ต้องพิมพ์ซ้ำ
     init(); // เริ่มโหลดข้อมูลจริงของแอป หลัง Login สำเร็จเท่านั้น
+  }
+
+  // ซิงก์ชื่อจากช่อง "ข้อมูลทั่วไป > ผู้ตรวจสอบ" ไปที่ช่อง "ลายเซ็นรับรอง (พิมพ์ชื่อ) > ผู้ตรวจสอบ"
+  // อัตโนมัติ เพื่อไม่ต้องพิมพ์ชื่อซ้ำสองที่ (ยังแก้ไขเองที่ช่องลายเซ็นได้ภายหลังถ้าจำเป็น)
+  function syncSigInspectorFromInpInspector() {
+    const inspInp = $('inp-inspector');
+    const sigInp = $('sig-inspector');
+    if (inspInp && sigInp) sigInp.value = inspInp.value;
   }
 
   async function attemptAppLogin() {
@@ -3932,12 +3945,12 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
       initCheckState();
       renderChecklist();
       updateStats();
-      $('inp-inspector').value = '';
+      $('inp-inspector').value = (currentAppUser && currentAppUser.full_name) || '';
       $('inp-date').value = new Date().toISOString().slice(0, 10);
       $('inp-shift').value = 'กะ 1';
       $('inp-month').value = currentThaiMonthAbbr();
       $('report-notes').value = '';
-      $('sig-inspector').value = '';
+      syncSigInspectorFromInpInspector(); // ให้ช่องลายเซ็นตามชื่อผู้ตรวจสอบไปด้วยตอนล้างฟอร์ม
       toast('เริ่มต้นใหม่เรียบร้อย', 'ok');
     });
     // SVG points (bound after inspection cards shown)
