@@ -437,6 +437,17 @@ h1, h2, h3, h4, label, button, input, select, textarea, p, span, div {
   padding: 1px 6px; margin-left: 2px; white-space: nowrap;
 }
 
+/* Badge "ตรวจแล้ววันนี้" — กันตรวจซ้ำ JIG เดิม */
+.chip.jig-chip.jig-checked-today { border-color: var(--ok-border); }
+.chip.jig-chip.jig-checked-today.jig-skipped { border-style: dashed; } /* skipped ทับ checked ได้ ยังใช้เส้นประของ skip อยู่ */
+.jig-checked-badge {
+  display: inline-block; font-size: 9.5px; font-weight: 700; text-decoration: none;
+  border-radius: 6px; padding: 1px 6px; margin-left: 2px; margin-top: 2px; white-space: nowrap;
+}
+.jig-checked-badge-ok { color: var(--ok); background: var(--ok-bg); border: 1px solid var(--ok-border); }
+.jig-checked-badge-ng { color: var(--ng); background: var(--ng-bg); border: 1px solid var(--ng-border); }
+
+
 /* Selected JIG Banner */
 .selected-jig-banner {
   display: flex; align-items: center; gap: 12px;

@@ -982,17 +982,26 @@
     container.innerHTML = jigs.map(j => {
       const sel = selection.jigId === j.id ? 'selected' : '';
       const skipped = isJigSkippedToday(j.id);
+      const checkedInfo = getJigCheckedTodayInfo(j.id);
       const thumb = j.bgImage
         ? `<img src="${escHtml(j.bgImage)}" alt="" loading="lazy" decoding="async">`
         : `<span class="jig-chip-thumb-icon">🔧</span>`;
+      let checkedBadge = '';
+      if (checkedInfo) {
+        const badgeClass = checkedInfo.status === 'ng' ? 'jig-checked-badge-ng' : 'jig-checked-badge-ok';
+        const badgeIcon = checkedInfo.status === 'ng' ? '⚠️' : '✅';
+        const dupNote = checkedInfo.count > 1 ? ` ×${checkedInfo.count}` : '';
+        checkedBadge = `<span class="jig-checked-badge ${badgeClass}">${badgeIcon} ตรวจแล้ว ${checkedInfo.time}${dupNote}</span>`;
+      }
       return `
-        <div class="chip jig-chip ${sel} ${skipped ? 'jig-skipped' : ''}" data-jig="${escHtml(j.id)}">
+        <div class="chip jig-chip ${sel} ${skipped ? 'jig-skipped' : ''} ${checkedInfo ? 'jig-checked-today' : ''}" data-jig="${escHtml(j.id)}">
           <span class="jig-chip-main" data-jig="${escHtml(j.id)}">
             <span class="jig-chip-thumb${j.bgImage ? '' : ' jig-chip-thumb-empty'}">${thumb}</span>
             <span class="jig-chip-text">
               <span class="jig-chip-name">${escHtml(j.name)}</span>
               <span class="chip-code">${escHtml(j.id)}</span>
               ${skipped ? '<span class="jig-skip-badge">ไม่ได้ผลิตวันนี้</span>' : ''}
+              ${checkedBadge}
             </span>
           </span>
           <button type="button" class="jig-skip-toggle" data-jig="${escHtml(j.id)}" title="${skipped ? 'ยกเลิกมาร์ค (กลับมาผลิตแล้ว)' : 'มาร์คว่าวันนี้ไม่ได้ผลิต JIG นี้'}">
@@ -1494,6 +1503,7 @@
     if (hist.length > 100) hist = hist.slice(0, 100);
     if (saveHistory(hist)) {
       toast(`✅ บันทึกในเครื่องสำเร็จ! (กำลังซิงค์ขึ้นระบบ...) GPS: ${gpsData.latitude.toFixed(6)}, ${gpsData.longitude.toFixed(6)} (±${Math.round(gpsData.accuracy)}m)`, 'ok');
+      renderFilter(); // อัปเดต badge "ตรวจแล้ววันนี้" บนการ์ด JIG ทันที กันตรวจซ้ำ
       
       // ─── ส่ง Telegram Notification ───
       const okCount = checkState.filter(i => i.status === 'ok' || i.status === 'fixed').length;
@@ -4259,6 +4269,18 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
   function isJigSkippedToday(jigId) {
     const t = todayStr();
     return loadJigSkips().some(s => s.jigId === jigId && s.date === t);
+  }
+  // ── เช็คว่า JIG นี้ถูกตรวจไปแล้ว "วันนี้" หรือยัง (กันตรวจซ้ำ) ──
+  // คืนค่า null ถ้ายังไม่ตรวจ, หรือ { status: 'ok'|'ng', time } ถ้าตรวจแล้ว (เอารายการล่าสุดของวันนี้)
+  function getJigCheckedTodayInfo(jigId) {
+    const t = todayStr();
+    const records = loadHistory().filter(r => r.date === t && r.jigId === jigId);
+    if (!records.length) return null;
+    // เอารายการล่าสุด (timestamp ใหม่สุด) เผื่อมีการตรวจซ้ำจริงๆ หลายรอบในวันเดียว
+    const latest = records.reduce((a, b) => (new Date(b.timestamp || 0) > new Date(a.timestamp || 0) ? b : a));
+    const hasNg = (latest.items || []).some(i => i.status === 'ng');
+    const time = latest.timestamp ? new Date(latest.timestamp).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' }) : '';
+    return { status: hasNg ? 'ng' : 'ok', time, count: records.length };
   }
   // ── ดึงรายการ JIG ที่มาร์ค "ไม่ได้ผลิต" ของวันนี้ จาก Supabase ──
   async function pullJigSkipsFromSupabase() {
