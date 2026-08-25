@@ -837,6 +837,50 @@
     return `${yyyy}-${mm}-${dd}`;
   }
 
+  /* ══════════════════════════════════════
+     🔍 STARTUP DIAGNOSTIC PANEL (ชั่วคราว)
+     ใช้ไล่บั๊ก "ค้างหน้าโหลดข้อมูล" บน iPhone บางเครื่องที่ debug จากระยะไกลไม่ได้
+     — โชว์ log แต่ละขั้นตอนของการเริ่มแอปเป็น overlay บนจอ พร้อมเวลาที่ใช้ในแต่ละขั้น
+     ถ้าค้าง จะเห็นเลยว่าค้างที่ขั้นไหน กี่วินาที ให้ผู้ใช้ถ่ายรูปหน้าจอส่งมาได้เลย
+     (ลบส่วนนี้ออกได้ทั้งหมดหลังจากไล่บั๊กเสร็จแล้ว — ค้นหาคำว่า "STARTUP DIAGNOSTIC" เพื่อหาทุกจุดที่เกี่ยวข้อง)
+  ══════════════════════════════════════ */
+  const _dbgStartTime = Date.now();
+  const _dbgLogEntries = [];
+  let _dbgPanelShown = false;
+  function dbgLog(step, extra) {
+    const elapsed = ((Date.now() - _dbgStartTime) / 1000).toFixed(1);
+    _dbgLogEntries.push({ elapsed, step, extra: extra || '' });
+    console.log(`[DIAG +${elapsed}s] ${step}${extra ? ' — ' + extra : ''}`);
+    renderDbgPanel();
+  }
+  function renderDbgPanel() {
+    let panel = document.getElementById('_dbg-panel');
+    if (!panel) {
+      panel = document.createElement('div');
+      panel.id = '_dbg-panel';
+      panel.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:999999;background:#111;color:#0f0;font:11px/1.5 monospace;padding:10px 12px;max-height:60vh;overflow-y:auto;white-space:pre-wrap;box-shadow:0 2px 10px rgba(0,0,0,.5);';
+      document.body.appendChild(panel);
+    }
+    const lines = _dbgLogEntries.map(e => `+${e.elapsed}s  ${e.step}${e.extra ? '  (' + e.extra + ')' : ''}`).join('\n');
+    panel.innerHTML = `<div style="color:#ff0;font-weight:bold;margin-bottom:4px;">🔍 DIAGNOSTIC LOG — ถ่ายรูปหน้าจอนี้ส่งให้ยูยิได้เลย</div>${escHtml(lines)}<div style="margin-top:6px;color:#888;">(กดค้างเพื่อ copy ข้อความได้)</div>`;
+  }
+  // โชว์ panel อัตโนมัติถ้าโหลดนานเกิน 3 วินาทีแล้วยังไม่เสร็จ (ปกติไม่โชว์ กันรกจอตอนโหลดเร็ว)
+  setTimeout(() => {
+    if (!_dbgPanelShown && catalogLoading) {
+      _dbgPanelShown = true;
+      renderDbgPanel();
+    }
+  }, 3000);
+
+  // ── ดักจับ error ที่อาจเกิดขึ้นแบบเงียบๆ (เช่น syntax/API บางตัวที่ iOS Safari รุ่นเก่าไม่รองรับ)
+  //    ซึ่งจะทำให้ init() หยุดทำงานกลางคันโดยไม่มีอะไรบอกเลย — โชว์ error ลงในแผง diagnostic ด้วย
+  window.addEventListener('error', e => {
+    dbgLog('❌ JS ERROR', `${e.message} (${e.filename ? e.filename.split('/').pop() : ''}:${e.lineno})`);
+  });
+  window.addEventListener('unhandledrejection', e => {
+    dbgLog('❌ UNHANDLED PROMISE REJECTION', String(e.reason && e.reason.message || e.reason));
+  });
+
   // ── ตัวจับเวลาให้ Promise ใดๆ ก็ตาม — กันหน้าจอค้างรอตลอดไปถ้าเน็ต/Supabase ไม่ตอบสนอง ──
   // (เจอเคสจริง: iPhone บางเครื่องที่ต่อ Supabase ไม่ติด เช่น เน็ตหลุด/ถูกบล็อกกลางทาง
   // จะค้างที่หน้า "กำลังโหลดข้อมูล..." ตลอดไปเพราะ fetch ไม่ resolve และไม่ reject เลย
@@ -892,24 +936,37 @@
      INIT
   ══════════════════════════════════════ */
   async function init() {
+    dbgLog('init() เริ่มทำงาน');
     ensureLocalAdminPassBootstrap();
+    dbgLog('ensureLocalAdminPassBootstrap() เสร็จ');
     pullJigSkipsFromSupabase(); // ดึงรายการ JIG ที่มาร์คไม่ได้ผลิตวันนี้
+    dbgLog('เรียก pullJigSkipsFromSupabase() แล้ว (ไม่รอผล)');
 
     // ─── ตรวจสอบ GPS Status ───
-    await checkGPSStatusOnLoad();
-    
+    // ⚠️ ห้าม await ตรงนี้! บน iOS Safari ถ้ากล่องขออนุญาต Location (native permission dialog)
+    // ค้างอยู่โดยผู้ใช้ยังไม่กด Allow/Don't Allow เบราว์เซอร์จะ "หยุด" การรัน JavaScript ทั้งหน้า
+    // ชั่วคราว รวมถึง setTimeout ที่ตั้งไว้เป็น fallback ข้างในด้วย ทำให้ทั้งแอปค้างที่หน้า
+    // "กำลังโหลดข้อมูล..." ตลอดไปโดยไม่มีทาง fallback เลย (เจอจริงกับ iPhone ส่วนตัวหลายเครื่อง
+    // ที่ยังไม่เคยกดอนุญาต Location ให้เว็บนี้มาก่อน) — ปล่อยให้ทำงานเป็น background แทน
+    // ไม่ต้องรอผลก่อนโหลดข้อมูลหลักของแอป
+    checkGPSStatusOnLoad();
+    dbgLog('เรียก checkGPSStatusOnLoad() แล้ว (ไม่รอผล — เช็คพื้นหลัง)');
+
     // ดึงข้อมูลล่าสุดจากทีมมาก่อน แล้วค่อย render (ถ้ายังไม่เคย sync ขึ้นเลยจะได้ null แล้วใช้ local ต่อ)
     // ⏱️ ใส่ timeout 10 วินาที กันเครื่องที่ต่อ Supabase ไม่ติด (เน็ตหลุด/ถูกบล็อก) ค้างที่หน้า
     //    "กำลังโหลดข้อมูล..." ตลอดไป — ถ้าเกินเวลาจะเลิกรอ แล้วใช้ข้อมูลแคชในเครื่อง (ถ้ามี) แทนทันที
+    dbgLog('เริ่มดึง catalog + history จาก Supabase (sb=' + (sb ? 'พร้อมใช้งาน' : '❌ NULL — client สร้างไม่สำเร็จ!') + ')');
     const [remoteCat, remoteHist] = await Promise.all([
-      withTimeout(pullCatalogFromSupabase(), 10000, 'TIMEOUT'),
-      withTimeout(pullHistoryFromSupabase(), 10000, 'TIMEOUT'),
+      withTimeout(pullCatalogFromSupabase().then(r => { dbgLog('pullCatalogFromSupabase() เสร็จแล้ว', r ? `${(r.depts||[]).length} depts` : 'null'); return r; }), 10000, 'TIMEOUT'),
+      withTimeout(pullHistoryFromSupabase().then(r => { dbgLog('pullHistoryFromSupabase() เสร็จแล้ว', r ? `${r.length} รายการ` : 'null'); return r; }), 10000, 'TIMEOUT'),
     ]);
+    dbgLog('Promise.all ของ catalog+history เสร็จแล้ว', `catTimedOut=${remoteCat === 'TIMEOUT'}, histTimedOut=${remoteHist === 'TIMEOUT'}`);
     const catTimedOut  = remoteCat === 'TIMEOUT';
     const histTimedOut = remoteHist === 'TIMEOUT';
     if (!catTimedOut && remoteCat) localStorage.setItem(SK.catalog, JSON.stringify(remoteCat));
     if (!histTimedOut && remoteHist) localStorage.setItem(SK.history, JSON.stringify(remoteHist));
     loadCatalog();
+    dbgLog('loadCatalog() เสร็จ', `${(catalog.depts||[]).length} depts ในตัวแปร catalog`);
     catalogLoading = false; // ✅ ข้อมูลตั้งต้นพร้อมแล้ว (จาก Supabase หรือ cache local) — เลิกถือว่า "กำลังโหลด"
     if (catTimedOut || histTimedOut) {
       const hasLocalCache = catalog.depts && catalog.depts.length > 0;
@@ -926,7 +983,9 @@
     $('inp-month').value = currentThaiMonthAbbr();
     $('inp-shift').value = 'กะ 1'; // ตั้งค่าเริ่มต้นเป็นกะ 1 ทุกครั้งที่เข้าโปรแกรม แต่ยังเลือกเปลี่ยนเป็นกะอื่นได้ตามปกติ
 
+    dbgLog('กำลังเรียก renderFilter() (แสดงรายการแผนก/Line/JIG)');
     renderFilter();
+    dbgLog('renderFilter() เสร็จแล้ว — ควรเห็นรายการแผนกบนจอแล้ว ✅');
     bindJigSearch();
     bindThemeToggle();
     bindAdminPanel();
@@ -940,6 +999,7 @@
     bindPanelOverlay();
     subscribeRealtime();
     restoreAutoSaveFolder(); // กู้ค่าโฟลเดอร์บันทึก PDF อัตโนมัติที่เคยตั้งไว้ (ถ้ามี)
+    dbgLog('init() เสร็จสมบูรณ์ทั้งหมด 🎉');
 
     // 🆕 RETRY QUEUE — กันเคสเน็ตหลุดหน้างานตอนบันทึก แล้วข้อมูลค้างอยู่แค่ในเครื่อง
     retryPendingHistorySync(); // (1) ลองส่งของที่ค้างทันทีที่เปิดแอป
@@ -1998,7 +2058,11 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
     const inspInp = $('inp-inspector');
     if (inspInp && !inspInp.value.trim() && currentAppUser) inspInp.value = currentAppUser.full_name;
     syncSigInspectorFromInpInspector(); // ให้ช่องลายเซ็นรับรองโชว์ชื่อเดียวกันทันที ไม่ต้องพิมพ์ซ้ำ
-    init(); // เริ่มโหลดข้อมูลจริงของแอป หลัง Login สำเร็จเท่านั้น
+    dbgLog('unlockApp() เรียก init() แล้ว');
+    init().catch(err => { // ⚠️ ดัก error ที่อาจเกิดใน init() ไม่ให้หายไปเงียบๆ
+      console.error('init() error:', err);
+      dbgLog('❌ init() THROW ERROR', err.message || String(err));
+    }); // เริ่มโหลดข้อมูลจริงของแอป หลัง Login สำเร็จเท่านั้น
   }
 
   // ซิงก์ชื่อจากช่อง "ข้อมูลทั่วไป > ผู้ตรวจสอบ" ไปที่ช่อง "ลายเซ็นรับรอง (พิมพ์ชื่อ) > ผู้ตรวจสอบ"
