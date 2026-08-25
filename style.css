@@ -658,6 +658,37 @@ h1, h2, h3, h4, label, button, input, select, textarea, p, span, div {
   text-align: center; color: var(--text-muted); font-size: 13px;
   padding: 24px 0;
 }
+.line-status-card { cursor: pointer; }
+.line-status-card.expanded { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+/* ── รายละเอียดราย JIG (เปิดเมื่อคลิกการ์ด Line) ── */
+.line-jig-detail-panel {
+  margin-top: 8px; padding: 10px; border-radius: 11px;
+  background: var(--bg-input); border: 1px dashed var(--border-input);
+}
+.line-jig-detail-empty { font-size: 12px; color: var(--text-muted); }
+.line-jig-detail-grid {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 6px;
+}
+.line-jig-detail-chip {
+  display: flex; align-items: center; gap: 6px;
+  padding: 6px 8px; border-radius: 8px;
+  background: var(--bg-card); border: 1px solid var(--border-card);
+}
+.line-jig-detail-chip .jd-icon { font-size: 12px; flex-shrink: 0; }
+.line-jig-detail-chip .jd-text { min-width: 0; display: flex; flex-direction: column; }
+.line-jig-detail-chip .jd-name {
+  font-size: 11px; font-weight: 600; color: var(--text-main);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.line-jig-detail-chip .jd-status { font-size: 9.5px; color: var(--text-muted); }
+.line-jig-detail-chip.jd-ok { border-color: var(--ok-border); background: var(--ok-bg); }
+.line-jig-detail-chip.jd-ok .jd-status { color: var(--ok); }
+.line-jig-detail-chip.jd-ng { border-color: var(--ng-border); background: var(--ng-bg); }
+.line-jig-detail-chip.jd-ng .jd-status { color: var(--ng); }
+.line-jig-detail-chip.jd-skipped { border-style: dashed; opacity: 0.75; }
+.line-jig-detail-chip.jd-pending { opacity: 0.75; }
 
 /* Stats row */
 .stats-mini-row { display: grid; grid-template-columns: repeat(3,1fr); gap: 8px; margin-top: 10px; }
@@ -1583,6 +1614,32 @@ h1, h2, h3, h4, label, button, input, select, textarea, p, span, div {
   min-width: 28px; text-align: right;
 }
 .ng-rank-empty { font-size: 13px; color: var(--text-muted); text-align: center; padding: 20px 0; }
+
+/* ── NG วันนี้ ── */
+.ng-today-count-badge {
+  font-size: 11px; font-weight: 700; color: var(--ng);
+  background: var(--ng-bg); border: 1px solid var(--ng-border);
+  border-radius: 20px; padding: 1px 9px; margin-left: 6px; vertical-align: middle;
+}
+.ng-today-empty { font-size: 13px; color: var(--text-muted); text-align: center; padding: 20px 0; }
+.ng-today-grid {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 8px;
+}
+.ng-today-item {
+  display: flex; gap: 10px; padding: 10px 12px; border-radius: 11px;
+  background: var(--ng-bg); border: 1px solid var(--ng-border);
+}
+.ng-today-time {
+  font-size: 12px; font-weight: 700; color: var(--ng); flex-shrink: 0;
+  font-family: var(--font-en); min-width: 38px;
+}
+.ng-today-body { min-width: 0; flex: 1; }
+.ng-today-jig { font-size: 12.5px; font-weight: 700; color: var(--text-main); }
+.ng-today-line { font-weight: 400; color: var(--text-muted); font-size: 11px; }
+.ng-today-checkpoint { font-size: 12px; color: var(--text-main); margin-top: 2px; }
+.ng-today-note { font-size: 11px; color: var(--text-muted); font-style: italic; margin-top: 2px; }
+.ng-today-inspector { font-size: 10.5px; color: var(--text-muted); margin-top: 4px; }
 
 /* ─────────────────────────────
    AI Analysis Card

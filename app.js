@@ -825,6 +825,18 @@
     }[c]));
   }
 
+  // คืนวันที่ "YYYY-MM-DD" ตามเวลาท้องถิ่นของเครื่อง (ไม่ใช้ toISOString ซึ่งเป็น UTC)
+  // ⚠️ toISOString() แปลงเป็น UTC ก่อนเสมอ — ประเทศไทยคือ UTC+7 ดังนั้นช่วงเที่ยงคืนถึง 06:59 น.
+  // ตามเวลาไทย toISOString().slice(0,10) จะได้ "เมื่อวาน" ไม่ใช่ "วันนี้" ทำให้สถานะ/badge
+  // ที่อ้างอิงวันที่ค้างจากเมื่อวานจนถึง 7 โมงเช้า ต้องใช้ฟังก์ชันนี้แทนทุกจุดที่ต้องการ "วันที่วันนี้"
+  function localDateStr(d) {
+    d = d || new Date();
+    const yyyy = d.getFullYear();
+    const mm = String(d.getMonth() + 1).padStart(2, '0');
+    const dd = String(d.getDate()).padStart(2, '0');
+    return `${yyyy}-${mm}-${dd}`;
+  }
+
   // Format an ISO timestamp as "D/M/YYYY HH:MM น." (Thai locale) — ใช้ให้ช่องลายเซ็นทั้ง 3
   // (ผู้ตรวจสอบ / หัวหน้างาน / ผู้จัดการฝ่ายผลิต) ในหน้า PDF โชว์วันที่-เวลาแบบเดียวกัน
   function sigDateTime(iso) {
@@ -867,7 +879,7 @@
     loadAppSettings();               // ใช้ค่า cache/default ไปก่อนระหว่างรอ Supabase
     renderAppSettingsForm();
     pullAppSettingsFromSupabase();   // แล้วอัปเดตให้ล่าสุดทันทีที่ดึงเสร็จ (ไม่บล็อกหน้าจอ)
-    $('inp-date').value = new Date().toISOString().slice(0, 10);
+    $('inp-date').value = localDateStr();
     $('inp-month').value = currentThaiMonthAbbr();
     $('inp-shift').value = 'กะ 1'; // ตั้งค่าเริ่มต้นเป็นกะ 1 ทุกครั้งที่เข้าโปรแกรม แต่ยังเลือกเปลี่ยนเป็นกะอื่นได้ตามปกติ
 
@@ -1622,7 +1634,7 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
         XLSX.utils.book_append_sheet(wb, ws2, 'รายละเอียด NG');
       }
 
-      const stamp = new Date().toISOString().slice(0, 10);
+      const stamp = localDateStr();
       XLSX.writeFile(wb, `jig-history-${stamp}.xlsx`);
       toast(`✅ Export Excel สำเร็จ — ${hist.length} รายการ`, 'ok');
     } catch (err) {
@@ -1694,7 +1706,7 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
     ws['!cols'] = [{wch:5},{wch:14},{wch:16},{wch:30},{wch:16},{wch:14},{wch:16},{wch:16},{wch:16},{wch:12},{wch:12},{wch:12}];
     XLSX.utils.book_append_sheet(wb, ws, 'Master List');
 
-    const stamp = new Date().toISOString().slice(0, 10);
+    const stamp = localDateStr();
     XLSX.writeFile(wb, `jig-master-list-run-no-${stamp}.xlsx`);
     toast(`✅ Export Master List สำเร็จ — ${rows.length} รายการ`, 'ok');
   }
@@ -1738,7 +1750,7 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
       const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
-      const stamp = new Date().toISOString().slice(0, 10);
+      const stamp = localDateStr();
       a.href = url;
       a.download = `jig-backup-${stamp}.json`;
       document.body.appendChild(a);
@@ -3170,12 +3182,49 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
     const hist = loadHistory();
     const recs = ids.map(id => hist.find(h => String(h.id) === id)).filter(Boolean);
     if (!recs.length) { toast('ไม่พบรายการที่เลือก', 'ng'); return; }
+
+    // ── เช็ค/ขอสิทธิ์โฟลเดอร์อัตโนมัติ "ครั้งเดียว" ก่อนเริ่มลูป ──
+    // เหตุผล: browser (Chrome/Edge) อนุญาตให้ขอสิทธิ์เขียนไฟล์ (requestPermission) ได้เฉพาะ
+    // ตอนที่ยังอยู่ใน user gesture เดิม (การคลิกปุ่มนี้) เท่านั้น — ถ้าปล่อยให้แต่ละไฟล์ในลูป
+    // ขอสิทธิ์เอง ไฟล์แรกอาจผ่านแต่ไฟล์ถัดๆ ไปจะขอไม่ผ่านเงียบๆ กลายเป็นว่าโหลดปกติแทนบางไฟล์
+    // โดยผู้ใช้ไม่รู้ตัว เช็คครั้งเดียวตรงนี้ให้ชัดเจนไปเลยว่าพร้อมหรือไม่
+    let autosaveReady = false;
+    if (autosaveDirHandle) {
+      autosaveReady = await verifyDirPermission(autosaveDirHandle, true);
+      if (!autosaveReady) {
+        toast('⚠️ ยังไม่ได้รับสิทธิ์เขียนไฟล์ในโฟลเดอร์ที่ตั้งไว้ — จะดาวน์โหลดไฟล์แบบปกติแทน (ไปที่ตั้งค่า → "ยืนยันสิทธิ์อีกครั้ง" เพื่อแก้)', 'ng');
+        updateAutoSaveFolderUI('needs-permission');
+      }
+    } else {
+      // ไม่ได้ตั้งค่าโฟลเดอร์อัตโนมัติเลย — เตือนไว้ก่อน เผื่อ browser บล็อกการดาวน์โหลดหลายไฟล์รัวๆ
+      if (recs.length > 1) {
+        toast(`ℹ️ ยังไม่ได้ตั้งค่าโฟลเดอร์บันทึกอัตโนมัติ — จะดาวน์โหลด ${recs.length} ไฟล์ไปที่ Downloads ตามปกติ (ถ้า browser ถามอนุญาตดาวน์โหลดหลายไฟล์ กรุณากด "อนุญาต")`, 'ok');
+      }
+    }
+
     toast(`⏳ กำลังสร้าง PDF ${recs.length} ไฟล์...`, 'ok');
+    let autosavedCount = 0, downloadedCount = 0, failedCount = 0;
     for (const rec of recs) {
-      await generatePdf(rec);
+      try {
+        const savedAuto = await generatePdf(rec, { silent: true, skipPermissionCheck: autosaveReady });
+        if (savedAuto) autosavedCount++; else downloadedCount++;
+      } catch (e) {
+        console.error('bulkExportPdf item error:', e);
+        failedCount++;
+      }
       await new Promise(r => setTimeout(r, 400)); // เว้นจังหวะกันเบราว์เซอร์บล็อกดาวน์โหลดรัว ๆ
     }
-    toast(`✅ Export PDF ครบ ${recs.length} ไฟล์แล้ว`, 'ok');
+
+    // ── สรุปผลให้ชัดว่าไฟล์ไปที่ไหนบ้าง แทนที่จะโชว์แค่ toast ของไฟล์สุดท้าย ──
+    if (failedCount) {
+      toast(`⚠️ Export เสร็จ ${autosavedCount + downloadedCount}/${recs.length} ไฟล์ (ล้มเหลว ${failedCount} ไฟล์ ดูรายละเอียดใน Console)`, 'ng');
+    } else if (autosavedCount && downloadedCount) {
+      toast(`✅ Export PDF ครบ ${recs.length} ไฟล์ — บันทึกลงโฟลเดอร์ ${autosavedCount} ไฟล์ / ดาวน์โหลดปกติ ${downloadedCount} ไฟล์`, 'ok');
+    } else if (autosavedCount) {
+      toast(`✅ Export PDF ครบ ${recs.length} ไฟล์ → บันทึกลงโฟลเดอร์ "📁 ${autosaveDirHandle.name}" ทั้งหมด (แยก subfolder ตามชื่อ Line)`, 'ok');
+    } else {
+      toast(`✅ Export PDF ครบ ${recs.length} ไฟล์ (ดาวน์โหลดไปที่ Downloads ตามปกติ)`, 'ok');
+    }
   }
 
   // ── Bulk: mark/unmark "กันลบอัตโนมัติ" (protected) ──
@@ -3820,16 +3869,17 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
     savePdfLocalLog(log);
   }
 
-  async function generatePdf(record) {
-    if (!window.jspdf) { toast('jsPDF โหลดไม่สำเร็จ', 'ng'); return; }
-    if (!window.html2canvas) { toast('html2canvas โหลดไม่สำเร็จ', 'ng'); return; }
+  async function generatePdf(record, opts) {
+    opts = opts || {};
+    if (!window.jspdf) { toast('jsPDF โหลดไม่สำเร็จ', 'ng'); return false; }
+    if (!window.html2canvas) { toast('html2canvas โหลดไม่สำเร็จ', 'ng'); return false; }
     const { jsPDF } = window.jspdf;
 
-    toast('⏳ กำลังสร้าง PDF (ISO/IATF format)...', 'ok');
+    if (!opts.silent) toast('⏳ กำลังสร้าง PDF (ISO/IATF format)...', 'ok');
 
     // ── Report No. (unique ต่อรายงานแต่ละใบ — ใช้ตั้งชื่อไฟล์ให้ไม่ซ้ำกัน) ──
     const reportNo = 'RPT-' + (record.id || '').toString().slice(-8).toUpperCase();
-    const stamp   = record.date || new Date().toISOString().slice(0, 10);
+    const stamp   = record.date || localDateStr();
     const filename = `JIG-RPT_${reportNo}_${escHtml(record.jigId)}_${stamp}_${escHtml(record.shift)}.pdf`;
 
     const container = document.createElement('div');
@@ -3893,30 +3943,35 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
       let autosaved = false;
       if (autosaveDirHandle) {
         try {
-          const permitted = await verifyDirPermission(autosaveDirHandle, true);
+          // เวลาเรียกจาก bulkExportPdf จะส่ง opts.skipPermissionCheck มาเพราะเช็คสิทธิ์ล่วงหน้า
+          // ครั้งเดียวไปแล้วก่อนเริ่มลูป (ขอสิทธิ์ซ้ำในลูปจะไม่ผ่าน เพราะ browser อนุญาต
+          // request permission เฉพาะตอนที่ยังอยู่ใน user gesture เดิมของการคลิกปุ่มครั้งแรกเท่านั้น)
+          const permitted = opts.skipPermissionCheck ? true : await verifyDirPermission(autosaveDirHandle, true);
           if (permitted) {
             const pdfBlob    = doc.output('blob');
             const folderUsed = await saveFileToAutosaveFolder(autosaveDirHandle, record.lineName, filename, pdfBlob);
             autosaved = true;
             markPdfSavedLocally(record.id, { method: 'auto', folder: `${autosaveDirHandle.name}/${folderUsed}` });
-            toast(`📄 บันทึก PDF อัตโนมัติสำเร็จ → 📁 ${autosaveDirHandle.name}/${folderUsed}/${filename}`, 'ok');
+            if (!opts.silent) toast(`📄 บันทึก PDF อัตโนมัติสำเร็จ → 📁 ${autosaveDirHandle.name}/${folderUsed}/${filename}`, 'ok');
           } else {
             updateAutoSaveFolderUI('needs-permission');
           }
         } catch (autoErr) {
           console.error('autosave PDF error:', autoErr);
-          toast('บันทึกอัตโนมัติไม่สำเร็จ จะดาวน์โหลดไฟล์แทน: ' + (autoErr.message || autoErr), 'ng');
+          if (!opts.silent) toast('บันทึกอัตโนมัติไม่สำเร็จ จะดาวน์โหลดไฟล์แทน: ' + (autoErr.message || autoErr), 'ng');
         }
       }
       if (!autosaved) {
         doc.save(filename);
         markPdfSavedLocally(record.id, { method: 'download' });
-        toast(`📄 PDF บันทึกสำเร็จ! (${filename})`, 'ok');
+        if (!opts.silent) toast(`📄 PDF บันทึกสำเร็จ! (${filename})`, 'ok');
       }
       populateHistoryPanel(); // 🆕 รีเฟรช badge "บันทึกแล้ว" ในประวัติทันที (ถ้าเปิดหน้าประวัติอยู่)
+      return autosaved;
     } catch (err) {
       console.error('generatePdf error:', err);
       toast('สร้าง PDF ไม่สำเร็จ: ' + (err.message || err), 'ng');
+      return false;
     } finally {
       document.body.removeChild(container);
     }
@@ -3955,7 +4010,7 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
       renderChecklist();
       updateStats();
       $('inp-inspector').value = (currentAppUser && currentAppUser.full_name) || '';
-      $('inp-date').value = new Date().toISOString().slice(0, 10);
+      $('inp-date').value = localDateStr();
       $('inp-shift').value = 'กะ 1';
       $('inp-month').value = currentThaiMonthAbbr();
       $('report-notes').value = '';
@@ -4256,7 +4311,7 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
      ใช้ตัดออกจากตัวหารตอนคำนวณ % ตรวจครบของ Line — รีเซ็ตทุกเช้าอัตโนมัติ (เก็บแยกตามวันที่)
   ══════════════════════════════════════ */
   const JIG_SKIPS_KEY = 'jig_skips_v1';
-  const todayStr = () => new Date().toISOString().slice(0, 10);
+  const todayStr = () => localDateStr();
 
   function loadJigSkips() {
     try { return JSON.parse(localStorage.getItem(JIG_SKIPS_KEY)) || []; }
@@ -4347,15 +4402,21 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
     const skippedJigIds = new Set(loadJigSkips().filter(s => s.date === t).map(s => s.jigId));
     const checkedJigsByLine = {}; // lineId -> Set(jigId)
     const ngByLine = {}; // lineId -> true ถ้าเจอ NG อย่างน้อย 1 JIG
+    const jigInfo = {}; // jigId -> { status: 'ok'|'ng', time }
 
     hist.forEach(r => {
       if (r.date !== t || !r.lineId) return;
       (checkedJigsByLine[r.lineId] = checkedJigsByLine[r.lineId] || new Set()).add(r.jigId);
       const hasNg = (r.items || []).some(i => i.status === 'ng');
       if (hasNg) ngByLine[r.lineId] = true;
+      const time = r.timestamp ? new Date(r.timestamp).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' }) : '';
+      // เก็บสถานะล่าสุดของ JIG นั้น (ถ้าตรวจซ้ำหลายรอบ เอาอันล่าสุด)
+      if (!jigInfo[r.jigId] || new Date(r.timestamp || 0) >= new Date((jigInfo[r.jigId]._ts) || 0)) {
+        jigInfo[r.jigId] = { status: hasNg ? 'ng' : 'ok', time, _ts: r.timestamp };
+      }
     });
 
-    const map = {}; // lineId -> { status: 'ok'|'ng'|'partial', checked, total, skipped }
+    const map = {}; // lineId -> { status: 'ok'|'ng'|'partial', checked, total, skipped, jigDetails }
     catalog.lines.forEach(line => {
       const lineId = line.id;
       const lineJigs = catalog.jigs.filter(j => j.lineId === lineId);
@@ -4363,17 +4424,27 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
       const totalJigs = lineJigs.length - skippedCount; // ตัด JIG ที่ไม่ได้ผลิตออกจากตัวหาร
       const checkedSet = checkedJigsByLine[lineId];
       const checked = checkedSet ? checkedSet.size : 0;
-      if (!checkedSet && totalJigs > 0) return; // ยังไม่ตรวจเลยสักจุด และยังมีของต้องตรวจ — เว้นไว้ให้แสดงสีเทา
+
+      // รายละเอียดราย JIG — ไว้โชว์ตอนกดเปิดดูรายละเอียดว่า JIG ไหนตรวจแล้ว/ยังไม่ตรวจ/ไม่ได้ผลิต
+      const jigDetails = lineJigs.map(j => {
+        if (skippedJigIds.has(j.id)) return { id: j.id, name: j.name, status: 'skipped' };
+        const info = jigInfo[j.id];
+        if (info) return { id: j.id, name: j.name, status: info.status, time: info.time };
+        return { id: j.id, name: j.name, status: 'pending' };
+      });
+
+      if (!checkedSet && totalJigs > 0) { map[lineId] = { jigDetails }; return; } // ยังไม่ตรวจเลยสักจุด — เก็บ jigDetails ไว้ใช้แสดงรายละเอียดได้ แต่ไม่มี status สรุป (แสดงสีเทา)
       let status;
       if (ngByLine[lineId]) status = 'ng';
       else if (totalJigs === 0 || checked >= totalJigs) status = 'ok'; // ไม่มีอะไรต้องตรวจ (ทุก JIG ไม่ได้ผลิต) ถือว่าครบ
       else status = 'partial';
-      map[lineId] = { status, checked, total: totalJigs, skipped: skippedCount };
+      map[lineId] = { status, checked, total: totalJigs, skipped: skippedCount, jigDetails };
     });
     return map;
   }
 
   let lineSearchQuery = '';
+  let expandedLineId = null; // Line ที่กำลังเปิดดูรายละเอียดราย JIG อยู่ (คลิกที่การ์ด Line เพื่อเปิด/ปิด)
 
   function renderLineStatusList() {
     const listEl = $('line-status-list');
@@ -4403,7 +4474,7 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
       const dept = catalog.depts.find(d => d.id === deptId);
       const deptName = dept ? dept.name : 'ไม่ระบุแผนก';
       const cards = groups[deptId].map(l => {
-        const info = statusMap[l.id]; // undefined | { status: 'ok'|'ng'|'partial', checked, total }
+        const info = statusMap[l.id]; // undefined | { status: 'ok'|'ng'|'partial', checked, total, jigDetails }
         const status = info ? info.status : undefined;
         const statusClass = status === 'ng' ? 'status-ng' : status === 'ok' ? 'status-ok' : status === 'partial' ? 'status-partial' : '';
         const progress = info && info.total ? ` (${info.checked}/${info.total} JIG)` : '';
@@ -4414,19 +4485,56 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
           : 'ยังไม่ตรวจวันนี้';
         const progressBadge = (status === 'partial' || status === 'ng') && info && info.total
           ? `<span class="line-status-card-progress">${info.checked}/${info.total}</span>` : '';
+        const isOpen = expandedLineId === l.id;
         return `
-          <div class="line-status-card ${statusClass}" title="${escHtml(l.name || l.id)} — ${statusLabel}">
+          <div class="line-status-card ${statusClass} ${isOpen ? 'expanded' : ''}" data-line="${escHtml(l.id)}" title="คลิกเพื่อดูว่า JIG ไหนตรวจแล้วบ้าง — ${escHtml(l.name || l.id)}: ${statusLabel}">
             <span class="line-status-card-dot"></span>
             <span class="line-status-card-name">${escHtml(l.name || l.id)}</span>
             ${progressBadge}
           </div>`;
       }).join('');
+
+      // ── แผงรายละเอียดราย JIG (เปิดเมื่อคลิกการ์ด Line) — บอกชัดว่า JIG ไหนตรวจแล้ว/ยังไม่ตรวจ/ไม่ได้ผลิตวันนี้ ──
+      const expandedLine = groups[deptId].find(l => l.id === expandedLineId);
+      const detailPanel = expandedLine ? renderJigDetailPanel(expandedLine, statusMap[expandedLine.id]) : '';
+
       return `
         <div class="line-status-dept-group">
           <div class="line-status-dept-title">${escHtml(deptName)} <span style="opacity:.6">(${groups[deptId].length})</span></div>
           <div class="line-status-grid">${cards}</div>
+          ${detailPanel}
         </div>`;
     }).join('');
+
+    listEl.querySelectorAll('.line-status-card').forEach(card => {
+      card.addEventListener('click', () => {
+        const lineId = card.dataset.line;
+        expandedLineId = expandedLineId === lineId ? null : lineId;
+        renderLineStatusList();
+      });
+    });
+  }
+
+  // ── รายละเอียดราย JIG ของ Line ที่เปิดดูอยู่ — ใครตรวจแล้ว/ยังไม่ตรวจ/ไม่ได้ผลิตวันนี้ ──
+  function renderJigDetailPanel(line, info) {
+    const jigDetails = (info && info.jigDetails) || [];
+    if (!jigDetails.length) return '<div class="line-jig-detail-panel"><span class="line-jig-detail-empty">ยังไม่มี JIG ใน Line นี้</span></div>';
+    const chips = jigDetails.map(j => {
+      let cls, icon, label;
+      if (j.status === 'ok') { cls = 'jd-ok'; icon = '✅'; label = `ตรวจแล้ว ${j.time || ''}`; }
+      else if (j.status === 'ng') { cls = 'jd-ng'; icon = '⚠️'; label = `ตรวจแล้ว ${j.time || ''} (พบ NG)`; }
+      else if (j.status === 'skipped') { cls = 'jd-skipped'; icon = '⏸'; label = 'ไม่ได้ผลิตวันนี้'; }
+      else { cls = 'jd-pending'; icon = '⚪'; label = 'ยังไม่ตรวจ'; }
+      return `
+        <div class="line-jig-detail-chip ${cls}" title="${escHtml(j.name)} (${escHtml(j.id)}) — ${label}">
+          <span class="jd-icon">${icon}</span>
+          <span class="jd-text">
+            <span class="jd-name">${escHtml(j.name)}</span>
+            <span class="jd-status">${label}</span>
+          </span>
+        </div>`;
+    }).join('');
+    return `<div class="line-jig-detail-panel"><div class="line-jig-detail-grid">${chips}</div></div>`;
   }
 
   function bindLineSearch() {
@@ -4463,6 +4571,7 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
     populateDashMonthOptions(allHist);
     populateDashLineOptions();
     renderLineStatusList();
+    renderNgToday(allHist); // 🆕 รายการ NG วันนี้ — ใช้ allHist เสมอ ไม่ผูกกับตัวกรองเดือน/Line ด้านบน
     let hist = dashMonthFilter === 'all'
       ? allHist
       : allHist.filter(h => (h.date || '').slice(0, 7) === dashMonthFilter);
@@ -4472,6 +4581,48 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
     renderByLineChart(hist);
     renderDeptDonut(hist);
     renderNgRanking(hist);
+  }
+
+  // ── รายการ NG ที่พบ "วันนี้" แบบละเอียด (JIG ไหน ข้อไหน ใครตรวจ กี่โมง) ──
+  // แยกจาก renderNgRanking ซึ่งเป็นสรุปสถิติ NG-checkpoint สะสมตามตัวกรองเดือน/Line ด้านบน
+  function renderNgToday(allHist) {
+    const listEl = $('ng-today-list');
+    const countEl = $('ng-today-count');
+    if (!listEl) return;
+    const t = todayStr();
+    const rows = [];
+    allHist.filter(h => h.date === t).forEach(h => {
+      (h.items || []).forEach(it => {
+        if (it.status !== 'ng') return;
+        rows.push({
+          time: h.timestamp ? new Date(h.timestamp).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' }) : '',
+          ts: h.timestamp || '',
+          jigName: h.jigName || h.jigId || '',
+          lineName: h.lineName || '',
+          label: it.label || `ข้อ ${it.id}`,
+          value: it.value != null ? `${it.value}${it.unit ? ' ' + it.unit : ''}` : '',
+          note: it.note || '',
+          inspector: h.inspector || '',
+        });
+      });
+    });
+    rows.sort((a, b) => new Date(b.ts) - new Date(a.ts)); // ล่าสุดขึ้นก่อน
+
+    if (countEl) countEl.textContent = rows.length ? `${rows.length} รายการ` : '';
+    if (!rows.length) {
+      listEl.innerHTML = '<div class="ng-today-empty">✅ วันนี้ยังไม่พบ NG</div>';
+      return;
+    }
+    listEl.innerHTML = `<div class="ng-today-grid">${rows.map(r => `
+      <div class="ng-today-item">
+        <div class="ng-today-time">${r.time}</div>
+        <div class="ng-today-body">
+          <div class="ng-today-jig">${escHtml(r.jigName)} <span class="ng-today-line">(${escHtml(r.lineName)})</span></div>
+          <div class="ng-today-checkpoint">${escHtml(r.label)}${r.value ? ` — <strong>${escHtml(r.value)}</strong>` : ''}</div>
+          ${r.note ? `<div class="ng-today-note">"${escHtml(r.note)}"</div>` : ''}
+          <div class="ng-today-inspector">👤 ${escHtml(r.inspector)}</div>
+        </div>
+      </div>`).join('')}</div>`;
   }
 
   const TH_MONTHS_FULL = ['มกราคม','กุมภาพันธ์','มีนาคม','เมษายน','พฤษภาคม','มิถุนายน','กรกฎาคม','สิงหาคม','กันยายน','ตุลาคม','พฤศจิกายน','ธันวาคม'];
@@ -4530,7 +4681,7 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
       const days = 30;
       for (let i = days - 1; i >= 0; i--) {
         const d = new Date(); d.setDate(d.getDate() - i);
-        const key = d.toISOString().slice(0, 10);
+        const key = localDateStr(d);
         labels.push(key.slice(5)); // MM-DD
         const dayRecs = hist.filter(h => h.date === key);
         passData.push(dayRecs.filter(h => h.items.every(i => i.status === 'ok' || i.status === 'fixed')).length);
