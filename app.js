@@ -3762,6 +3762,16 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
       .replace(/\s+/g, ' ')
       .slice(0, 80) || 'ไม่ระบุไลน์';
   }
+  // กันชื่อไฟล์ PDF มีอักขระที่ระบบไฟล์ไม่รับ — สำคัญมากเพราะรหัส JIG บางตัวมี "/" อยู่ในตัวเอง
+  // (เช่น "7552712620/2640/2660/2680") ถ้าไม่กรองก่อน getFileHandle() ของ File System Access API
+  // จะ throw error ทันที (ตีความ "/" เป็นตัวแบ่งโฟลเดอร์) ทำให้บันทึกอัตโนมัติล้มเหลวเงียบๆ
+  // แล้ว fallback ไปดาวน์โหลดที่ Downloads แทน โดยโฟลเดอร์ที่ตั้งไว้ถูกสร้างค้างไว้แบบว่างเปล่า
+  function sanitizeFileName(name) {
+    return (name || '').toString().trim()
+      .replace(/[\\/:*?"<>|]/g, '-')
+      .replace(/\s+/g, ' ')
+      .slice(0, 120) || 'ไม่ระบุ';
+  }
 
   async function chooseAutoSaveFolder() {
     if (!autosaveSupported()) {
@@ -3880,7 +3890,7 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
     // ── Report No. (unique ต่อรายงานแต่ละใบ — ใช้ตั้งชื่อไฟล์ให้ไม่ซ้ำกัน) ──
     const reportNo = 'RPT-' + (record.id || '').toString().slice(-8).toUpperCase();
     const stamp   = record.date || localDateStr();
-    const filename = `JIG-RPT_${reportNo}_${escHtml(record.jigId)}_${stamp}_${escHtml(record.shift)}.pdf`;
+    const filename = `JIG-RPT_${reportNo}_${sanitizeFileName(record.jigId)}_${stamp}_${sanitizeFileName(record.shift)}.pdf`;
 
     const container = document.createElement('div');
     container.className = 'pdf-export-root';
