@@ -318,11 +318,10 @@ h1, h2, h3, h4, label, button, input, select, textarea, p, span, div {
   .filter-chips.jig-chips-grid { grid-template-columns: 1fr; }
 }
 
-/* Line chip list (Level 2) — การ์ดสไตล์เดียวกับ JIG chip (หัวข้อ 3) พร้อม "ไอคอนตัวย่อ"
-   (monogram) แทน thumbnail ที่ Line ไม่มี ให้แต่ละการ์ดดูสมบูรณ์เหมือนหัวข้อ 3
-   🛡️ เปลี่ยนจาก CSS Grid (auto-fill/minmax) มาใช้ flex column เดียวแบบตรงไปตรงมาแทน —
+/* Line chip list (Level 2) — การ์ดสไตล์เดียวกับ JIG chip (หัวข้อ 3)
+   🛡️ ใช้ flex column เดียวตรงไปตรงมาแทน CSS Grid (auto-fill/minmax) —
    บาง in-app browser บนมือถือ (เช่น webview ของ Telegram) คำนวณความกว้าง viewport ผิดพลาด
-   ทำให้ grid track ที่ตั้ง min-width ไว้ (220px) ดันเนื้อหาล้นขอบจอด้านขวาได้
+   ทำให้ grid track ที่ตั้ง min-width ไว้ดันเนื้อหาล้นขอบจอด้านขวาได้
    ใส่ overflow:hidden + min-width:0 กันไว้ทุกจุดที่เป็นไปได้ เพื่อไม่ให้ล้นจออีกไม่ว่าจะเปิดจาก
    เบราว์เซอร์ไหนก็ตาม */
 .filter-chips.line-chips-grid {
@@ -332,21 +331,10 @@ h1, h2, h3, h4, label, button, input, select, textarea, p, span, div {
 }
 .line-chips-grid .chip.line-chip {
   width: 100%; max-width: 100%; box-sizing: border-box;
-  justify-content: flex-start;
-  padding: 8px 10px 8px 8px;
+  justify-content: space-between;
+  padding: 11px 14px;
   gap: 10px;
   overflow: hidden;
-}
-.line-chip-avatar {
-  width: 36px; height: 36px; flex-shrink: 0;
-  border-radius: 8px;
-  background: var(--bg-input); border: 1px solid var(--border-input);
-  display: flex; align-items: center; justify-content: center;
-  font-size: 12px; font-weight: 700; letter-spacing: 0.2px;
-  color: var(--text-muted); font-family: var(--font-en);
-}
-.chip.line-chip.selected .line-chip-avatar {
-  background: var(--accent-dim); border-color: var(--chip-active-bdr); color: var(--accent);
 }
 .line-chip-text {
   display: flex; flex-direction: column; align-items: flex-start;
