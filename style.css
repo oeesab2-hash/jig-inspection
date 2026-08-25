@@ -318,32 +318,30 @@ h1, h2, h3, h4, label, button, input, select, textarea, p, span, div {
   .filter-chips.jig-chips-grid { grid-template-columns: 1fr; }
 }
 
-/* Line chip list (Level 2) — เปลี่ยนจากกล่องแยกทีละแถว (ดูซ้อนกันรก ไม่เป็นสากล)
-   ไปเป็น "list group" กรอบเดียว คั่นด้วยเส้นแบ่งบางๆ แบบ list มาตรฐานของแอปมือถือทั่วไป
-   (คล้าย Settings list บน iOS/Android) — เลือกแล้วโชว่ด้วยแถบสีด้านซ้าย + พื้นหลังไฮไลต์
-   ชื่อยาวตัดด้วย ... บรรทัดเดียวเสมอ กันแถวสูงไม่เท่ากัน ชื่อเต็มดูได้จาก title (กดค้าง/hover) */
+/* Line chip list (Level 2) — ปรับให้เป็นการ์ดแบบเดียวกับ JIG chip (หัวข้อ 3) เพื่อความ
+   สม่ำเสมอของดีไซน์ทั้งแอป: การ์ดเดี่ยวแยกทีละใบ ระยะห่างเท่ากัน มี "ไอคอนตัวย่อ" (monogram)
+   ด้านซ้ายแทนรูป thumbnail (Line ไม่มีรูปเหมือน JIG) ให้แต่ละการ์ดดูสมบูรณ์ไม่โล่งเกินไป
+   ชื่อยาวตัดด้วย ... บรรทัดเดียวเสมอ กันความสูงไม่เท่ากัน — ชื่อเต็มดูได้จาก title (กดค้าง/hover) */
 .filter-chips.line-chips-grid {
-  display: flex; flex-direction: column; gap: 0;
-  border: 1px solid var(--border-input);
-  border-radius: 12px;
-  overflow: hidden;
-  background: var(--chip-bg);
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  align-items: stretch;
 }
 .line-chips-grid .chip.line-chip {
-  width: 100%; justify-content: space-between;
-  min-height: 48px;
-  border: none;
-  border-bottom: 1px solid var(--border-input);
-  border-left: 3px solid transparent;
-  border-radius: 0;
-  background: transparent;
-  padding: 11px 14px 11px 13px;
+  width: 100%; justify-content: flex-start;
+  padding: 8px 10px 8px 8px;
+  gap: 10px;
 }
-.line-chips-grid .chip.line-chip:last-child { border-bottom: none; }
-.line-chips-grid .chip.line-chip:hover { background: var(--chip-hover); }
-.line-chips-grid .chip.line-chip.selected {
-  background: var(--chip-active-bg);
-  border-left-color: var(--chip-active-bdr);
+.line-chip-avatar {
+  width: 36px; height: 36px; flex-shrink: 0;
+  border-radius: 8px;
+  background: var(--bg-input); border: 1px solid var(--border-input);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 12px; font-weight: 700; letter-spacing: 0.2px;
+  color: var(--text-muted); font-family: var(--font-en);
+}
+.chip.line-chip.selected .line-chip-avatar {
+  background: var(--accent-dim); border-color: var(--chip-active-bdr); color: var(--accent);
 }
 .line-chip-text {
   display: flex; flex-direction: column; align-items: flex-start;
@@ -356,6 +354,10 @@ h1, h2, h3, h4, label, button, input, select, textarea, p, span, div {
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 .line-chip-text .chip-code { margin-left: 0; }
+.line-chip-count { margin-left: auto; flex-shrink: 0; align-self: center; }
+@media (max-width: 560px) {
+  .filter-chips.line-chips-grid { grid-template-columns: 1fr; }
+}
 
 .jig-search-wrap {
   position: relative;

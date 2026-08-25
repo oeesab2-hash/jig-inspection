@@ -1066,12 +1066,16 @@
       const sel = selection.lineId === l.id ? 'selected' : '';
       // โชว์รหัส Line ต่อเมื่อไม่ซ้ำกับชื่อเท่านั้น (บาง Line ตั้งชื่อ = รหัสเป๊ะ โชว์ซ้ำ 2 บรรทัดไม่มีประโยชน์)
       const codeHtml = l.id !== l.name ? `<span class="chip-code">${escHtml(l.id)}</span>` : '';
+      // ตัวย่อ 1-2 ตัวอักษรจากคำแรกๆ ของชื่อ Line ใช้แทน thumbnail รูป (Line ไม่มีรูปเหมือน JIG)
+      // ให้การ์ดแต่ละใบดูสมบูรณ์ ไม่โล่งเกินไป เหมือนสไตล์การ์ด JIG ในหัวข้อ 3
+      const initials = l.name.trim().split(/\s+/).slice(0, 2).map(w => w[0] || '').join('').toUpperCase() || '·';
       return `<button class="chip line-chip ${sel}" data-line="${escHtml(l.id)}" title="${escHtml(l.name)}">
+        <span class="line-chip-avatar" aria-hidden="true">${escHtml(initials)}</span>
         <span class="line-chip-text">
           <span class="line-chip-name">${escHtml(l.name)}</span>
           ${codeHtml}
         </span>
-        <span class="chip-count">${jigCount} JIG</span>
+        <span class="chip-count line-chip-count">${jigCount} JIG</span>
       </button>`;
     }).join('');
     container.querySelectorAll('.chip').forEach(btn => {
