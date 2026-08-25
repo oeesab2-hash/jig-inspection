@@ -318,17 +318,32 @@ h1, h2, h3, h4, label, button, input, select, textarea, p, span, div {
   .filter-chips.jig-chips-grid { grid-template-columns: 1fr; }
 }
 
-/* Line chip list (Level 2) — ให้ทุกแถวมีความสูงเท่ากันเป๊ะเสมอ ไม่ว่าชื่อ Line จะสั้นหรือยาว
-   (เช่น "SILL" vs "SIDE STEP (Common RG01,RG04,RG12,RG17)") ตัดชื่อยาวด้วย ... บรรทัดเดียว
-   แทนการขึ้น 2 บรรทัด กันแถวสูงไม่เท่ากันแล้วดูไม่เป็นระเบียบ — ชื่อเต็มยังดูได้จาก title (touch-and-hold / hover) */
+/* Line chip list (Level 2) — เปลี่ยนจากกล่องแยกทีละแถว (ดูซ้อนกันรก ไม่เป็นสากล)
+   ไปเป็น "list group" กรอบเดียว คั่นด้วยเส้นแบ่งบางๆ แบบ list มาตรฐานของแอปมือถือทั่วไป
+   (คล้าย Settings list บน iOS/Android) — เลือกแล้วโชว่ด้วยแถบสีด้านซ้าย + พื้นหลังไฮไลต์
+   ชื่อยาวตัดด้วย ... บรรทัดเดียวเสมอ กันแถวสูงไม่เท่ากัน ชื่อเต็มดูได้จาก title (กดค้าง/hover) */
 .filter-chips.line-chips-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-  align-items: stretch;
+  display: flex; flex-direction: column; gap: 0;
+  border: 1px solid var(--border-input);
+  border-radius: 12px;
+  overflow: hidden;
+  background: var(--chip-bg);
 }
 .line-chips-grid .chip.line-chip {
   width: 100%; justify-content: space-between;
-  min-height: 44px; /* ความสูงคงที่ทุกแถว ไม่ว่าจะมี chip-code หรือชื่อยาว/สั้นแค่ไหน */
+  min-height: 48px;
+  border: none;
+  border-bottom: 1px solid var(--border-input);
+  border-left: 3px solid transparent;
+  border-radius: 0;
+  background: transparent;
+  padding: 11px 14px 11px 13px;
+}
+.line-chips-grid .chip.line-chip:last-child { border-bottom: none; }
+.line-chips-grid .chip.line-chip:hover { background: var(--chip-hover); }
+.line-chips-grid .chip.line-chip.selected {
+  background: var(--chip-active-bg);
+  border-left-color: var(--chip-active-bdr);
 }
 .line-chip-text {
   display: flex; flex-direction: column; align-items: flex-start;
@@ -341,9 +356,6 @@ h1, h2, h3, h4, label, button, input, select, textarea, p, span, div {
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 .line-chip-text .chip-code { margin-left: 0; }
-@media (max-width: 560px) {
-  .filter-chips.line-chips-grid { grid-template-columns: 1fr; }
-}
 
 .jig-search-wrap {
   position: relative;
