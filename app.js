@@ -848,6 +848,18 @@
     return `${date} ${time} น.`;
   }
 
+  // Generate a collision-safe unique ID for records (history entries, etc).
+  // Date.now() alone can collide if two records are created within the
+  // same millisecond (e.g. the mock-data generator, or fast repeat taps).
+  // crypto.randomUUID() needs a secure context (https/localhost); we fall
+  // back to timestamp+random for plain http on a local factory network.
+  function genId() {
+    try {
+      if (window.crypto && crypto.randomUUID) return crypto.randomUUID();
+    } catch (e) { /* fall through to fallback */ }
+    return `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+  }
+
   // 🆕 กัน promise ค้างตลอดไป (ไม่ resolve ไม่ reject) เช่นตอนเน็ต/WiFi โรงงานกระตุก
   // แล้ว fetch ของ Supabase ค้างเงียบๆ — เจอปัญหานี้จริง (2026-08): เปิดแอปพร้อมกันหลายเครื่อง
   // ตอนเน็ตมีปัญหา แล้วค้างที่หน้า "กำลังโหลดข้อมูล..." ตลอดไปเพราะ await Promise.all(...)
@@ -869,18 +881,6 @@
     });
   }
 
-  // Generate a collision-safe unique ID for records (history entries, etc).
-  // Date.now() alone can collide if two records are created within the
-  // same millisecond (e.g. the mock-data generator, or fast repeat taps).
-  // crypto.randomUUID() needs a secure context (https/localhost); we fall
-  // back to timestamp+random for plain http on a local factory network.
-  function genId() {
-    try {
-      if (window.crypto && crypto.randomUUID) return crypto.randomUUID();
-    } catch (e) { /* fall through to fallback */ }
-    return `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
-  }
-
   /* ══════════════════════════════════════
      INIT
   ══════════════════════════════════════ */
@@ -889,7 +889,9 @@
     pullJigSkipsFromSupabase(); // ดึงรายการ JIG ที่มาร์คไม่ได้ผลิตวันนี้
 
     // ─── ตรวจสอบ GPS Status ───
-    await checkGPSStatusOnLoad();
+    // 🆕 เอา await ออก ให้รันคู่ขนานแทน — GPS เป็นแค่ popup เตือนเฉยๆ ไม่ควรเป็นเงื่อนไข
+    // กันการโหลดข้อมูลหลักของแอปไว้ (ลดจุดเสี่ยงที่ทำให้ init() บล็อกโดยไม่จำเป็น)
+    checkGPSStatusOnLoad();
     
     // ดึงข้อมูลล่าสุดจากทีมมาก่อน แล้วค่อย render (ถ้ายังไม่เคย sync ขึ้นเลยจะได้ null แล้วใช้ local ต่อ)
     // 🆕 ใส่ timeout 8 วิ กำกับไว้ — เดิม await Promise.all(...) ตรงๆ ไม่มี timeout เลย
