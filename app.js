@@ -953,9 +953,11 @@
     container.innerHTML = lines.map(l => {
       const jigCount = catalog.jigs.filter(j => j.lineId === l.id).length;
       const sel = selection.lineId === l.id ? 'selected' : '';
-      return `<button class="chip ${sel}" data-line="${escHtml(l.id)}">
-        ${escHtml(l.name)}
-        <span class="chip-code">${escHtml(l.id)}</span>
+      return `<button class="chip line-chip ${sel}" data-line="${escHtml(l.id)}">
+        <span class="line-chip-text">
+          <span class="line-chip-name">${escHtml(l.name)}</span>
+          <span class="chip-code">${escHtml(l.id)}</span>
+        </span>
         <span class="chip-count">${jigCount} JIG</span>
       </button>`;
     }).join('');

@@ -318,6 +318,30 @@ h1, h2, h3, h4, label, button, input, select, textarea, p, span, div {
   .filter-chips.jig-chips-grid { grid-template-columns: 1fr; }
 }
 
+/* Line chip list (Level 2) — เดิมใช้ flex-wrap ทำให้ชื่อ Line ยาว/สั้นไม่เท่ากัน
+   (เช่น "SILL" vs "SIDE STEP (Common RG01,RG04,RG12,RG17)") เรียงตัวมั่วไม่เป็นระเบียบ
+   เปลี่ยนเป็น grid คอลัมน์เท่ากันเหมือน JIG chips เพื่อให้แถวเรียงเป็นระเบียบเสมอ */
+.filter-chips.line-chips-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  align-items: stretch;
+}
+.line-chips-grid .chip.line-chip {
+  width: 100%; justify-content: space-between;
+}
+.line-chip-text {
+  display: flex; flex-direction: column; align-items: flex-start;
+  gap: 2px; min-width: 0; flex: 1;
+}
+.line-chip-name {
+  line-height: 1.3; overflow: hidden; text-overflow: ellipsis;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+}
+.line-chip-text .chip-code { margin-left: 0; }
+@media (max-width: 560px) {
+  .filter-chips.line-chips-grid { grid-template-columns: 1fr; }
+}
+
 .jig-search-wrap {
   position: relative;
   display: flex; align-items: center;
