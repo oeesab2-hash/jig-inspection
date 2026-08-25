@@ -963,8 +963,19 @@
     dbgLog('Promise.all ของ catalog+history เสร็จแล้ว', `catTimedOut=${remoteCat === 'TIMEOUT'}, histTimedOut=${remoteHist === 'TIMEOUT'}`);
     const catTimedOut  = remoteCat === 'TIMEOUT';
     const histTimedOut = remoteHist === 'TIMEOUT';
-    if (!catTimedOut && remoteCat) localStorage.setItem(SK.catalog, JSON.stringify(remoteCat));
-    if (!histTimedOut && remoteHist) localStorage.setItem(SK.history, JSON.stringify(remoteHist));
+    // ⚠️ ห้ามปล่อยให้ localStorage.setItem ตรงนี้ throw แบบไม่ดักจับ!
+    // บน iOS Safari ถ้าเปิด Private Browsing อยู่ (หรือพื้นที่เก็บข้อมูลเต็ม) setItem() จะ throw
+    // QuotaExceededError ("The quota has been exceeded.") ทันที ซึ่งจะทำให้ init() หยุดทำงานกลางคัน
+    // ก่อนถึง renderFilter() แอปเลยค้างที่หน้า "กำลังโหลดข้อมูล..." ตลอดไปโดยไม่มี error ให้เห็นเลย
+    // (เจอจริงกับ iPhone 6 เครื่องที่พี่บีแจ้งมา) — ดักจับไว้แล้วแค่เตือน ไม่ให้ทั้งแอปพังตาม
+    if (!catTimedOut && remoteCat) {
+      try { localStorage.setItem(SK.catalog, JSON.stringify(remoteCat)); }
+      catch (e) { console.warn('บันทึก catalog ลง localStorage ไม่สำเร็จ (พื้นที่เต็ม/Private Browsing) — ใช้ข้อมูลจาก Supabase ในหน่วยความจำแทนไปก่อน:', e); }
+    }
+    if (!histTimedOut && remoteHist) {
+      try { localStorage.setItem(SK.history, JSON.stringify(remoteHist)); }
+      catch (e) { console.warn('บันทึก history ลง localStorage ไม่สำเร็จ (พื้นที่เต็ม/Private Browsing) — ใช้ข้อมูลจาก Supabase ในหน่วยความจำแทนไปก่อน:', e); }
+    }
     loadCatalog();
     dbgLog('loadCatalog() เสร็จ', `${(catalog.depts||[]).length} depts ในตัวแปร catalog`);
     catalogLoading = false; // ✅ ข้อมูลตั้งต้นพร้อมแล้ว (จาก Supabase หรือ cache local) — เลิกถือว่า "กำลังโหลด"
