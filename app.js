@@ -848,6 +848,27 @@
     return `${date} ${time} น.`;
   }
 
+  // 🆕 กัน promise ค้างตลอดไป (ไม่ resolve ไม่ reject) เช่นตอนเน็ต/WiFi โรงงานกระตุก
+  // แล้ว fetch ของ Supabase ค้างเงียบๆ — เจอปัญหานี้จริง (2026-08): เปิดแอปพร้อมกันหลายเครื่อง
+  // ตอนเน็ตมีปัญหา แล้วค้างที่หน้า "กำลังโหลดข้อมูล..." ตลอดไปเพราะ await Promise.all(...)
+  // ใน init() ไม่มี timeout กำกับเลย ถ้าเกินเวลาที่กำหนดให้ resolve เป็น fallbackValue แทน
+  // เพื่อให้แอปไปต่อได้โดยใช้ cache local แทนที่จะค้างจอขาวรอเน็ตตลอดไป
+  function withTimeout(promise, ms, fallbackValue) {
+    return new Promise((resolve) => {
+      let done = false;
+      const timer = setTimeout(() => {
+        if (done) return;
+        done = true;
+        console.warn(`withTimeout: เกิน ${ms}ms ยังไม่เสร็จ — ใช้ fallback แทน`);
+        resolve(fallbackValue);
+      }, ms);
+      promise.then(
+        (val) => { if (done) return; done = true; clearTimeout(timer); resolve(val); },
+        (err) => { if (done) return; done = true; clearTimeout(timer); console.warn('withTimeout: promise error', err); resolve(fallbackValue); }
+      );
+    });
+  }
+
   // Generate a collision-safe unique ID for records (history entries, etc).
   // Date.now() alone can collide if two records are created within the
   // same millisecond (e.g. the mock-data generator, or fast repeat taps).
@@ -871,7 +892,14 @@
     await checkGPSStatusOnLoad();
     
     // ดึงข้อมูลล่าสุดจากทีมมาก่อน แล้วค่อย render (ถ้ายังไม่เคย sync ขึ้นเลยจะได้ null แล้วใช้ local ต่อ)
-    const [remoteCat, remoteHist] = await Promise.all([pullCatalogFromSupabase(), pullHistoryFromSupabase()]);
+    // 🆕 ใส่ timeout 8 วิ กำกับไว้ — เดิม await Promise.all(...) ตรงๆ ไม่มี timeout เลย
+    // ถ้าเน็ต/WiFi โรงงานกระตุกตอนนั้นจน fetch ค้างเงียบๆ (ไม่ resolve ไม่ reject) แอปจะค้างที่
+    // หน้า "กำลังโหลดข้อมูล..." ตลอดไปเพราะโค้ดไปไม่ถึง renderFilter() เลย (เคสจริง: iPhone 5 เครื่องติดพร้อมกัน)
+    // ตอนนี้ถ้าเกิน 8 วิ จะ fallback เป็น null แล้วใช้ catalog/history ที่ cache ไว้ในเครื่องแทนทันที
+    const [remoteCat, remoteHist] = await Promise.all([
+      withTimeout(pullCatalogFromSupabase(), 8000, null),
+      withTimeout(pullHistoryFromSupabase(), 8000, null),
+    ]);
     if (remoteCat) localStorage.setItem(SK.catalog, JSON.stringify(remoteCat));
     if (remoteHist) localStorage.setItem(SK.history, JSON.stringify(remoteHist));
     loadCatalog();
