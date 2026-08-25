@@ -853,7 +853,11 @@
     console.log(`[DIAG +${elapsed}s] ${step}${extra ? ' — ' + extra : ''}`);
     renderDbgPanel();
   }
+  // 🔕 ปิดการโชว์ panel สีเขียวบนจอแล้ว (บั๊กที่ไล่อยู่แก้เสร็จแล้ว) — เหลือไว้แค่ log ลง console
+  //    เผื่อวันหลังต้องไล่บั๊กเน็ต/Supabase อีก เปิดกลับมาได้ง่ายๆ โดยลบ "return;" บรรทัดล่างออก
   function renderDbgPanel() {
+    return; // ← ลบบรรทัดนี้ทิ้งเมื่อไหร่ก็เปิด panel วินิจฉัยกลับมาโชว์บนจอได้ทันที
+    // eslint-disable-next-line no-unreachable
     let panel = document.getElementById('_dbg-panel');
     if (!panel) {
       panel = document.createElement('div');
@@ -864,13 +868,6 @@
     const lines = _dbgLogEntries.map(e => `+${e.elapsed}s  ${e.step}${e.extra ? '  (' + e.extra + ')' : ''}`).join('\n');
     panel.innerHTML = `<div style="color:#ff0;font-weight:bold;margin-bottom:4px;">🔍 DIAGNOSTIC LOG — ถ่ายรูปหน้าจอนี้ส่งให้ยูยิได้เลย</div>${escHtml(lines)}<div style="margin-top:6px;color:#888;">(กดค้างเพื่อ copy ข้อความได้)</div>`;
   }
-  // โชว์ panel อัตโนมัติถ้าโหลดนานเกิน 3 วินาทีแล้วยังไม่เสร็จ (ปกติไม่โชว์ กันรกจอตอนโหลดเร็ว)
-  setTimeout(() => {
-    if (!_dbgPanelShown && catalogLoading) {
-      _dbgPanelShown = true;
-      renderDbgPanel();
-    }
-  }, 3000);
 
   // ── ดักจับ error ที่อาจเกิดขึ้นแบบเงียบๆ (เช่น syntax/API บางตัวที่ iOS Safari รุ่นเก่าไม่รองรับ)
   //    ซึ่งจะทำให้ init() หยุดทำงานกลางคันโดยไม่มีอะไรบอกเลย — โชว์ error ลงในแผง diagnostic ด้วย
