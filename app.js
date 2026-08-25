@@ -837,6 +837,34 @@
     return `${yyyy}-${mm}-${dd}`;
   }
 
+  // ── ตัวจับเวลาให้ Promise ใดๆ ก็ตาม — กันหน้าจอค้างรอตลอดไปถ้าเน็ต/Supabase ไม่ตอบสนอง ──
+  // (เจอเคสจริง: iPhone บางเครื่องที่ต่อ Supabase ไม่ติด เช่น เน็ตหลุด/ถูกบล็อกกลางทาง
+  // จะค้างที่หน้า "กำลังโหลดข้อมูล..." ตลอดไปเพราะ fetch ไม่ resolve และไม่ reject เลย
+  // ต้องตั้ง timeout ฝั่งแอปเองเพื่อบังคับเลิกรอ แล้ว fallback ไปใช้ค่า resolveWith แทน)
+  function withTimeout(promise, ms, resolveWith) {
+    return new Promise(resolve => {
+      let done = false;
+      const timer = setTimeout(() => {
+        if (done) return;
+        done = true;
+        console.warn(`withTimeout: หมดเวลา ${ms}ms — ใช้ค่า fallback แทน`);
+        resolve(resolveWith);
+      }, ms);
+      promise.then(v => {
+        if (done) return;
+        done = true;
+        clearTimeout(timer);
+        resolve(v);
+      }).catch(err => {
+        if (done) return;
+        done = true;
+        clearTimeout(timer);
+        console.error('withTimeout: promise error', err);
+        resolve(resolveWith);
+      });
+    });
+  }
+
   // Format an ISO timestamp as "D/M/YYYY HH:MM น." (Thai locale) — ใช้ให้ช่องลายเซ็นทั้ง 3
   // (ผู้ตรวจสอบ / หัวหน้างาน / ผู้จัดการฝ่ายผลิต) ในหน้า PDF โชว์วันที่-เวลาแบบเดียวกัน
   function sigDateTime(iso) {
@@ -871,11 +899,26 @@
     await checkGPSStatusOnLoad();
     
     // ดึงข้อมูลล่าสุดจากทีมมาก่อน แล้วค่อย render (ถ้ายังไม่เคย sync ขึ้นเลยจะได้ null แล้วใช้ local ต่อ)
-    const [remoteCat, remoteHist] = await Promise.all([pullCatalogFromSupabase(), pullHistoryFromSupabase()]);
-    if (remoteCat) localStorage.setItem(SK.catalog, JSON.stringify(remoteCat));
-    if (remoteHist) localStorage.setItem(SK.history, JSON.stringify(remoteHist));
+    // ⏱️ ใส่ timeout 10 วินาที กันเครื่องที่ต่อ Supabase ไม่ติด (เน็ตหลุด/ถูกบล็อก) ค้างที่หน้า
+    //    "กำลังโหลดข้อมูล..." ตลอดไป — ถ้าเกินเวลาจะเลิกรอ แล้วใช้ข้อมูลแคชในเครื่อง (ถ้ามี) แทนทันที
+    const [remoteCat, remoteHist] = await Promise.all([
+      withTimeout(pullCatalogFromSupabase(), 10000, 'TIMEOUT'),
+      withTimeout(pullHistoryFromSupabase(), 10000, 'TIMEOUT'),
+    ]);
+    const catTimedOut  = remoteCat === 'TIMEOUT';
+    const histTimedOut = remoteHist === 'TIMEOUT';
+    if (!catTimedOut && remoteCat) localStorage.setItem(SK.catalog, JSON.stringify(remoteCat));
+    if (!histTimedOut && remoteHist) localStorage.setItem(SK.history, JSON.stringify(remoteHist));
     loadCatalog();
     catalogLoading = false; // ✅ ข้อมูลตั้งต้นพร้อมแล้ว (จาก Supabase หรือ cache local) — เลิกถือว่า "กำลังโหลด"
+    if (catTimedOut || histTimedOut) {
+      const hasLocalCache = catalog.depts && catalog.depts.length > 0;
+      if (hasLocalCache) {
+        toast('⚠️ เชื่อมต่อ Supabase ไม่สำเร็จ (เน็ตช้า/ถูกบล็อก) — ใช้ข้อมูลที่บันทึกไว้ในเครื่องแทนไปก่อน', 'ng');
+      } else {
+        toast('⚠️ เชื่อมต่อ Supabase ไม่สำเร็จ และไม่มีข้อมูลในเครื่อง กรุณาเช็คสัญญาณอินเทอร์เน็ตแล้วรีเฟรชหน้าใหม่', 'ng');
+      }
+    }
     loadAppSettings();               // ใช้ค่า cache/default ไปก่อนระหว่างรอ Supabase
     renderAppSettingsForm();
     pullAppSettingsFromSupabase();   // แล้วอัปเดตให้ล่าสุดทันทีที่ดึงเสร็จ (ไม่บล็อกหน้าจอ)
