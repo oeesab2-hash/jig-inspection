@@ -1066,7 +1066,7 @@
       const sel = selection.lineId === l.id ? 'selected' : '';
       // โชว์รหัส Line ต่อเมื่อไม่ซ้ำกับชื่อเท่านั้น (บาง Line ตั้งชื่อ = รหัสเป๊ะ โชว์ซ้ำ 2 บรรทัดไม่มีประโยชน์)
       const codeHtml = l.id !== l.name ? `<span class="chip-code">${escHtml(l.id)}</span>` : '';
-      return `<button class="chip line-chip ${sel}" data-line="${escHtml(l.id)}">
+      return `<button class="chip line-chip ${sel}" data-line="${escHtml(l.id)}" title="${escHtml(l.name)}">
         <span class="line-chip-text">
           <span class="line-chip-name">${escHtml(l.name)}</span>
           ${codeHtml}
