@@ -2351,3 +2351,10 @@ body.sidebar-collapsed .sidebar-nav a.side-nav-item { justify-content: center; p
 .adm-login-log-item .llg-name { font-weight: 600; color: var(--text-main); }
 .adm-login-log-item .llg-time { color: var(--text-muted); font-family: var(--font-en); font-size: 10.5px; white-space: nowrap; }
 .adm-login-log-item .llg-meta { color: var(--text-muted); font-size: 10px; }
+.llg-net {
+  display: inline-flex; align-items: center; gap: 3px;
+  padding: 1px 7px; border-radius: 8px; font-size: 10px; font-weight: 600;
+}
+.llg-net-mobile { background: #fef3c7; color: #92400e; } /* ส้ม — เน็ตมือถือ */
+.llg-net-wifi { background: #dcfce7; color: #166534; } /* เขียว — WiFi บริษัท */
+.llg-net-unknown { background: var(--bg-input); color: var(--text-muted); }

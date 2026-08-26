@@ -2045,6 +2045,32 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
        ทุกครั้งที่เปิดเบราว์เซอร์ใหม่ ตามที่พี่บีต้องการ)
      - init() ของแอปจริงจะยังไม่ทำงาน จนกว่าจะ Login สำเร็จ (ดูท้ายไฟล์)
   ══════════════════════════════════════ */
+  /* ── ตรวจสอบว่าตอน Login ใช้เน็ตมือถือ (4G/5G) หรือ WiFi บริษัท ──
+     หลักการ: ดึงชื่อ ISP (ผู้ให้บริการเน็ต) จาก IP สาธารณะตอนนั้น ผ่าน ipapi.co (ฟรี ไม่ต้องมี API key)
+     ถ้าชื่อ ISP ตรงกับค่ายมือถือที่รู้จัก (AIS/dtac/True ฯลฯ) → ถือว่าเป็น "เน็ตมือถือ"
+     นอกนั้นถือว่าเป็น "WiFi บริษัท" ตามที่พี่บีระบุไว้ (ไม่ต้องตั้งค่า IP บริษัทล่วงหน้า)
+     ⚠️ ถ้าดึงข้อมูลไม่สำเร็จ (เน็ตช้า/API ล่ม) จะไม่บล็อกการ login — แค่บันทึกเป็น "ไม่ทราบ" แทน */
+  const MOBILE_ISP_KEYWORDS = [
+    'AIS', 'ADVANCED INFO', 'DTAC', 'TOTAL ACCESS', 'TRUEMOVE', 'TRUE MOVE',
+    'TRUE CORP', 'MOBILE', 'CELLULAR', 'WIRELESS', 'NT MOBILE', 'CAT MOBILE',
+  ];
+  async function detectNetworkType() {
+    try {
+      const ctrl = new AbortController();
+      const timer = setTimeout(() => ctrl.abort(), 3000); // กันไม่ให้รอนานจนหน้า login ค้าง
+      const res = await fetch('https://ipapi.co/json/', { signal: ctrl.signal });
+      clearTimeout(timer);
+      if (!res.ok) return { network_type: null, isp_org: null };
+      const info = await res.json();
+      const org = (info.org || info.asn || '').toString();
+      const isMobile = MOBILE_ISP_KEYWORDS.some(k => org.toUpperCase().includes(k));
+      return { network_type: org ? (isMobile ? 'mobile' : 'wifi') : null, isp_org: org || null };
+    } catch (e) {
+      console.warn('ตรวจสอบประเภทเครือข่ายไม่สำเร็จ (ไม่กระทบการ login):', e);
+      return { network_type: null, isp_org: null };
+    }
+  }
+
   let currentAppUser = null; // { user_id, username, full_name, role }
 
   function getStoredAppUser() {
@@ -2102,10 +2128,13 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
     btn.textContent = '🔄 กำลังตรวจสอบ...';
 
     try {
+      const netInfo = await detectNetworkType(); // { network_type: 'mobile'|'wifi'|null, isp_org }
       const { data, error } = await sb.rpc('verify_app_login', {
         p_username: username,
         p_password: password,
         p_user_agent: navigator.userAgent,
+        p_network_type: netInfo.network_type,
+        p_isp_org: netInfo.isp_org,
       });
 
       if (error) {
@@ -2701,12 +2730,19 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
       const dt = new Date(l.login_at);
       const dateStr = dt.toLocaleDateString('th-TH', { day: '2-digit', month: 'short', year: 'numeric' });
       const timeStr = dt.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' });
+      // badge ประเภทเครือข่าย — mobile=ค่ายมือถือ, wifi=ไม่ใช่มือถือ (ถือว่า WiFi บริษัท), ไม่มีข้อมูล=ไม่ทราบ
+      const netBadge = l.network_type === 'mobile'
+        ? '<span class="llg-net llg-net-mobile">📱 เน็ตมือถือ</span>'
+        : l.network_type === 'wifi'
+          ? '<span class="llg-net llg-net-wifi">📶 WiFi บริษัท</span>'
+          : '<span class="llg-net llg-net-unknown">❓ ไม่ทราบเครือข่าย</span>';
       return `
         <div class="adm-login-log-item">
           <div class="llg-top">
             <span class="llg-name">${escHtml(l.full_name)} <span style="color:var(--text-muted);font-weight:400">@${escHtml(l.username)}</span></span>
             <span class="llg-time">${dateStr} ${timeStr}</span>
           </div>
+          <div class="llg-meta">${netBadge}${l.isp_org ? ` · ${escHtml(l.isp_org)}` : ''}</div>
         </div>`;
     }).join('');
   }
