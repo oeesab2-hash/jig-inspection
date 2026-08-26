@@ -2129,12 +2129,13 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
 
     try {
       const netInfo = await detectNetworkType(); // { network_type: 'mobile'|'wifi'|null, isp_org }
+      void netInfo; // ⏸️ ยังไม่ส่งไป Supabase — รอ verify_app_login ฝั่ง DB อัปเดตให้รับพารามิเตอร์นี้ก่อน
+      // (เดิมเคยส่ง p_network_type/p_isp_org ไปด้วย แต่ function บน Supabase ยังไม่รองรับ
+      //  ทำให้ RPC หา function ที่ signature ตรงกันไม่เจอ → 404 → login ไม่ได้ทั้งระบบ)
       const { data, error } = await sb.rpc('verify_app_login', {
         p_username: username,
         p_password: password,
         p_user_agent: navigator.userAgent,
-        p_network_type: netInfo.network_type,
-        p_isp_org: netInfo.isp_org,
       });
 
       if (error) {
