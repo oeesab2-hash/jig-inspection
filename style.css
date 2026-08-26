@@ -319,11 +319,11 @@ h1, h2, h3, h4, label, button, input, select, textarea, p, span, div {
 }
 
 /* Line chip list (Level 2) — การ์ดสไตล์เดียวกับ JIG chip (หัวข้อ 3)
-   🛡️ ใช้ flex column เดียวตรงไปตรงมาแทน CSS Grid (auto-fill/minmax) —
+   🛡️ ค่าเริ่มต้น (มือถือ) ใช้ flex column เดียวตรงไปตรงมาแทน CSS Grid —
    บาง in-app browser บนมือถือ (เช่น webview ของ Telegram) คำนวณความกว้าง viewport ผิดพลาด
-   ทำให้ grid track ที่ตั้ง min-width ไว้ดันเนื้อหาล้นขอบจอด้านขวาได้
-   ใส่ overflow:hidden + min-width:0 กันไว้ทุกจุดที่เป็นไปได้ เพื่อไม่ให้ล้นจออีกไม่ว่าจะเปิดจาก
-   เบราว์เซอร์ไหนก็ตาม */
+   ทำให้ grid track ที่ตั้ง min-width ไว้ดันเนื้อหาล้นขอบจอด้านขวาได้ จึงล็อกเป็นคอลัมน์เดียวไว้ก่อน
+   💻 จอกว้าง (คอมพิวเตอร์/แท็บเล็ต ตั้งแต่ 700px ขึ้นไป) เปลี่ยนเป็น grid หลายคอลัมน์
+   กันไม่ให้แต่ละแถวยืดยาวเต็มจอจนดูแปลกตา (ปัญหานี้ไม่เกิดกับจอกว้างอยู่แล้ว จึงเปิด grid ได้อย่างปลอดภัย) */
 .filter-chips.line-chips-grid {
   display: flex; flex-direction: column;
   width: 100%; max-width: 100%;
@@ -349,6 +349,13 @@ h1, h2, h3, h4, label, button, input, select, textarea, p, span, div {
 }
 .line-chip-text .chip-code { margin-left: 0; }
 .line-chip-count { margin-left: auto; flex-shrink: 0; align-self: center; }
+@media (min-width: 700px) {
+  .filter-chips.line-chips-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+    align-items: stretch;
+  }
+}
 
 .jig-search-wrap {
   position: relative;
