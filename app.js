@@ -4752,7 +4752,7 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
     populateDashLineOptions();
     populateAiPeriodOptions(allHist); // 🆕 อัปเดตรายชื่อเดือนใน dropdown ของ AI ให้ตรงกับข้อมูลล่าสุด
     renderLineStatusList();
-    renderNgToday(allHist); // 🆕 รายการ NG วันนี้ — ใช้ allHist เสมอ ไม่ผูกกับตัวกรองเดือน/Line ด้านบน
+    renderNgToday(allHist); // 🆕 รายการ NG วันนี้ — โชว์ "วันนี้" เสมอ ไม่ผูกกับตัวกรองเดือน แต่กรองตาม Line ที่เลือกด้วย (ดูใน renderNgToday)
     let hist = dashMonthFilter === 'all'
       ? allHist
       : allHist.filter(h => (h.date || '').slice(0, 7) === dashMonthFilter);
@@ -4769,6 +4769,7 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
     $('byline-title-text').textContent   = 'NG ตาม Line' + lineSuffix;
     $('donut-title-text').textContent    = 'อัตราผ่านตาม Line' + lineSuffix;
     $('ng-rank-title-text').textContent  = 'จุดตรวจที่พบ NG บ่อยที่สุด' + lineSuffix;
+    $('ng-today-title-text').textContent = 'NG วันนี้' + lineSuffix;
   }
 
   // ── สร้างรายการ NG แบบละเอียด (JIG ไหน ข้อไหน ใครตรวจ วันไหน กี่โมง) จาก history subset ที่ส่งเข้ามา ──
@@ -4802,7 +4803,10 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
     const countEl = $('ng-today-count');
     if (!listEl) return;
     const t = todayStr();
-    const rows = buildNgDetailRows(allHist.filter(h => h.date === t));
+    // 🆕 กรองตาม Line ที่กำลังเลือกดูอยู่ด้วย (เดิมโชว์ทุก Line เสมอ ไม่ผูกกับการคลิกการ์ด Line)
+    let todayHist = allHist.filter(h => h.date === t);
+    if (dashLineFilter !== 'all') todayHist = todayHist.filter(h => h.lineId === dashLineFilter);
+    const rows = buildNgDetailRows(todayHist);
 
     if (countEl) countEl.textContent = rows.length ? `${rows.length} รายการ` : '';
     if (!rows.length) {
