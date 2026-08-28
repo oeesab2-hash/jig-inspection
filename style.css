@@ -1686,12 +1686,13 @@ h1, h2, h3, h4, label, button, input, select, textarea, p, span, div {
 .ng-today-urgent-badge {
   font-size: 11px; font-weight: 700; color: #fff;
   background: var(--ng); border: 1px solid var(--ng-border);
-  border-radius: 20px; padding: 2px 10px; margin-left: 6px; vertical-align: middle;
-  animation: urgentBlink 1s ease-in-out infinite;
+  border-radius: 20px; padding: 2px 10px; margin-left: 6px;
+  display: inline-block; vertical-align: middle;
+  animation: urgentPulse 1s ease-in-out infinite;
 }
-@keyframes urgentBlink {
-  0%, 100% { opacity: 1; }
-  50%      { opacity: 0.35; }
+@keyframes urgentPulse {
+  0%, 100% { transform: scale(1); }
+  50%      { transform: scale(1.08); }
 }
 .ng-today-time {
   font-size: 12px; font-weight: 700; color: var(--ng); flex-shrink: 0;
