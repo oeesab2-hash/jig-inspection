@@ -4515,6 +4515,7 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
   function renderKpiDelta(el, todayVal, yesterdayVal, opts = {}) {
     if (!el) return;
     const invert = !!opts.invert; // สำหรับ NG: เพิ่มขึ้น = สีแดง(แย่ลง), ลดลง = สีเขียว(ดีขึ้น) — invert กลับด้านของ "up=แดง"
+    const unit = opts.unit || ''; // 🆕 เช่น 'pt' สำหรับ Pass Rate — กันสับสนระหว่าง "เพิ่มขึ้น N จุด%" กับ "เพิ่มขึ้น N% ของค่าเดิม"
     const diff = todayVal - yesterdayVal;
     if (diff === 0) {
       el.className = 'kpi-delta flat';
@@ -4524,7 +4525,7 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
     const isUp = diff > 0;
     const good = invert ? !isUp : isUp;
     el.className = 'kpi-delta ' + (good ? 'down' : 'up'); // .down = สีเขียว(ดี), .up = สีแดง(ต้องระวัง) — ตั้งชื่อตามทิศทางลูกศร ไม่ใช่ตามความหมาย
-    el.innerHTML = (isUp ? '▲ +' : '▼ ') + diff + ' จากเมื่อวาน';
+    el.innerHTML = (isUp ? '▲ +' : '▼ ') + diff + unit + ' จากเมื่อวาน';
   }
 
   // 🆕 ตรวจคำในหมายเหตุ NG ว่าเข้าข่าย "ฉุกเฉิน/วิกฤต" หรือไม่ — ใช้แยกสีแดง(วิกฤตจริง)ออกจากสีเหลือง(NG ทั่วไป) ลด red-noise บน Dashboard
@@ -4975,6 +4976,20 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
       const yesterdayNg = yesterdayHist.flatMap(h => h.items.filter(i => i.status === 'ng')).length;
       renderKpiDelta($('kpi-delta-total'), todayHist.length, yesterdayHist.length);
       renderKpiDelta($('kpi-delta-ng'), todayNg, yesterdayNg, { invert: true });
+
+      // 🆕 Pass Rate delta — โชว์เป็น "แต้ม" (pt) ไม่ใช่ % เทียบสัดส่วนเดิม กันสับสน และซ่อนลูกศรถ้าวันไหนตรวจน้อยเกินไป (sample size ต่ำ ทำให้ % แกว่งง่าย ไม่ควรเอามาเทียบกัน)
+      const MIN_SAMPLE_FOR_PASS_DELTA = 5;
+      const passDeltaEl = $('kpi-delta-pass');
+      if (passDeltaEl) {
+        if (todayHist.length < MIN_SAMPLE_FOR_PASS_DELTA || yesterdayHist.length < MIN_SAMPLE_FOR_PASS_DELTA) {
+          passDeltaEl.className = 'kpi-delta';
+          passDeltaEl.innerHTML = '';
+        } else {
+          const todayPassRate = Math.round(todayHist.filter(h => h.items.every(i => i.status === 'ok' || i.status === 'fixed')).length / todayHist.length * 100);
+          const yesterdayPassRate = Math.round(yesterdayHist.filter(h => h.items.every(i => i.status === 'ok' || i.status === 'fixed')).length / yesterdayHist.length * 100);
+          renderKpiDelta(passDeltaEl, todayPassRate, yesterdayPassRate, { unit: 'pt' });
+        }
+      }
     }
   }
 
