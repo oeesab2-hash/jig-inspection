@@ -1684,7 +1684,7 @@ h1, h2, h3, h4, label, button, input, select, textarea, p, span, div {
 .ng-today-item:hover { transform: translateY(-1px); box-shadow: 0 4px 14px hsla(0,0%,0%,0.18); }
 /* 🆕 ตามที่พี่บีขอ: ทุกรายการ NG เป็นสีแดงเหมือนกันหมด (ไม่แยกเหลือง เพราะถือว่าทุกอย่างคือเรื่องด่วน) — คงไว้แค่ป้าย "ด่วน" ที่กระพริบเตือนสายตาเฉพาะเคสที่หมายเหตุมีคำจริงจัง */
 .ng-today-item.critical .ng-today-jig::after {
-  content: "⚠ ด่วน"; margin-left: 6px; font-size: 10px; font-weight: 700;
+  content: "⚠ URGENT"; margin-left: 6px; font-size: 10px; font-weight: 700;
   color: #fff; background: var(--ng); border: 1px solid var(--ng-border);
   border-radius: 20px; padding: 1px 7px; vertical-align: middle;
   animation: urgentBlink 1s ease-in-out infinite;
