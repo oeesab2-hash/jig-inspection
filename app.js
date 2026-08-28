@@ -4678,8 +4678,13 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
     listEl.querySelectorAll('.line-status-card').forEach(card => {
       card.addEventListener('click', () => {
         const lineId = card.dataset.line;
-        expandedLineId = expandedLineId === lineId ? null : lineId;
-        renderLineStatusList();
+        const isSame = expandedLineId === lineId;
+        expandedLineId = isSame ? null : lineId;
+        // 🆕 คลิกการ์ด Line แล้ว sync กับตัวกรอง Line ของ Dashboard ด้วย (เดิมกรอง KPI/กราฟ
+        // ไม่ผูกกับการคลิกการ์ดเลย ทำให้คลิก Line ไหนข้อมูล/กราฟด้านล่างก็ไม่เปลี่ยนตาม)
+        // คลิกซ้ำที่การ์ดเดิม (ยุบแผง) = กลับไปดู "ทุก Line" เหมือนเดิม
+        dashLineFilter = isSame ? 'all' : lineId;
+        refreshDashboard(); // เรียกตัวนี้แทน renderLineStatusList() เพราะจะ re-render การ์ดนี้ให้ + อัปเดต KPI/กราฟ/dropdown ให้ตรงกันในทีเดียว
       });
     });
   }
