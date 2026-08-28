@@ -4460,6 +4460,79 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
     return c; // ไม่รู้จักรูปแบบ — คืนค่าเดิม
   }
 
+  // 🆕 ไล่สี gradient แนวตั้งสำหรับพื้นที่ใต้เส้นกราฟ (สวยกว่าสีเรียบแบนราบ)
+  function verticalGradient(ctx, chartArea, colorHex, topAlpha = 0.35, bottomAlpha = 0.02) {
+    if (!chartArea) return withAlpha(colorHex, (topAlpha + bottomAlpha) / 2);
+    const g = ctx.createLinearGradient(0, chartArea.top, 0, chartArea.bottom);
+    g.addColorStop(0, withAlpha(colorHex, topAlpha));
+    g.addColorStop(1, withAlpha(colorHex, bottomAlpha));
+    return g;
+  }
+
+  // 🆕 Plugin แสดงตัวเลขรวมตรงกลาง donut chart (chart.$centerText = { value, label })
+  const centerTextPlugin = {
+    id: 'centerText',
+    beforeDraw(chart) {
+      if (!chart.$centerText) return;
+      const { ctx, chartArea } = chart;
+      if (!chartArea) return;
+      const cx = (chartArea.left + chartArea.right) / 2;
+      const cy = (chartArea.top + chartArea.bottom) / 2;
+      const style = getComputedStyle(document.documentElement);
+      ctx.save();
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.font = "700 22px " + (style.getPropertyValue('--font-en').trim() || 'sans-serif');
+      ctx.fillStyle = style.getPropertyValue('--text-main').trim();
+      ctx.fillText(String(chart.$centerText.value), cx, cy - 8);
+      ctx.font = "400 10px " + (style.getPropertyValue('--font-thai').trim() || 'sans-serif');
+      ctx.fillStyle = style.getPropertyValue('--text-muted').trim();
+      ctx.fillText(chart.$centerText.label, cx, cy + 11);
+      ctx.restore();
+    }
+  };
+  if (typeof Chart !== 'undefined') Chart.register(centerTextPlugin);
+
+  // 🆕 นับตัวเลขไล่ขึ้นแบบ animate แทนการเปลี่ยนค่าทันที ให้การ์ด KPI ดูมีชีวิตตอนโหลด/อัปเดตข้อมูล
+  function animateCountUp(el, target, opts = {}) {
+    if (!el) return;
+    const suffix = opts.suffix || '';
+    const duration = opts.duration || 650;
+    const start = Number(el.dataset.rawVal || 0);
+    el.dataset.rawVal = target;
+    if (start === target) { el.textContent = target + suffix; return; }
+    const t0 = performance.now();
+    function tick(now) {
+      const p = Math.min((now - t0) / duration, 1);
+      const eased = 1 - Math.pow(1 - p, 3); // ease-out cubic
+      const val = Math.round(start + (target - start) * eased);
+      el.textContent = val + suffix;
+      if (p < 1) requestAnimationFrame(tick);
+    }
+    requestAnimationFrame(tick);
+  }
+
+  // 🆕 แสดงส่วนต่าง "วันนี้ vs เมื่อวาน" ใต้ตัวเลข KPI — เพิ่ม/ลด/เท่าเดิม พร้อมสีที่สื่อความหมาย (แดง=NG เพิ่ม, เขียว=ลดลง)
+  function renderKpiDelta(el, todayVal, yesterdayVal, opts = {}) {
+    if (!el) return;
+    const invert = !!opts.invert; // สำหรับ NG: เพิ่มขึ้น = สีแดง(แย่ลง), ลดลง = สีเขียว(ดีขึ้น) — invert กลับด้านของ "up=แดง"
+    const diff = todayVal - yesterdayVal;
+    if (diff === 0) {
+      el.className = 'kpi-delta flat';
+      el.innerHTML = '● เท่าเมื่อวาน';
+      return;
+    }
+    const isUp = diff > 0;
+    const good = invert ? !isUp : isUp;
+    el.className = 'kpi-delta ' + (good ? 'down' : 'up'); // .down = สีเขียว(ดี), .up = สีแดง(ต้องระวัง) — ตั้งชื่อตามทิศทางลูกศร ไม่ใช่ตามความหมาย
+    el.innerHTML = (isUp ? '▲ +' : '▼ ') + diff + ' จากเมื่อวาน';
+  }
+
+  // 🆕 ตรวจคำในหมายเหตุ NG ว่าเข้าข่าย "ฉุกเฉิน/วิกฤต" หรือไม่ — ใช้แยกสีแดง(วิกฤตจริง)ออกจากสีเหลือง(NG ทั่วไป) ลด red-noise บน Dashboard
+  const NG_CRITICAL_RX = /ฉุกเฉิน|ด่วนมาก|แตกหัก|แตก|หัก|emergency|broken|critical|severe/i;
+  function ngIsCritical(note) {
+    return !!(note && NG_CRITICAL_RX.test(note));
+  }
+
   function bindDashboard() {
     $('dash-month-filter').addEventListener('change', e => {
       dashMonthFilter = e.target.value;
@@ -4757,7 +4830,7 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
       ? allHist
       : allHist.filter(h => (h.date || '').slice(0, 7) === dashMonthFilter);
     if (dashLineFilter !== 'all') hist = hist.filter(h => h.lineId === dashLineFilter);
-    renderKpis(hist);
+    renderKpis(hist, allHist);
     renderTrendChart(hist, dashMonthFilter);
     renderByLineChart(hist);
     renderDeptDonut(hist);
@@ -4814,7 +4887,7 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
       return;
     }
     listEl.innerHTML = `<div class="ng-today-grid">${rows.map(r => `
-      <div class="ng-today-item">
+      <div class="ng-today-item ${ngIsCritical(r.note) ? 'critical' : ''}">
         <div class="ng-today-time">${r.time}</div>
         <div class="ng-today-body">
           <div class="ng-today-jig">${escHtml(r.jigName)} <span class="ng-today-line">(${escHtml(r.lineName)})</span></div>
@@ -4834,7 +4907,7 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
       body.innerHTML = '<div class="ng-today-empty">✅ ไม่พบ NG ในช่วงที่กรองอยู่</div>';
     } else {
       body.innerHTML = `<div class="ng-today-grid">${rows.map(r => `
-        <div class="ng-today-item">
+        <div class="ng-today-item ${ngIsCritical(r.note) ? 'critical' : ''}">
           <div class="ng-today-time">${escHtml(r.date)}<br>${r.time}</div>
           <div class="ng-today-body">
             <div class="ng-today-jig">${escHtml(r.jigName)} <span class="ng-today-line">(${escHtml(r.lineName)})</span></div>
@@ -4875,7 +4948,7 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
   }
 
   /* ── KPI Cards ── */
-  function renderKpis(hist) {
+  function renderKpis(hist, allHist) {
     _dashKpiHist = hist; // 🆕 เก็บไว้ให้ modal "รายการ NG ทั้งหมด" ใช้ตัวเดียวกับที่คำนวณการ์ดนี้
     const total   = hist.length;
     const allNgs  = hist.flatMap(h => h.items.filter(i => i.status === 'ng'));
@@ -4883,10 +4956,24 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
     const passRate  = total ? Math.round(passCount / total * 100) : 0;
     const jigsSeen  = new Set(hist.map(h => h.jigId)).size;
 
-    $('kpi-n-total').textContent = total;
-    $('kpi-n-pass').textContent  = passRate + '%';
-    $('kpi-n-ng').textContent    = allNgs.length;
-    $('kpi-n-jig').textContent   = jigsSeen;
+    animateCountUp($('kpi-n-total'), total);
+    animateCountUp($('kpi-n-pass'), passRate, { suffix: '%' });
+    animateCountUp($('kpi-n-ng'), allNgs.length);
+    animateCountUp($('kpi-n-jig'), jigsSeen);
+
+    // 🆕 เทียบ "วันนี้ vs เมื่อวาน" — ใช้ allHist (ไม่ผูกกับตัวกรองเดือน) กรองตาม Line เดียวกับที่เลือกดูอยู่ ให้ความรู้สึกว่า Dashboard นี้ขยับตามเวลาจริง
+    if (allHist) {
+      const t = todayStr();
+      const y = localDateStr(new Date(Date.now() - 86400000));
+      let scoped = allHist;
+      if (dashLineFilter !== 'all') scoped = scoped.filter(h => h.lineId === dashLineFilter);
+      const todayHist     = scoped.filter(h => h.date === t);
+      const yesterdayHist = scoped.filter(h => h.date === y);
+      const todayNg     = todayHist.flatMap(h => h.items.filter(i => i.status === 'ng')).length;
+      const yesterdayNg = yesterdayHist.flatMap(h => h.items.filter(i => i.status === 'ng')).length;
+      renderKpiDelta($('kpi-delta-total'), todayHist.length, yesterdayHist.length);
+      renderKpiDelta($('kpi-delta-ng'), todayNg, yesterdayNg, { invert: true });
+    }
   }
 
   /* ── Trend Chart (30 วันล่าสุด, หรือทุกวันในเดือนที่เลือก) ── */
@@ -4927,12 +5014,18 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
       data: {
         labels,
         datasets: [
-          { label: 'ผ่าน', data: passData, borderColor: ok, backgroundColor: withAlpha(ok, 0.13), fill: true, tension: 0.4, pointRadius: 3 },
-          { label: 'NG',   data: ngData,   borderColor: ng, backgroundColor: withAlpha(ng, 0.13), fill: true, tension: 0.4, pointRadius: 3 },
+          { label: 'ผ่าน', data: passData, borderColor: ok, borderWidth: 2.5,
+            backgroundColor: (c) => verticalGradient(c.chart.ctx, c.chart.chartArea, ok),
+            fill: true, tension: 0.4, pointRadius: 0, pointHoverRadius: 5, pointHoverBackgroundColor: ok, pointHitRadius: 8 },
+          { label: 'NG',   data: ngData,   borderColor: ng, borderWidth: 2.5,
+            backgroundColor: (c) => verticalGradient(c.chart.ctx, c.chart.chartArea, ng),
+            fill: true, tension: 0.4, pointRadius: 0, pointHoverRadius: 5, pointHoverBackgroundColor: ng, pointHitRadius: 8 },
         ]
       },
       options: {
         responsive: true, maintainAspectRatio: false,
+        animation: { duration: 900, easing: 'easeOutQuart' },
+        interaction: { mode: 'index', intersect: false },
         plugins: { legend: { display: false } },
         scales: {
           x: { ticks: { color: muted, font: { size: 10 } }, grid: { color: 'rgba(128,128,128,0.08)' } },
@@ -4963,10 +5056,15 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
       type: 'bar',
       data: {
         labels: sorted.map(([k]) => k.replace('LINE : ','')),
-        datasets: [{ label: 'NG', data: sorted.map(([,v]) => v), backgroundColor: withAlpha(ng, 0.67), borderColor: ng, borderWidth: 1, borderRadius: 5 }]
+        datasets: [{
+          label: 'NG', data: sorted.map(([,v]) => v),
+          backgroundColor: withAlpha(ng, 0.67), hoverBackgroundColor: ng,
+          borderColor: ng, borderWidth: 1, borderRadius: 5, maxBarThickness: 34
+        }]
       },
       options: {
         responsive: true, maintainAspectRatio: false,
+        animation: { duration: 700, easing: 'easeOutQuart' },
         plugins: { legend: { display: false } },
         scales: {
           x: { ticks: { color: muted, font: { size: 10 } }, grid: { display: false } },
@@ -5003,9 +5101,10 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
 
     charts.dept = new Chart($('chart-dept'), {
       type: 'doughnut',
-      data: { labels, datasets: [{ data, backgroundColor: bgs, borderWidth: 2, borderColor: style.getPropertyValue('--bg-card').trim() }] },
+      data: { labels, datasets: [{ data, backgroundColor: bgs, borderWidth: 2, borderColor: style.getPropertyValue('--bg-card').trim(), hoverOffset: 8 }] },
       options: {
-        responsive: true, maintainAspectRatio: false, cutout: '62%',
+        responsive: true, maintainAspectRatio: false, cutout: '68%',
+        animation: { duration: 800, easing: 'easeOutQuart' },
         plugins: { legend: { display: false }, tooltip: {
           callbacks: { label: ctx => {
             const k = ctx.label; const d = deptMap[k];
@@ -5015,6 +5114,9 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
         }}
       }
     });
+    // 🆕 ตัวเลขรวมตรงกลาง donut — เห็นยอดรวมทันทีโดยไม่ต้องนับเอง
+    charts.dept.$centerText = { value: data.reduce((a, b) => a + b, 0), label: 'ครั้งทั้งหมด' };
+    charts.dept.update();
 
     $('donut-legend').innerHTML = labels.map((l, i) => `
       <div class="donut-legend-item">
@@ -5045,16 +5147,22 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
     const el = $('ng-ranking');
     if (!sorted.length) { el.innerHTML = '<div class="ng-rank-empty">✅ ยังไม่มีรายการ NG ในประวัติ</div>'; return; }
     el.innerHTML = sorted.map(([id, d], rank) => `
-      <div class="ng-rank-item">
+      <div class="ng-rank-item" style="animation-delay:${rank * 60}ms">
         <div class="ng-rank-num">${rank + 1}</div>
         <div class="ng-rank-bar-wrap">
           <div class="ng-rank-label">ข้อ ${id} — ${escHtml(d.label)}</div>
           <div class="ng-rank-bar-bg">
-            <div class="ng-rank-bar-fill" style="width:${Math.round(d.n/max*100)}%"></div>
+            <div class="ng-rank-bar-fill" style="width:0%" data-target="${Math.round(d.n/max*100)}"></div>
           </div>
         </div>
         <div class="ng-rank-count">${d.n} ครั้ง</div>
       </div>`).join('');
+    // 🆕 ให้แถบวิ่งจาก 0% ไปยังความยาวจริงหลัง DOM แสดงผลแล้ว (ไม่งั้น transition width จะไม่ทำงานเพราะเริ่มที่ค่าจริงตั้งแต่แรก)
+    requestAnimationFrame(() => {
+      el.querySelectorAll('.ng-rank-bar-fill').forEach(bar => {
+        bar.style.width = bar.dataset.target + '%';
+      });
+    });
   }
 
   /* ══════════════════════════════════════

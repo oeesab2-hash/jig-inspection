@@ -1568,19 +1568,29 @@ h1, h2, h3, h4, label, button, input, select, textarea, p, span, div {
   transition: transform 0.2s, box-shadow 0.2s;
 }
 .kpi-card:hover { transform: translateY(-2px); box-shadow: 0 8px 28px hsla(0,0%,0%,0.3); }
+.kpi-card:hover .kpi-icon { transform: scale(1.12) rotate(-4deg); }
 .kpi-card.ok    { border-color: var(--ok-border);     background: var(--ok-bg); }
 .kpi-card.ng    { border-color: var(--ng-border);     background: var(--ng-bg); cursor: pointer; }
 .kpi-card.accent { border-color: hsla(210,80%,55%,0.35); background: var(--accent-dim); }
-.kpi-icon { font-size: 26px; flex-shrink: 0; }
+.kpi-icon { font-size: 26px; flex-shrink: 0; transition: transform 0.25s ease; }
 .kpi-body { min-width: 0; }
 .kpi-num {
   font-family: var(--font-en); font-size: 26px; font-weight: 700;
   color: var(--text-main); line-height: 1;
+  font-variant-numeric: tabular-nums;
 }
 .kpi-card.ok   .kpi-num { color: var(--ok); }
 .kpi-card.ng   .kpi-num { color: var(--ng); }
 .kpi-card.accent .kpi-num { color: var(--accent); }
 .kpi-lbl { font-size: 11px; color: var(--text-muted); margin-top: 3px; }
+.kpi-delta {
+  font-family: var(--font-en); font-size: 10.5px; font-weight: 700;
+  margin-top: 3px; display: flex; align-items: center; gap: 3px;
+  opacity: 0; animation: fadeUp 0.4s ease-out 0.5s both;
+}
+.kpi-delta.up   { color: var(--ng); }
+.kpi-delta.down { color: var(--ok); }
+.kpi-delta.flat { color: var(--text-muted); }
 
 /* ─────────────────────────────
    Chart Cards
@@ -1597,7 +1607,7 @@ h1, h2, h3, h4, label, button, input, select, textarea, p, span, div {
   position: relative;
   width: 100%; height: 200px;
 }
-.chart-donut-wrap { height: 180px; }
+.chart-donut-wrap { height: 210px; }
 .chart-legend {
   display: flex; align-items: center; gap: 10px;
   font-size: 11px; color: var(--text-muted);
@@ -1627,6 +1637,7 @@ h1, h2, h3, h4, label, button, input, select, textarea, p, span, div {
 .ng-rank-item {
   display: flex; align-items: center; gap: 10px;
   margin-bottom: 8px;
+  opacity: 0; animation: fadeUp 0.4s ease-out both;
 }
 .ng-rank-num {
   width: 22px; height: 22px; border-radius: 50%;
@@ -1667,10 +1678,20 @@ h1, h2, h3, h4, label, button, input, select, textarea, p, span, div {
 }
 .ng-today-item {
   display: flex; gap: 10px; padding: 10px 12px; border-radius: 11px;
-  background: var(--ng-bg); border: 1px solid var(--ng-border);
+  background: var(--fixed-bg); border: 1px solid var(--fixed-border);
+  transition: transform 0.15s, box-shadow 0.15s;
+}
+.ng-today-item:hover { transform: translateY(-1px); box-shadow: 0 4px 14px hsla(0,0%,0%,0.18); }
+/* 🆕 NG วิกฤต (ตรวจพบคำอย่าง "ฉุกเฉิน"/"แตกหัก" ในหมายเหตุ) — ใช้แดงเข้มเฉพาะเคสจริงจัง ที่เหลือใช้เหลือง/ส้มแทน ลดความล้าสายตาจากสีแดงเต็มจอ */
+.ng-today-item.critical { background: var(--ng-bg); border-color: var(--ng-border); }
+.ng-today-item.critical .ng-today-time { color: var(--ng); }
+.ng-today-item.critical .ng-today-jig::after {
+  content: "⚠ ด่วน"; margin-left: 6px; font-size: 10px; font-weight: 700;
+  color: var(--ng); background: var(--ng-bg); border: 1px solid var(--ng-border);
+  border-radius: 20px; padding: 1px 7px; vertical-align: middle;
 }
 .ng-today-time {
-  font-size: 12px; font-weight: 700; color: var(--ng); flex-shrink: 0;
+  font-size: 12px; font-weight: 700; color: var(--fixed); flex-shrink: 0;
   font-family: var(--font-en); min-width: 38px;
 }
 .ng-today-body { min-width: 0; flex: 1; }
@@ -1740,7 +1761,11 @@ h1, h2, h3, h4, label, button, input, select, textarea, p, span, div {
   justify-content: center; gap: 10px; text-align: center;
   min-height: 100px;
 }
-.ai-ph-icon { font-size: 32px; opacity: 0.4; }
+.ai-ph-icon { font-size: 32px; opacity: 0.5; animation: aiPhFloat 2.6s ease-in-out infinite; }
+@keyframes aiPhFloat {
+  0%, 100% { transform: translateY(0); opacity: 0.4; }
+  50%      { transform: translateY(-4px); opacity: 0.65; }
+}
 .ai-ph-text { font-size: 13px; color: var(--text-muted); line-height: 1.6; }
 
 /* AI Report output */
