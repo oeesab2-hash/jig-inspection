@@ -1678,20 +1678,23 @@ h1, h2, h3, h4, label, button, input, select, textarea, p, span, div {
 }
 .ng-today-item {
   display: flex; gap: 10px; padding: 10px 12px; border-radius: 11px;
-  background: var(--fixed-bg); border: 1px solid var(--fixed-border);
+  background: var(--ng-bg); border: 1px solid var(--ng-border);
   transition: transform 0.15s, box-shadow 0.15s;
 }
 .ng-today-item:hover { transform: translateY(-1px); box-shadow: 0 4px 14px hsla(0,0%,0%,0.18); }
-/* 🆕 NG วิกฤต (ตรวจพบคำอย่าง "ฉุกเฉิน"/"แตกหัก" ในหมายเหตุ) — ใช้แดงเข้มเฉพาะเคสจริงจัง ที่เหลือใช้เหลือง/ส้มแทน ลดความล้าสายตาจากสีแดงเต็มจอ */
-.ng-today-item.critical { background: var(--ng-bg); border-color: var(--ng-border); }
-.ng-today-item.critical .ng-today-time { color: var(--ng); }
+/* 🆕 ตามที่พี่บีขอ: ทุกรายการ NG เป็นสีแดงเหมือนกันหมด (ไม่แยกเหลือง เพราะถือว่าทุกอย่างคือเรื่องด่วน) — คงไว้แค่ป้าย "ด่วน" ที่กระพริบเตือนสายตาเฉพาะเคสที่หมายเหตุมีคำจริงจัง */
 .ng-today-item.critical .ng-today-jig::after {
   content: "⚠ ด่วน"; margin-left: 6px; font-size: 10px; font-weight: 700;
-  color: var(--ng); background: var(--ng-bg); border: 1px solid var(--ng-border);
+  color: #fff; background: var(--ng); border: 1px solid var(--ng-border);
   border-radius: 20px; padding: 1px 7px; vertical-align: middle;
+  animation: urgentBlink 1s ease-in-out infinite;
+}
+@keyframes urgentBlink {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.35; }
 }
 .ng-today-time {
-  font-size: 12px; font-weight: 700; color: var(--fixed); flex-shrink: 0;
+  font-size: 12px; font-weight: 700; color: var(--ng); flex-shrink: 0;
   font-family: var(--font-en); min-width: 38px;
 }
 .ng-today-body { min-width: 0; flex: 1; }
