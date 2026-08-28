@@ -4882,12 +4882,14 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
     const rows = buildNgDetailRows(todayHist);
 
     if (countEl) countEl.textContent = rows.length ? `${rows.length} รายการ` : '';
+    const urgentEl = $('ng-today-urgent'); // 🆕 โชว์ป้าย "URGENT" กระพริบครั้งเดียวตรงหัวข้อ เฉพาะตอนมี NG วันนี้จริง
+    if (urgentEl) urgentEl.classList.toggle('hidden', !rows.length);
     if (!rows.length) {
       listEl.innerHTML = '<div class="ng-today-empty">✅ วันนี้ยังไม่พบ NG</div>';
       return;
     }
     listEl.innerHTML = `<div class="ng-today-grid">${rows.map(r => `
-      <div class="ng-today-item critical">
+      <div class="ng-today-item">
         <div class="ng-today-time">${r.time}</div>
         <div class="ng-today-body">
           <div class="ng-today-jig">${escHtml(r.jigName)} <span class="ng-today-line">(${escHtml(r.lineName)})</span></div>
@@ -4907,7 +4909,7 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
       body.innerHTML = '<div class="ng-today-empty">✅ ไม่พบ NG ในช่วงที่กรองอยู่</div>';
     } else {
       body.innerHTML = `<div class="ng-today-grid">${rows.map(r => `
-        <div class="ng-today-item critical">
+        <div class="ng-today-item">
           <div class="ng-today-time">${escHtml(r.date)}<br>${r.time}</div>
           <div class="ng-today-body">
             <div class="ng-today-jig">${escHtml(r.jigName)} <span class="ng-today-line">(${escHtml(r.lineName)})</span></div>
