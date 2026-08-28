@@ -4739,6 +4739,7 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
     const allHist = loadHistory();
     populateDashMonthOptions(allHist);
     populateDashLineOptions();
+    populateAiPeriodOptions(allHist); // 🆕 อัปเดตรายชื่อเดือนใน dropdown ของ AI ให้ตรงกับข้อมูลล่าสุด
     renderLineStatusList();
     renderNgToday(allHist); // 🆕 รายการ NG วันนี้ — ใช้ allHist เสมอ ไม่ผูกกับตัวกรองเดือน/Line ด้านบน
     let hist = dashMonthFilter === 'all'
@@ -5041,6 +5042,7 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
 
   function bindAiPanel() {
     $('btn-ai-analyze').addEventListener('click', runAiAnalysis);
+    $('sel-ai-period').addEventListener('change', e => { aiPeriodFilter = e.target.value; }); // 🆕 จำค่าที่เลือกไว้
     $('btn-ai-key').addEventListener('click', () => {
       const modal = $('ai-key-modal');
       modal.classList.remove('hidden');
@@ -5076,24 +5078,35 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
     return escHtml(html);
   }
 
-  // ── กรองประวัติตามช่วงเวลาที่เลือกในหน้า AI (เดือนนี้ / เดือนที่แล้ว / ทั้งหมด) ──
+  // ── กรองประวัติตามช่วงเวลาที่เลือกในหน้า AI ──
+  // 🆕 period ตอนนี้คือ 'all' หรือค่าเดือนแบบ 'YYYY-MM' ที่เลือกจาก dropdown (ดู populateAiPeriodOptions)
   function filterHistoryByPeriod(hist, period) {
-    if (period === 'all') return hist;
-    const now = new Date();
-    let targetMonth = now.getMonth(); // 0-indexed
-    let targetYear  = now.getFullYear();
-    if (period === 'last_month') {
-      targetMonth -= 1;
-      if (targetMonth < 0) { targetMonth = 11; targetYear -= 1; }
-    }
-    return hist.filter(h => {
-      const d = h.date ? new Date(h.date) : (h.timestamp ? new Date(h.timestamp) : null);
-      if (!d || isNaN(d)) return false;
-      return d.getMonth() === targetMonth && d.getFullYear() === targetYear;
-    });
+    if (!period || period === 'all') return hist;
+    return hist.filter(h => (h.date || '').slice(0, 7) === period);
   }
   function aiPeriodLabel(period) {
-    return period === 'this_month' ? 'เดือนนี้' : period === 'last_month' ? 'เดือนที่แล้ว' : 'ทั้งหมด';
+    if (!period || period === 'all') return 'ทั้งหมด';
+    return formatMonthLabel(period);
+  }
+
+  let aiPeriodFilter = 'all'; // 🆕 เก็บค่าช่วงเวลาที่เลือกไว้ในหน้า AI (คงค่าไว้ข้าม refreshDashboard)
+
+  /* 🆕 สร้าง options ของ dropdown "AI วิเคราะห์ข้อมูล" จากเดือนที่มีข้อมูลจริงในประวัติ (เรียงล่าสุดก่อน)
+     เดิม dropdown มีแค่ "เดือนนี้ / เดือนที่แล้ว / ทั้งหมด" ตายตัว — ตอนนี้ให้เลือกได้ทุกเดือนที่มีข้อมูลจริง
+     คงค่าที่เลือกไว้เดิมถ้ายังมีอยู่ ไม่งั้น fallback กลับไปที่ "ทั้งหมด" */
+  function populateAiPeriodOptions(hist) {
+    const sel = $('sel-ai-period');
+    if (!sel) return;
+    const months = Array.from(new Set(hist.map(h => (h.date || '').slice(0, 7)).filter(Boolean)))
+      .sort().reverse();
+    sel.innerHTML = '<option value="all">ทั้งหมด</option>' +
+      months.map(m => `<option value="${m}">${formatMonthLabel(m)}${m === currentYearMonth() ? ' (เดือนนี้)' : ''}</option>`).join('');
+    if (aiPeriodFilter !== 'all' && months.includes(aiPeriodFilter)) {
+      sel.value = aiPeriodFilter;
+    } else {
+      sel.value = 'all';
+      aiPeriodFilter = 'all';
+    }
   }
 
   async function runAiAnalysis() {
