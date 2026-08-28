@@ -4442,6 +4442,7 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
   const currentYearMonth = () => new Date().toISOString().slice(0, 7); // 'YYYY-MM'
   let dashMonthFilter = currentYearMonth(); // ⚠️ FIX: default เป็นเดือนปัจจุบัน (เดิมเป็น 'all') — ยังเปลี่ยนเป็นเดือนอื่นหรือ "ทั้งหมด" ได้ตามปกติ
   let dashLineFilter  = 'all'; // 'all' หรือ line id — ใช้กรอง Dashboard ให้ดูได้เฉพาะ Line ที่เลือก
+  let _dashKpiHist = []; // 🆕 เก็บ hist (ที่ผ่านตัวกรองเดือน/Line แล้ว) ไว้ให้ modal "รายการ NG ทั้งหมด" ใช้ตัวเลขตรงกับการ์ด KPI เป๊ะๆ
 
   // ตัวแปรสี CSS ในระบบนี้เป็นรูปแบบ hsl(H, S%, L%) — การต่อ '22'/'aa'/'cc' ท้ายสตริง
   // (แบบ hex alpha) ทำให้ได้ค่าสีที่ผิดรูปแบบ เช่น "hsl(145, 65%, 45%)22" ซึ่ง Canvas/Chart.js
@@ -4468,6 +4469,10 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
       dashLineFilter = e.target.value;
       refreshDashboard();
     });
+    // 🆕 คลิกการ์ด KPI "รายการ NG ทั้งหมด" → เปิด modal ดูรายละเอียดทุกรายการ (ตรงกับตัวกรองเดือน/Line ปัจจุบัน)
+    $('kpi-ng').addEventListener('click', openNgListModal);
+    $('btn-ng-list-modal-close').addEventListener('click', closeNgListModal);
+    $('ng-list-modal').addEventListener('click', (e) => { if (e.target.id === 'ng-list-modal') closeNgListModal(); });
   }
 
   /* ══════════════════════════════════════
@@ -4747,18 +4752,15 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
     renderNgRanking(hist);
   }
 
-  // ── รายการ NG ที่พบ "วันนี้" แบบละเอียด (JIG ไหน ข้อไหน ใครตรวจ กี่โมง) ──
-  // แยกจาก renderNgRanking ซึ่งเป็นสรุปสถิติ NG-checkpoint สะสมตามตัวกรองเดือน/Line ด้านบน
-  function renderNgToday(allHist) {
-    const listEl = $('ng-today-list');
-    const countEl = $('ng-today-count');
-    if (!listEl) return;
-    const t = todayStr();
+  // ── สร้างรายการ NG แบบละเอียด (JIG ไหน ข้อไหน ใครตรวจ วันไหน กี่โมง) จาก history subset ที่ส่งเข้ามา ──
+  // ใช้ร่วมกันทั้ง "NG วันนี้" (การ์ดบน dashboard) และ modal "รายการ NG ทั้งหมด" (คลิก KPI card)
+  function buildNgDetailRows(histSubset) {
     const rows = [];
-    allHist.filter(h => h.date === t).forEach(h => {
+    histSubset.forEach(h => {
       (h.items || []).forEach(it => {
         if (it.status !== 'ng') return;
         rows.push({
+          date: h.date || '',
           time: h.timestamp ? new Date(h.timestamp).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' }) : '',
           ts: h.timestamp || '',
           jigName: h.jigName || h.jigId || '',
@@ -4771,6 +4773,17 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
       });
     });
     rows.sort((a, b) => new Date(b.ts) - new Date(a.ts)); // ล่าสุดขึ้นก่อน
+    return rows;
+  }
+
+  // ── รายการ NG ที่พบ "วันนี้" แบบละเอียด (JIG ไหน ข้อไหน ใครตรวจ กี่โมง) ──
+  // แยกจาก renderNgRanking ซึ่งเป็นสรุปสถิติ NG-checkpoint สะสมตามตัวกรองเดือน/Line ด้านบน
+  function renderNgToday(allHist) {
+    const listEl = $('ng-today-list');
+    const countEl = $('ng-today-count');
+    if (!listEl) return;
+    const t = todayStr();
+    const rows = buildNgDetailRows(allHist.filter(h => h.date === t));
 
     if (countEl) countEl.textContent = rows.length ? `${rows.length} รายการ` : '';
     if (!rows.length) {
@@ -4787,6 +4800,32 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
           <div class="ng-today-inspector">👤 ${escHtml(r.inspector)}</div>
         </div>
       </div>`).join('')}</div>`;
+  }
+
+  // ── 🆕 Modal "รายการ NG ทั้งหมด" — เปิดจากคลิกการ์ด KPI สีแดง ใช้ hist เดียวกับที่ใช้คำนวณตัวเลขบนการ์ด ──
+  function openNgListModal() {
+    const rows = buildNgDetailRows(_dashKpiHist);
+    $('ng-list-modal-count').textContent = rows.length ? `${rows.length} รายการ` : '';
+    const body = $('ng-list-modal-body');
+    if (!rows.length) {
+      body.innerHTML = '<div class="ng-today-empty">✅ ไม่พบ NG ในช่วงที่กรองอยู่</div>';
+    } else {
+      body.innerHTML = `<div class="ng-today-grid">${rows.map(r => `
+        <div class="ng-today-item">
+          <div class="ng-today-time">${escHtml(r.date)}<br>${r.time}</div>
+          <div class="ng-today-body">
+            <div class="ng-today-jig">${escHtml(r.jigName)} <span class="ng-today-line">(${escHtml(r.lineName)})</span></div>
+            <div class="ng-today-checkpoint">${escHtml(r.label)}${r.value ? ` — <strong>${escHtml(r.value)}</strong>` : ''}</div>
+            ${r.note ? `<div class="ng-today-note">"${escHtml(r.note)}"</div>` : ''}
+            <div class="ng-today-inspector">👤 ${escHtml(r.inspector)}</div>
+          </div>
+        </div>`).join('')}</div>`;
+    }
+    $('ng-list-modal').classList.remove('hidden');
+  }
+
+  function closeNgListModal() {
+    $('ng-list-modal').classList.add('hidden');
   }
 
   const TH_MONTHS_FULL = ['มกราคม','กุมภาพันธ์','มีนาคม','เมษายน','พฤษภาคม','มิถุนายน','กรกฎาคม','สิงหาคม','กันยายน','ตุลาคม','พฤศจิกายน','ธันวาคม'];
@@ -4814,6 +4853,7 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
 
   /* ── KPI Cards ── */
   function renderKpis(hist) {
+    _dashKpiHist = hist; // 🆕 เก็บไว้ให้ modal "รายการ NG ทั้งหมด" ใช้ตัวเดียวกับที่คำนวณการ์ดนี้
     const total   = hist.length;
     const allNgs  = hist.flatMap(h => h.items.filter(i => i.status === 'ng'));
     const passCount = hist.filter(h => h.items.every(i => i.status === 'ok' || i.status === 'fixed')).length;

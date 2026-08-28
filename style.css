@@ -1569,7 +1569,7 @@ h1, h2, h3, h4, label, button, input, select, textarea, p, span, div {
 }
 .kpi-card:hover { transform: translateY(-2px); box-shadow: 0 8px 28px hsla(0,0%,0%,0.3); }
 .kpi-card.ok    { border-color: var(--ok-border);     background: var(--ok-bg); }
-.kpi-card.ng    { border-color: var(--ng-border);     background: var(--ng-bg); }
+.kpi-card.ng    { border-color: var(--ng-border);     background: var(--ng-bg); cursor: pointer; }
 .kpi-card.accent { border-color: hsla(210,80%,55%,0.35); background: var(--accent-dim); }
 .kpi-icon { font-size: 26px; flex-shrink: 0; }
 .kpi-body { min-width: 0; }

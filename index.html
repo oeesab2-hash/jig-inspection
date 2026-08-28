@@ -927,5 +927,16 @@
   </div>
 </div>
 
+<!-- ─── NG LIST MODAL (คลิกการ์ด "รายการ NG ทั้งหมด" บน Dashboard) ─── -->
+<div id="ng-list-modal" class="modal-overlay hidden">
+  <div class="modal-box" style="width:min(640px, 94vw); max-height:85vh; display:flex; flex-direction:column;">
+    <div class="modal-head">
+      <h3><svg class="inline-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg> รายการ NG ทั้งหมด <span id="ng-list-modal-count" style="color:var(--text-muted);font-weight:400;font-size:12px;"></span></h3>
+      <button id="btn-ng-list-modal-close" class="btn-close-panel">✕</button>
+    </div>
+    <div id="ng-list-modal-body" style="padding: 14px 16px; overflow-y: auto; flex: 1;"></div>
+  </div>
+</div>
+
 </body>
 </html>
