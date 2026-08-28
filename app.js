@@ -4740,6 +4740,12 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
     }
   }
 
+  // 🆕 หาชื่อ Line จาก id (ใช้โชว์ในหัวข้อการ์ดต่าง ๆ เมื่อกรองดูเฉพาะ Line เดียว)
+  function lineNameById(id) {
+    const l = catalog.lines.find(x => x.id === id);
+    return l ? (l.name || l.id) : id;
+  }
+
   function refreshDashboard() {
     const allHist = loadHistory();
     populateDashMonthOptions(allHist);
@@ -4756,6 +4762,13 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
     renderByLineChart(hist);
     renderDeptDonut(hist);
     renderNgRanking(hist);
+
+    // 🆕 ใส่ชื่อ Line ที่กำลังกรองอยู่ต่อท้ายหัวข้อการ์ดต่าง ๆ ให้เห็นชัดว่าตอนนี้ดูข้อมูลของ Line ไหนอยู่
+    const lineSuffix = dashLineFilter !== 'all' ? ` — ${lineNameById(dashLineFilter)}` : '';
+    if (lineSuffix) $('trend-title-text').textContent += lineSuffix;
+    $('byline-title-text').textContent   = 'NG ตาม Line' + lineSuffix;
+    $('donut-title-text').textContent    = 'อัตราผ่านตาม Line' + lineSuffix;
+    $('ng-rank-title-text').textContent  = 'จุดตรวจที่พบ NG บ่อยที่สุด' + lineSuffix;
   }
 
   // ── สร้างรายการ NG แบบละเอียด (JIG ไหน ข้อไหน ใครตรวจ วันไหน กี่โมง) จาก history subset ที่ส่งเข้ามา ──
