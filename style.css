@@ -2019,7 +2019,7 @@ h1, h2, h3, h4, label, button, input, select, textarea, p, span, div {
 }
 .pdf-meta-cell:last-child { border-right: none; }
 .pdf-meta-label { color: #6b7280; font-weight: 600; font-size: 8.5px; text-transform: uppercase; letter-spacing: 0.4px; }
-.pdf-meta-value { color: #111827; font-weight: 700; font-size: 11px; margin-top: 1px; }
+.pdf-meta-value { color: #111827; font-weight: 700; font-size: 11px; margin-top: 1px; line-height: 1.5; }
 
 /* ─── SCOPE / PART INFO ROW ─────────────────────────────── */
 .pdf-scope-block {

@@ -3636,9 +3636,9 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
                               : stage.key === 'partial'  ? 'pdf-approval-partial'
                               : 'pdf-approval-pending';
     const approvalText = stage.key === 'approved'
-      ? `✅ Approved — หัวหน้างาน: ${escHtml(record.approvedBy || '')} / ผู้จัดการฝ่ายผลิต: ${escHtml(record.managerApprovedBy || '')} (${record.managerApprovedAt ? formatDateDMY(record.managerApprovedAt) : ''})`
+      ? `✅ Approved<br><span style="white-space:nowrap">หัวหน้างาน:</span> ${escHtml(record.approvedBy || '')}<br><span style="white-space:nowrap">ผู้จัดการฝ่ายผลิต:</span> ${escHtml(record.managerApprovedBy || '')} (${record.managerApprovedAt ? formatDateDMY(record.managerApprovedAt) : ''})`
       : stage.key === 'partial'
-      ? `🔵 หัวหน้างานตรวจสอบแล้ว (${escHtml(record.approvedBy || '')}) — รอผู้จัดการฝ่ายผลิตอนุมัติ`
+      ? `🔵 หัวหน้างานตรวจสอบแล้ว (${escHtml(record.approvedBy || '')}) — รอ<span style="white-space:nowrap">ผู้จัดการฝ่ายผลิต</span>อนุมัติ`
       : '🟡 Pending Approval';
 
     // ── Table rows (ISO/IATF: include spec LSL/USL + Actual Value + Status Badge) ──
