@@ -3640,7 +3640,7 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
                               : stage.key === 'partial'  ? 'pdf-approval-partial'
                               : 'pdf-approval-pending';
     const approvalText = stage.key === 'approved'
-      ? `✅ Approved — หัวหน้างาน: ${escHtml(record.approvedBy || '')} / ผู้จัดการฝ่ายผลิต: ${escHtml(record.managerApprovedBy || '')} (${record.managerApprovedAt ? new Date(record.managerApprovedAt).toLocaleDateString('th-TH') : ''})`
+      ? `✅ Approved — หัวหน้างาน: ${escHtml(record.approvedBy || '')} / ผู้จัดการฝ่ายผลิต: ${escHtml(record.managerApprovedBy || '')} (${record.managerApprovedAt ? formatDateDMY(record.managerApprovedAt) : ''})`
       : stage.key === 'partial'
       ? `🔵 หัวหน้างานตรวจสอบแล้ว (${escHtml(record.approvedBy || '')}) — รอผู้จัดการฝ่ายผลิตอนุมัติ`
       : '🟡 Pending Approval';
