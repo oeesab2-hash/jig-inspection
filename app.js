@@ -906,13 +906,26 @@
     });
   }
 
-  // Format an ISO timestamp as "D/M/YYYY HH:MM น." (Thai locale) — ใช้ให้ช่องลายเซ็นทั้ง 3
+  // 🆕 Format วันที่แบบ "DD/MM/YYYY" ปี ค.ศ. (Gregorian) เสมอ — ไม่ใช้ toLocaleDateString('th-TH')
+  // เพราะ locale th-TH จะแปลงปีเป็น พ.ศ. ให้อัตโนมัติ ซึ่งไม่ตรงกับที่ ISO ขอ (ต้องเป็น ค.ศ. ทุกช่องในฟอร์ม)
+  // Date object ของ JS เก็บปีเป็น ค.ศ. อยู่แล้วภายใน (getFullYear() คืนค่า ค.ศ. เสมอไม่ว่า locale ไหน)
+  function formatDateDMY(dateInput) {
+    if (!dateInput) return null;
+    const d = new Date(dateInput);
+    if (isNaN(d.getTime())) return null;
+    const dd = String(d.getDate()).padStart(2, '0');
+    const mm = String(d.getMonth() + 1).padStart(2, '0');
+    const yyyy = d.getFullYear();
+    return `${dd}/${mm}/${yyyy}`;
+  }
+
+  // Format an ISO timestamp as "DD/MM/YYYY HH:MM น." ปี ค.ศ. — ใช้ให้ช่องลายเซ็นทั้ง 3
   // (ผู้ตรวจสอบ / หัวหน้างาน / ผู้จัดการฝ่ายผลิต) ในหน้า PDF โชว์วันที่-เวลาแบบเดียวกัน
   function sigDateTime(iso) {
     if (!iso) return '';
     const d = new Date(iso);
     if (isNaN(d.getTime())) return '';
-    const date = d.toLocaleDateString('th-TH', { day: 'numeric', month: 'numeric', year: 'numeric' });
+    const date = formatDateDMY(d);
     const time = d.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' });
     return `${date} ${time} น.`;
   }
@@ -3592,23 +3605,21 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
     // 🆕 หา JIG ต้นทางเพื่อเช็คว่ามีค่าเอกสารเฉพาะตัว (override) หรือไม่ — ถ้าไม่มี/ว่าง ใช้ค่ากลาง
     const jigRef = catalog.jigs.find(x => x.id === record.jigId);
     const docId    = (jigRef && jigRef.docNoOverride) ? jigRef.docNoOverride : (appSettings.docNo || null);
-    const formRevLevel = (jigRef && jigRef.formRevLevelOverride) ? jigRef.formRevLevelOverride : (appSettings.formRevLevel || 'Rev.01');
     const revLevel = (jigRef && jigRef.revLevelOverride) ? jigRef.revLevelOverride : (appSettings.revLevel || 'Rev.00');
     const runNo    = (record.jigDocNo && record.jigDocNo.trim()) ? record.jigDocNo.trim() : null;
     const reportNo = 'RPT-' + (record.id || '').toString().slice(-8).toUpperCase();
-    // 🆕 Rev. Date = ของ JIG นี้ (ถ้ากำหนด) ไม่งั้นใช้ค่ากลาง — วันที่แก้ไข Rev เนื้อหาล่าสุด
-    const revDateRaw = (jigRef && jigRef.revDateOverride) ? jigRef.revDateOverride : appSettings.revDate;
-    const revDate  = revDateRaw
-      ? new Date(revDateRaw).toLocaleDateString('th-TH', { year:'numeric', month:'2-digit', day:'2-digit' })
-      : '—';
-    // Issued Form = ของ JIG นี้ (ถ้ากำหนด) ไม่งั้นใช้ค่ากลาง — วันที่ออกแบบฟอร์มฉบับนี้ครั้งแรก
+    // 🆕 Rev. No. — ตัดคำว่า "Rev." ออก เหลือแค่ตัวเลข (เช่น "Rev.00" → "00") ตามที่ ISO ขอ
+    // ไม่แก้ที่ต้นทาง (appSettings.revLevel) เพื่อไม่กระทบหน้าตั้งค่า/Excel export อื่นๆ ที่ยังต้องการคำว่า "Rev." อยู่
+    const revLevelDisplay = revLevel.replace(/^Rev\.?\s*/i, '');
+    // Issued Date (เดิมชื่อ "Issued Form") = ของ JIG นี้ (ถ้ากำหนด) ไม่งั้นใช้ค่ากลาง — วันที่ออกแบบฟอร์มฉบับนี้ครั้งแรก
     // ไม่ใช่วันที่ตรวจของรายงานแต่ละใบ (อันนั้นอยู่แยกในบล็อก Inspector/วันที่ตรวจสอบด้านล่าง)
+    // 🆕 แสดงเป็นปี ค.ศ. (Gregorian) เสมอ — ใช้ formatDateDMY แทน toLocaleDateString('th-TH')
     const issueDateRaw = (jigRef && jigRef.issueDateOverride) ? jigRef.issueDateOverride : appSettings.issueDate;
     const docDate  = issueDateRaw
-      ? new Date(issueDateRaw).toLocaleDateString('th-TH', { year:'numeric', month:'2-digit', day:'2-digit' })
+      ? (formatDateDMY(issueDateRaw) || '—')
       : '<span style="color:#dc2626;font-weight:700">⚠️ ยังไม่กำหนด</span>';
     const docDatePlain = issueDateRaw
-      ? new Date(issueDateRaw).toLocaleDateString('th-TH', { year:'numeric', month:'2-digit', day:'2-digit' })
+      ? (formatDateDMY(issueDateRaw) || '—')
       : '—';
 
     // ── Result Summary ──
@@ -3693,19 +3704,11 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
               <span class="pdf-doc-value">${escHtml(reportNo)}</span>
             </div>
             <div class="pdf-doc-row">
-              <span class="pdf-doc-label">Rev. Level</span>
-              <span class="pdf-doc-value">${escHtml(formRevLevel)}</span>
-            </div>
-            <div class="pdf-doc-row">
               <span class="pdf-doc-label">Rev. No.</span>
-              <span class="pdf-doc-value">${escHtml(revLevel)}</span>
+              <span class="pdf-doc-value">${escHtml(revLevelDisplay)}</span>
             </div>
             <div class="pdf-doc-row">
-              <span class="pdf-doc-label">Rev. Date</span>
-              <span class="pdf-doc-value">${revDate}</span>
-            </div>
-            <div class="pdf-doc-row">
-              <span class="pdf-doc-label">Issued Form</span>
+              <span class="pdf-doc-label">Issued Date</span>
               <span class="pdf-doc-value">${docDate}</span>
             </div>
           </div>
@@ -3719,7 +3722,7 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
           </div>
           <div class="pdf-meta-cell">
             <div class="pdf-meta-label">Inspection Date / วันที่</div>
-            <div class="pdf-meta-value">${escHtml(record.date)}</div>
+            <div class="pdf-meta-value">${escHtml(formatDateDMY(record.date) || record.date || '—')}</div>
           </div>
           <div class="pdf-meta-cell">
             <div class="pdf-meta-label">Shift / กะ</div>
@@ -3742,7 +3745,7 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
             <div class="pdf-scope-value">${escHtml(record.lineName || '—')}</div>
           </div>
           <div class="pdf-scope-cell">
-            <div class="pdf-scope-label">JIG ID / Part Number</div>
+            <div class="pdf-scope-label">Jig No. / Jig Name</div>
             <div class="pdf-scope-value">${escHtml(record.jigId || '—')} — ${escHtml(record.jigName || '—')}</div>
           </div>
         </div>
@@ -3755,7 +3758,7 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
                 <th style="width:5%">No.</th>
                 <th style="width:26%;text-align:left">Inspection Item / จุดตรวจสอบ</th>
                 <th style="width:13%">Method / วิธี</th>
-                <th style="width:13%">Spec / เกณฑ์</th>
+                <th style="width:13%">Standard / มาตรฐาน</th>
                 <th style="width:10%">Actual / ค่าจริง</th>
                 <th style="width:8%">Result</th>
                 <th style="width:25%;text-align:left">Remark / หมายเหตุ</th>
