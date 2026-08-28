@@ -586,16 +586,12 @@
     $('jdoc-name').value = j.name || '';
     $('jdoc-runno').value = j.docNo || '';
     $('jdoc-docno').value = j.docNoOverride || '';
-    $('jdoc-formrev').value = j.formRevLevelOverride || '';
     $('jdoc-rev').value = j.revLevelOverride || '';
-    $('jdoc-revdate').value = j.revDateOverride || '';
     $('jdoc-issuedate').value = j.issueDateOverride || '';
 
     // แสดงค่ากลางปัจจุบันเป็น hint ให้เห็นว่าถ้าเว้นว่างจะได้ค่าอะไร
     $('jdoc-docno-default').textContent = `(กลาง: ${appSettings.docNo || '—'})`;
-    $('jdoc-formrev-default').textContent = `(กลาง: ${appSettings.formRevLevel || '—'})`;
     $('jdoc-rev-default').textContent = `(กลาง: ${appSettings.revLevel || '—'})`;
-    $('jdoc-revdate-default').textContent = appSettings.revDate ? `(กลาง: ${appSettings.revDate})` : '';
     $('jdoc-issuedate-default').textContent = appSettings.issueDate ? `(กลาง: ${appSettings.issueDate})` : '';
 
     $('jig-doc-modal').classList.remove('hidden');
@@ -623,10 +619,10 @@
     j.name = newName;
     j.docNo = $('jdoc-runno').value.trim();
     j.docNoOverride = $('jdoc-docno').value.trim();
-    j.formRevLevelOverride = $('jdoc-formrev').value.trim();
     j.revLevelOverride = $('jdoc-rev').value.trim();
-    j.revDateOverride = $('jdoc-revdate').value;
     j.issueDateOverride = $('jdoc-issuedate').value;
+    // 🆕 ไม่แตะ formRevLevelOverride / revDateOverride ผ่าน modal นี้แล้ว (เอาช่องกรอกออกตามที่ ISO ขอ)
+    // — ค่าเดิม (ถ้ามี) จะยังคงอยู่ในข้อมูลเผื่อใช้อ้างอิงจุดอื่น แต่แก้ไขผ่านหน้านี้ไม่ได้อีกต่อไป
 
     saveCatalog(); renderAdminLists(); renderFilter();
     // ถ้าเปลี่ยนรหัส JIG ต้องย้าย checkpoints/history บน Supabase ตามไปด้วย กันข้อมูลเดิมหลุด/กำพร้า

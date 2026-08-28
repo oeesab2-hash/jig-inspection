@@ -507,21 +507,10 @@
       <div style="font-size:11px; color:var(--text-muted); margin-bottom:2px;">Doc No. <span id="jdoc-docno-default" style="opacity:.7;"></span></div>
       <div class="modal-inp-row"><input type="text" id="jdoc-docno" placeholder="ค่าเริ่มต้น = ใช้ค่ากลาง"></div>
 
-      <div style="font-size:11px; color:var(--text-muted); margin-bottom:2px;">Rev. Level (ฟอร์ม) <span id="jdoc-formrev-default" style="opacity:.7;"></span></div>
-      <div class="modal-inp-row"><input type="text" id="jdoc-formrev" placeholder="ค่าเริ่มต้น = ใช้ค่ากลาง"></div>
+      <div style="font-size:11px; color:var(--text-muted); margin-bottom:2px;">Rev. No. (เนื้อหา) <span id="jdoc-rev-default" style="opacity:.7;"></span></div>
+      <div class="modal-inp-row"><input type="text" id="jdoc-rev" placeholder="ค่าเริ่มต้น = ใช้ค่ากลาง"></div>
 
-      <div class="modal-inp-row">
-        <div style="flex:1;">
-          <div style="font-size:11px; color:var(--text-muted); margin-bottom:2px;">Rev. No. (เนื้อหา) <span id="jdoc-rev-default" style="opacity:.7;"></span></div>
-          <input type="text" id="jdoc-rev" placeholder="ค่าเริ่มต้น = ใช้ค่ากลาง">
-        </div>
-        <div style="flex:1;">
-          <div style="font-size:11px; color:var(--text-muted); margin-bottom:2px;">Rev. Date <span id="jdoc-revdate-default" style="opacity:.7;"></span></div>
-          <input type="date" id="jdoc-revdate">
-        </div>
-      </div>
-
-      <div style="font-size:11px; color:var(--text-muted); margin-bottom:2px;">Issued Form <span id="jdoc-issuedate-default" style="opacity:.7;"></span></div>
+      <div style="font-size:11px; color:var(--text-muted); margin-bottom:2px;">Issued Date <span id="jdoc-issuedate-default" style="opacity:.7;"></span></div>
       <div class="modal-inp-row"><input type="date" id="jdoc-issuedate"></div>
 
       <div class="modal-inp-row" style="margin-top:12px;">
@@ -627,14 +616,12 @@
       </div>
       <div class="admin-input-row">
         <input type="text" id="adm-doc-no" placeholder="Doc No. (เช่น DDM4-2-002)">
-        <input type="text" id="adm-form-rev-level" placeholder="Rev. Level ฟอร์ม (เช่น Rev.01)" title="Rev. Level ของตัวแบบฟอร์ม — เปลี่ยนเมื่อ ISO อนุมัติแก้ไข layout/โครงสร้างฟอร์มเท่านั้น">
-        <input type="text" id="adm-rev-level" placeholder="Rev. No. เนื้อหา (เช่น Rev.00)" title="Rev. No. ของเนื้อหา — เปลี่ยนเมื่อเพิ่ม/ลบ/แก้ไขจุดตรวจ">
-        <input type="date" id="adm-rev-date" title="Rev. Date — วันที่แก้ไข Rev เนื้อหาล่าสุด">
-        <input type="date" id="adm-issue-date" title="Issued Form — วันที่ออกแบบฟอร์มนี้ครั้งแรก (ค่าคงที่ ไม่เปลี่ยนตาม Rev)">
+        <input type="text" id="adm-rev-level" placeholder="Rev. No. เนื้อหา (เช่น 00)" title="Rev. No. ของเนื้อหา — เปลี่ยนเมื่อเพิ่ม/ลบ/แก้ไขจุดตรวจ">
+        <input type="date" id="adm-issue-date" title="Issued Date — วันที่ออกแบบฟอร์มนี้ครั้งแรก (ค่าคงที่ ไม่เปลี่ยนตาม Rev)">
         <button class="btn-adm-add" id="btn-save-app-settings">บันทึก</button>
       </div>
       <div style="font-size:10px; color:var(--text-muted); margin-top:4px;">
-        Rev. Level = Rev ของ "ฟอร์ม" (layout/โครงสร้าง) &nbsp;|&nbsp; Rev. No. / Rev. Date = Rev ของ "เนื้อหา" (เพิ่ม/ลบ/แก้ไขจุดตรวจ) &nbsp;|&nbsp; Issued Form = วันออกฟอร์มครั้งแรก (คงที่)
+        Rev. No. = Rev ของ "เนื้อหา" (เพิ่ม/ลบ/แก้ไขจุดตรวจ) &nbsp;|&nbsp; Issued Date = วันออกฟอร์มครั้งแรก (คงที่)
       </div>
     </div>
 
