@@ -3718,7 +3718,7 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
           </div>
           <div class="pdf-meta-cell">
             <div class="pdf-meta-label">Inspection Date / วันที่</div>
-            <div class="pdf-meta-value">${escHtml(formatDateDMY(record.date) || record.date || '—')}</div>
+            <div class="pdf-meta-value">${escHtml(formatDateDMY(record.date) || record.date || '—')}${record.timestamp ? ` <span style="font-weight:400">${new Date(record.timestamp).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' })} น.</span>` : ''}</div>
           </div>
           <div class="pdf-meta-cell">
             <div class="pdf-meta-label">Shift / กะ</div>
