@@ -1944,6 +1944,9 @@ h1, h2, h3, h4, label, button, input, select, textarea, p, span, div {
 }
 .dash-block { min-width: 0; }
 .dash-block-wide { grid-column: span 2; }
+/* 🆕 .dash-filter-row ถูกย้ายมาอยู่ใน .dashboard-sortable (grid 2 คอลัมน์) เลยกลายเป็น grid item ไปด้วย
+   ต้องบอกให้ span เต็มความกว้างเหมือนเดิม ไม่งั้นจะถูกบีบเหลือแค่ครึ่งคอลัมน์ */
+.dashboard-sortable > .dash-filter-row { grid-column: 1 / -1; }
 /* พื้นที่จับลาก — วางเป็นไอคอนเล็กๆ ก่อนหัวข้อการ์ด ต้องแตะ/คลิกตรงนี้เท่านั้นถึงจะเริ่มลากได้
    (ส่วนที่เหลือของการ์ด เช่น scroll list, ปุ่ม, select ยังกดปกติได้ ไม่ชนกับ drag) */
 .drag-handle {
