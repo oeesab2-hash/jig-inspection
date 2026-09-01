@@ -1257,16 +1257,13 @@
         const jigId = el.dataset.jig;
         if (selection.jigId === jigId) return; // เปิดอยู่แล้ว ไม่ต้องถามซ้ำ (ตรงกับ guard ใน selectJig())
         // 🆕 กันกดพลาดโดน JIG ที่ตรวจแล้ววันนี้ — เจอปัญหาจริงว่าพนักงานกดเข้าไปตรวจซ้ำโดยไม่ตั้งใจ
-        // ทั้งที่มี badge "ตรวจแล้ว" โชว์อยู่แล้ว ใส่ popup ยืนยันก่อน (ปุ่มยกเลิกเป็นค่าเริ่มต้นที่ปลอดภัย)
+        // ทั้งที่มี badge "ตรวจแล้ว" โชว์อยู่แล้ว ใส่ modal ยืนยันก่อน (ปุ่มยกเลิกเป็นค่าเริ่มต้นที่ปลอดภัย)
         // ยังอนุญาตให้ตรวจซ้ำได้ถ้าตั้งใจจริง (เช่น แก้ NG แล้วต้องตรวจยืนยันใหม่) แค่ต้องกดยืนยันอีกที
         const info = getJigCheckedTodayInfo(jigId);
         if (info) {
           const j = catalog.jigs.find(x => x.id === jigId);
-          const statusText = info.status === 'ng' ? 'พบ NG ⚠️' : 'ผ่าน ✅';
-          const ok = confirm(
-            `JIG "${j ? j.name : jigId}" ตรวจแล้ววันนี้เมื่อ ${info.time} น. (ผลตรวจ: ${statusText})\n\nต้องการตรวจซ้ำหรือไม่?`
-          );
-          if (!ok) return;
+          showRecheckConfirmModal(jigId, j ? j.name : jigId, info);
+          return;
         }
         selectJig(jigId);
       });
@@ -4545,6 +4542,7 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
 
     bindTabNav();
     bindDashboard();
+    bindRecheckConfirmModal();       // 🆕 modal ยืนยันก่อนตรวจซ้ำ JIG ที่ตรวจแล้ววันนี้
     initDashboardSorting();          // 🆕 เปิดใช้งานลากสลับตำแหน่งการ์ด Dashboard
     bindDashboardResetOrderButton(); // 🆕 ปุ่มรีเซ็ตลำดับกลับเป็นค่าเริ่มต้น
     bindLineSearch();
@@ -4854,6 +4852,33 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
     const hasNg = (latest.items || []).some(i => i.status === 'ng');
     const time = latest.timestamp ? new Date(latest.timestamp).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' }) : '';
     return { status: hasNg ? 'ng' : 'ok', time, count: records.length };
+  }
+
+  // 🆕 Modal ยืนยันก่อนตรวจซ้ำ JIG ที่ตรวจแล้ววันนี้ (แทนที่ confirm() ของเบราว์เซอร์ ให้ดูเป็นมืออาชีพ)
+  let _recheckConfirmJigId = null;
+  function showRecheckConfirmModal(jigId, jigName, info) {
+    _recheckConfirmJigId = jigId;
+    $('recheck-confirm-jigname').textContent = jigName;
+    const badge = $('recheck-confirm-badge');
+    badge.className = `jig-checked-badge ${info.status === 'ng' ? 'jig-checked-badge-ng' : 'jig-checked-badge-ok'}`;
+    badge.textContent = info.status === 'ng' ? '⚠️ พบ NG' : '✅ ผ่าน';
+    $('recheck-confirm-time').textContent = `ตรวจแล้ววันนี้เมื่อ ${info.time} น.`;
+    $('recheck-confirm-modal').classList.remove('hidden');
+  }
+  function hideRecheckConfirmModal() {
+    $('recheck-confirm-modal').classList.add('hidden');
+    _recheckConfirmJigId = null;
+  }
+  function bindRecheckConfirmModal() {
+    $('btn-recheck-cancel').addEventListener('click', hideRecheckConfirmModal);
+    $('recheck-confirm-modal').addEventListener('click', (e) => {
+      if (e.target.id === 'recheck-confirm-modal') hideRecheckConfirmModal(); // แตะพื้นหลังนอกกล่อง = ยกเลิก
+    });
+    $('btn-recheck-confirm').addEventListener('click', () => {
+      const jigId = _recheckConfirmJigId;
+      hideRecheckConfirmModal();
+      if (jigId) selectJig(jigId);
+    });
   }
   // ── ดึงรายการ JIG ที่มาร์ค "ไม่ได้ผลิต" ของวันนี้ จาก Supabase ──
   async function pullJigSkipsFromSupabase() {
