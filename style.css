@@ -349,6 +349,11 @@ h1, h2, h3, h4, label, button, input, select, textarea, p, span, div {
 }
 .line-chip-text .chip-code { margin-left: 0; }
 .line-chip-count { margin-left: auto; flex-shrink: 0; align-self: center; }
+/* 🆕 นับ JIG ที่ตรวจแล้ววันนี้ต่อ Line (เช่น "3/8 JIG") — เขียวเมื่อครบ, ส้มเมื่อตรวจไปบางส่วน */
+.line-chip-count-partial { background: hsla(45,80%,50%,0.15); color: var(--fixed); }
+.line-chip-count-full { background: var(--ok-bg); color: var(--ok); }
+.chip.selected .line-chip-count-partial { background: hsla(45,80%,50%,0.22); }
+.chip.selected .line-chip-count-full { background: var(--ok-bg); }
 @media (min-width: 700px) {
   .filter-chips.line-chips-grid {
     display: grid;

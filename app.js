@@ -1156,17 +1156,28 @@
       container.innerHTML = '<span class="chip-empty">ยังไม่มี Line ในแผนกนี้</span>';
       return;
     }
+    // 🆕 นับจำนวน JIG ที่ตรวจไปแล้ว "วันนี้" ต่อ Line — ไม่นับ JIG ที่มาร์ค "ไม่ได้ผลิตวันนี้" เป็นตัวหาร
+    // (ใช้ตรรกะเดียวกับ "สถานะ Line วันนี้" ใน Dashboard เพื่อให้ตัวเลขตรงกันทั้งแอป)
+    const t = todayStr();
+    const skippedJigIds = new Set(loadJigSkips().filter(s => s.date === t).map(s => s.jigId));
     container.innerHTML = lines.map(l => {
-      const jigCount = catalog.jigs.filter(j => j.lineId === l.id).length;
+      const lineJigs = catalog.jigs.filter(j => j.lineId === l.id);
+      const skippedCount = lineJigs.filter(j => skippedJigIds.has(j.id)).length;
+      const totalJigs = lineJigs.length - skippedCount;
+      const checkedCount = lineJigs.filter(j => !skippedJigIds.has(j.id) && getJigCheckedTodayInfo(j.id)).length;
       const sel = selection.lineId === l.id ? 'selected' : '';
       // โชว์รหัส Line ต่อเมื่อไม่ซ้ำกับชื่อเท่านั้น (บาง Line ตั้งชื่อ = รหัสเป๊ะ โชว์ซ้ำ 2 บรรทัดไม่มีประโยชน์)
       const codeHtml = l.id !== l.name ? `<span class="chip-code">${escHtml(l.id)}</span>` : '';
-      return `<button class="chip line-chip ${sel}" data-line="${escHtml(l.id)}" title="${escHtml(l.name)}">
+      const progressClass = totalJigs > 0 && checkedCount === totalJigs
+        ? 'line-chip-count-full'
+        : (checkedCount > 0 ? 'line-chip-count-partial' : '');
+      const countLabel = totalJigs > 0 ? `${checkedCount}/${totalJigs} JIG` : `${lineJigs.length} JIG`;
+      return `<button class="chip line-chip ${sel}" data-line="${escHtml(l.id)}" title="${escHtml(l.name)} — ตรวจแล้ว ${checkedCount}/${totalJigs} JIG วันนี้">
         <span class="line-chip-text">
           <span class="line-chip-name">${escHtml(l.name)}</span>
           ${codeHtml}
         </span>
-        <span class="chip-count line-chip-count">${jigCount} JIG</span>
+        <span class="chip-count line-chip-count ${progressClass}">${countLabel}</span>
       </button>`;
     }).join('');
     container.querySelectorAll('.chip').forEach(btn => {
