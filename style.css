@@ -1043,6 +1043,10 @@ h1, h2, h3, h4, label, button, input, select, textarea, p, span, div {
   border-bottom: 1px solid var(--border-card);
 }
 .panel-head h2 { font-size: 15px; font-weight: 600; color: var(--text-heading); }
+.panel-head-sub {
+  font-size: 11px; font-weight: 500; color: var(--text-muted);
+  font-family: var(--font-en); margin-left: 4px;
+}
 .panel-head-actions { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
 .btn-close-panel {
   width: 32px; height: 32px; border-radius: 8px;

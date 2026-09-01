@@ -368,6 +368,23 @@
     }
   }
 
+  /* 🆕 ดึง "จำนวนบันทึกทั้งหมดในระบบ" แบบเป๊ะๆ ตรงจาก Supabase (count query — ไม่ต้องโหลดข้อมูลจริงลงมา)
+     ไม่ผูกกับ filter ที่เลือกอยู่ในหน้าประวัติ เพื่อให้พี่บีมั่นใจได้ว่าเป็นตัวเลขจริงของทั้งระบบเสมอ
+     (ไม่ได้ถูกจำกัดไว้ที่ 100 รายการแต่อย่างใด — เก็บได้ไม่จำกัดตามพื้นที่ฐานข้อมูล) */
+  async function updateHistoryTotalCount() {
+    const el = $('hist-total-count');
+    if (!el) return;
+    if (!sb) { el.textContent = ''; return; }
+    try {
+      const { count, error } = await sb.from('history').select('id', { count: 'exact', head: true });
+      if (error) throw error;
+      el.textContent = `· บันทึกทั้งหมดในระบบ ${count ?? 0} รายการ`;
+    } catch (e) {
+      console.warn('updateHistoryTotalCount error:', e);
+      el.textContent = '';
+    }
+  }
+
   // ฟังการเปลี่ยนแปลง realtime จากเพื่อนร่วมทีมคนอื่น แล้วรีเฟรชหน้าจอให้อัตโนมัติ
   function subscribeRealtime() {
     if (!sb) return;
@@ -3360,7 +3377,7 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
   let _histSelected = new Set();
 
   function bindHistoryPanel() {
-    $('tab-history').addEventListener('click', () => { _histSelected.clear(); openPanel('history-panel'); populateHistoryPanel(); });
+    $('tab-history').addEventListener('click', () => { _histSelected.clear(); openPanel('history-panel'); populateHistoryPanel(); updateHistoryTotalCount(); });
     $('btn-close-hist').addEventListener('click', () => { _histSelected.clear(); closePanel('history-panel'); });
     $('btn-hf-apply').addEventListener('click', () => { _histSelected.clear(); populateHistoryPanel(); });
     $('hf-dept').addEventListener('change', () => { populateHistLineOptions(); populateHistoryPanel(); });
