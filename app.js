@@ -1253,7 +1253,23 @@
         </div>`;
     }).join('');
     container.querySelectorAll('.jig-chip-main').forEach(el => {
-      el.addEventListener('click', () => selectJig(el.dataset.jig));
+      el.addEventListener('click', () => {
+        const jigId = el.dataset.jig;
+        if (selection.jigId === jigId) return; // เปิดอยู่แล้ว ไม่ต้องถามซ้ำ (ตรงกับ guard ใน selectJig())
+        // 🆕 กันกดพลาดโดน JIG ที่ตรวจแล้ววันนี้ — เจอปัญหาจริงว่าพนักงานกดเข้าไปตรวจซ้ำโดยไม่ตั้งใจ
+        // ทั้งที่มี badge "ตรวจแล้ว" โชว์อยู่แล้ว ใส่ popup ยืนยันก่อน (ปุ่มยกเลิกเป็นค่าเริ่มต้นที่ปลอดภัย)
+        // ยังอนุญาตให้ตรวจซ้ำได้ถ้าตั้งใจจริง (เช่น แก้ NG แล้วต้องตรวจยืนยันใหม่) แค่ต้องกดยืนยันอีกที
+        const info = getJigCheckedTodayInfo(jigId);
+        if (info) {
+          const j = catalog.jigs.find(x => x.id === jigId);
+          const statusText = info.status === 'ng' ? 'พบ NG ⚠️' : 'ผ่าน ✅';
+          const ok = confirm(
+            `JIG "${j ? j.name : jigId}" ตรวจแล้ววันนี้เมื่อ ${info.time} น. (ผลตรวจ: ${statusText})\n\nต้องการตรวจซ้ำหรือไม่?`
+          );
+          if (!ok) return;
+        }
+        selectJig(jigId);
+      });
     });
     container.querySelectorAll('.jig-skip-toggle').forEach(btn => {
       btn.addEventListener('click', e => {
