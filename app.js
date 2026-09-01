@@ -4702,6 +4702,13 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
     const blocks = {};
     container.querySelectorAll(':scope > .dash-block').forEach(el => { blocks[el.dataset.blockId] = el; });
     order.forEach(id => { if (blocks[id]) container.appendChild(blocks[id]); });
+    // 🆕 appendChild ข้างบนจะดัน .dash-filter-row (แถบ filter เดือน/Line/นาฬิกา ที่ย้ายมาอยู่ในนี้)
+    //    ไปค้างอยู่บนสุดโดยไม่ตั้งใจ — ย้ายกลับมาไว้หลังบล็อกแรกเสมอ (ใต้การ์ดที่อยู่บนสุด ไม่ว่าจะลากสลับเป็นใบไหน)
+    const filterRow = container.querySelector(':scope > .dash-filter-row');
+    const firstBlock = blocks[order[0]];
+    if (filterRow && firstBlock && firstBlock.nextSibling !== filterRow) {
+      container.insertBefore(filterRow, firstBlock.nextSibling);
+    }
   }
 
   let _dashSortableInstance = null;
@@ -4719,6 +4726,7 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
       if (_dashSortableInstance) _dashSortableInstance.destroy();
       _dashSortableInstance = Sortable.create(container, {
         handle: '.drag-handle',      // ลากได้เฉพาะตอนจับที่ไอคอน ⠿ เท่านั้น กันชนกับ scroll ด้วยนิ้ว
+        draggable: '.dash-block',    // 🆕 จำกัดเฉพาะ .dash-block เท่านั้น กัน .dash-filter-row (แถบ filter ที่ย้ายมาอยู่ในนี้) โดนลากปนไปด้วย
         animation: 150,
         delay: 150,                  // ต้องกดค้าง 150ms ก่อนเริ่มลาก กันเผลอแตะโดนแล้วหลุด
         delayOnTouchOnly: true,      // หน่วงเฉพาะจอสัมผัส เมาส์ยังลากได้ทันทีเหมือนเดิม
@@ -4726,7 +4734,15 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
         ghostClass: 'sortable-ghost',
         chosenClass: 'sortable-chosen',
         dragClass: 'sortable-drag',
-        onEnd: () => saveDashOrder(container),
+        onEnd: () => {
+          saveDashOrder(container);
+          // 🆕 หลังลากสลับเสร็จ ก็ย้าย filter-row ให้ไปอยู่หลังการ์ดที่อยู่บนสุดเสมอ (เผื่อพี่บีลากการ์ดอื่นขึ้นมาเป็นอันดับ 1 แทน ng-today)
+          const firstBlock = container.querySelector(':scope > .dash-block');
+          const filterRow = container.querySelector(':scope > .dash-filter-row');
+          if (firstBlock && filterRow && firstBlock.nextSibling !== filterRow) {
+            container.insertBefore(filterRow, firstBlock.nextSibling);
+          }
+        },
       });
     } catch (e) {
       console.warn('initDashboardSorting: สร้าง Sortable ไม่สำเร็จ — ข้ามฟีเจอร์นี้ไปก่อน:', e);
