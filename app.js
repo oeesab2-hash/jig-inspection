@@ -60,17 +60,26 @@
   ══════════════════════════════════════ */
   function ensureLocalAdminPassBootstrap() {
     if (sb) return; // ใช้ Supabase RPC เป็นหลัก ไม่ต้องสุ่ม local pass
-    if (localStorage.getItem('jig_admin_pass')) return; // ตั้งรหัสไว้แล้ว ไม่ต้องสุ่มซ้ำ
-    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789';
-    let generated = '';
-    for (let i = 0; i < 10; i++) generated += chars[Math.floor(Math.random() * chars.length)];
-    localStorage.setItem('jig_admin_pass', generated);
-    console.warn(
-      '%c[Local mode] ยังไม่เคยตั้งรหัสผ่าน Admin — สุ่มรหัสผ่านเริ่มต้นให้แล้ว (แสดงครั้งนี้ครั้งเดียว):\n' +
-      generated +
-      '\nกรุณาเข้าสู่ระบบด้วยรหัสนี้แล้วรีบเปลี่ยนรหัสผ่านทันทีในเมนู Admin',
-      'font-weight:bold;font-size:14px;color:#b45309'
-    );
+    // 🆕 กัน localStorage throw (Private Browsing / ตั้งค่า "Block All Cookies" บน Safari)
+    // เดิมโค้ดนี้ไม่มี try/catch เลย ถ้า throw ตรงนี้ (เป็นบรรทัดแรกสุดที่ init() เรียก)
+    // จะทำให้ init() หยุดทำงานทันทีตั้งแต่ยังไม่เริ่ม ก่อนถึงจุดป้องกัน timeout/GPS ทั้งหมดที่ทำไว้
+    // (เจอเคสจริง: iPhone เครื่องที่ไม่เคยใช้แอปนี้มาก่อนเลยก็ค้าง — อาจเปิดด้วย Private tab
+    // หรือมีการตั้งค่า Block Cookies ไว้จาก MDM ของบริษัท)
+    try {
+      if (localStorage.getItem('jig_admin_pass')) return; // ตั้งรหัสไว้แล้ว ไม่ต้องสุ่มซ้ำ
+      const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789';
+      let generated = '';
+      for (let i = 0; i < 10; i++) generated += chars[Math.floor(Math.random() * chars.length)];
+      localStorage.setItem('jig_admin_pass', generated);
+      console.warn(
+        '%c[Local mode] ยังไม่เคยตั้งรหัสผ่าน Admin — สุ่มรหัสผ่านเริ่มต้นให้แล้ว (แสดงครั้งนี้ครั้งเดียว):\n' +
+        generated +
+        '\nกรุณาเข้าสู่ระบบด้วยรหัสนี้แล้วรีบเปลี่ยนรหัสผ่านทันทีในเมนู Admin',
+        'font-weight:bold;font-size:14px;color:#b45309'
+      );
+    } catch (e) {
+      console.warn('ensureLocalAdminPassBootstrap: localStorage ใช้งานไม่ได้ (Private Browsing/Block Cookies) — ข้ามการสุ่มรหัส local ไปก่อน:', e);
+    }
   }
 
   /* ══════════════════════════════════════
@@ -902,8 +911,8 @@
     console.log(`[DIAG +${elapsed}s] ${step}${extra ? ' — ' + extra : ''}`);
     renderDbgPanel();
   }
-  // 🔕 ปิดการโชว์ panel สีเขียวบนจอแล้ว (บั๊กที่ไล่อยู่แก้เสร็จแล้ว) — เหลือไว้แค่ log ลง console
-  //    เผื่อวันหลังต้องไล่บั๊กเน็ต/Supabase อีก เปิดกลับมาได้ง่ายๆ โดยลบ "return;" บรรทัดล่างออก
+  // 🔕 ปิดการโชว์ panel สีเขียวบนจอแล้ว (บั๊กที่ไล่อยู่แก้เสร็จแล้ว 2026-09-01) — เหลือไว้แค่ log
+  //    ลง console เผื่อวันหลังต้องไล่บั๊กเน็ต/Supabase อีก เปิดกลับมาได้ง่ายๆ โดยลบ "return;" ข้างล่างออก
   function renderDbgPanel() {
     return; // ← ลบบรรทัดนี้ทิ้งเมื่อไหร่ก็เปิด panel วินิจฉัยกลับมาโชว์บนจอได้ทันที
     // eslint-disable-next-line no-unreachable
@@ -4477,6 +4486,8 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
 
     bindTabNav();
     bindDashboard();
+    initDashboardSorting();          // 🆕 เปิดใช้งานลากสลับตำแหน่งการ์ด Dashboard
+    bindDashboardResetOrderButton(); // 🆕 ปุ่มรีเซ็ตลำดับกลับเป็นค่าเริ่มต้น
     bindLineSearch();
     bindAiPanel();
     startDashClock();
@@ -4648,6 +4659,94 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
     $('kpi-ng').addEventListener('click', openNgListModal);
     $('btn-ng-list-modal-close').addEventListener('click', closeNgListModal);
     $('ng-list-modal').addEventListener('click', (e) => { if (e.target.id === 'ng-list-modal') closeNgListModal(); });
+  }
+
+  /* ══════════════════════════════════════
+     🆕 DASHBOARD DRAG-TO-REORDER (SortableJS)
+     ────────────────────────────────────────
+     ลากสลับตำแหน่ง 7 การ์ด/บล็อกใน Dashboard ได้ตามใจชอบ — จับที่ไอคอน ⠿ (.drag-handle)
+     เท่านั้น ไม่ใช่ทั้งการ์ด กันชนกับการ scroll ด้วยนิ้วบนมือถือ/แท็บเล็ตหน้างาน
+     บันทึกลำดับไว้เฉพาะเครื่อง/เบราว์เซอร์นั้น (localStorage) — คนอื่นไม่ถูกกระทบ
+     "สถานะ Line วันนี้" และแถบตัวกรองเดือน/Line ด้านบนสุดตรึงตำแหน่งไว้เสมอ ไม่รวมอยู่ในนี้
+  ══════════════════════════════════════ */
+  const DASH_ORDER_KEY = 'jig_dashboard_order_v1';
+  // ลำดับเริ่มต้น (ค่าที่ออกแบบไว้แต่แรก) ใช้ตอน "รีเซ็ตเป็นค่าเริ่มต้น" หรือตอนที่ localStorage
+  // มี block-id ที่เราไม่รู้จัก/ไม่ครบ — กันเคสแก้โค้ดเพิ่ม/ลดการ์ดในอนาคตแล้วลำดับเก่าพัง
+  const DASH_DEFAULT_ORDER = ['ng-today', 'kpi-row', 'chart-trend', 'chart-byline', 'chart-donut', 'ng-ranking', 'ai-panel'];
+
+  function loadDashOrder() {
+    try {
+      const raw = localStorage.getItem(DASH_ORDER_KEY);
+      const saved = raw ? JSON.parse(raw) : null;
+      if (!Array.isArray(saved) || !saved.length) return DASH_DEFAULT_ORDER.slice();
+      // กรอง id แปลกปลอมที่ไม่มีอยู่จริงออก (เผื่อพี่บีเปลี่ยนชื่อ block-id ในอนาคต)
+      const known = new Set(DASH_DEFAULT_ORDER);
+      const cleaned = saved.filter(id => known.has(id));
+      // ต่อท้ายด้วย block-id ใหม่ที่ยังไม่เคยมีในลำดับที่บันทึกไว้ (เผื่อพี่บีเพิ่มการ์ดใหม่ในอนาคต)
+      DASH_DEFAULT_ORDER.forEach(id => { if (!cleaned.includes(id)) cleaned.push(id); });
+      return cleaned.length ? cleaned : DASH_DEFAULT_ORDER.slice();
+    } catch (e) {
+      console.warn('loadDashOrder: อ่าน localStorage ไม่ได้ (Private Browsing/Block Cookies) — ใช้ลำดับเริ่มต้นแทน:', e);
+      return DASH_DEFAULT_ORDER.slice();
+    }
+  }
+  function saveDashOrder(container) {
+    try {
+      const order = Array.from(container.querySelectorAll(':scope > .dash-block')).map(el => el.dataset.blockId);
+      localStorage.setItem(DASH_ORDER_KEY, JSON.stringify(order));
+    } catch (e) {
+      console.warn('saveDashOrder: บันทึก localStorage ไม่ได้ (Private Browsing/Block Cookies) — ลำดับจะไม่ถูกจำไว้ในรอบหน้า:', e);
+    }
+  }
+  function applyDashOrder(container, order) {
+    const blocks = {};
+    container.querySelectorAll(':scope > .dash-block').forEach(el => { blocks[el.dataset.blockId] = el; });
+    order.forEach(id => { if (blocks[id]) container.appendChild(blocks[id]); });
+  }
+
+  let _dashSortableInstance = null;
+  function initDashboardSorting() {
+    const container = $('dashboard-sortable');
+    if (!container) return;
+    // ⚠️ ถ้า SortableJS โหลดไม่สำเร็จ (CDN ถูกบล็อก/เน็ตหลุดตอนโหลดหน้า) ข้ามฟีเจอร์นี้ไปเงียบๆ
+    // อย่าให้ init() ทั้งหมดพังเพราะแค่ฟีเจอร์เสริมนี้ใช้ไม่ได้
+    if (typeof Sortable === 'undefined') {
+      console.warn('initDashboardSorting: ไลบรารี Sortable โหลดไม่สำเร็จ — ข้ามฟีเจอร์ลากสลับตำแหน่งไปก่อน (การ์ดยังใช้งานได้ปกติ แค่ลากไม่ได้)');
+      return;
+    }
+    applyDashOrder(container, loadDashOrder());
+    try {
+      if (_dashSortableInstance) _dashSortableInstance.destroy();
+      _dashSortableInstance = Sortable.create(container, {
+        handle: '.drag-handle',      // ลากได้เฉพาะตอนจับที่ไอคอน ⠿ เท่านั้น กันชนกับ scroll ด้วยนิ้ว
+        animation: 150,
+        delay: 150,                  // ต้องกดค้าง 150ms ก่อนเริ่มลาก กันเผลอแตะโดนแล้วหลุด
+        delayOnTouchOnly: true,      // หน่วงเฉพาะจอสัมผัส เมาส์ยังลากได้ทันทีเหมือนเดิม
+        touchStartThreshold: 5,
+        ghostClass: 'sortable-ghost',
+        chosenClass: 'sortable-chosen',
+        dragClass: 'sortable-drag',
+        onEnd: () => saveDashOrder(container),
+      });
+    } catch (e) {
+      console.warn('initDashboardSorting: สร้าง Sortable ไม่สำเร็จ — ข้ามฟีเจอร์นี้ไปก่อน:', e);
+    }
+  }
+
+  function resetDashboardOrder() {
+    const container = $('dashboard-sortable');
+    if (!container) return;
+    try { localStorage.removeItem(DASH_ORDER_KEY); }
+    catch (e) { console.warn('resetDashboardOrder: ล้าง localStorage ไม่ได้:', e); }
+    applyDashOrder(container, DASH_DEFAULT_ORDER.slice());
+    toast('รีเซ็ตลำดับการ์ด Dashboard กลับเป็นค่าเริ่มต้นแล้ว', 'ok');
+  }
+  function bindDashboardResetOrderButton() {
+    const btn = $('btn-dash-reset-order');
+    if (!btn) return;
+    btn.addEventListener('click', () => {
+      if (confirm('รีเซ็ตลำดับการ์ด Dashboard กลับเป็นค่าเริ่มต้น?')) resetDashboardOrder();
+    });
   }
 
   /* ══════════════════════════════════════

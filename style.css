@@ -1934,10 +1934,51 @@ h1, h2, h3, h4, label, button, input, select, textarea, p, span, div {
 /* ─────────────────────────────
    Responsive: Dashboard
 ───────────────────────────── */
+/* ─────────────────────────────
+   🆕 Dashboard Drag-to-Reorder (SortableJS)
+───────────────────────────── */
+.dashboard-sortable {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+.dash-block { min-width: 0; }
+.dash-block-wide { grid-column: span 2; }
+/* พื้นที่จับลาก — วางเป็นไอคอนเล็กๆ ก่อนหัวข้อการ์ด ต้องแตะ/คลิกตรงนี้เท่านั้นถึงจะเริ่มลากได้
+   (ส่วนที่เหลือของการ์ด เช่น scroll list, ปุ่ม, select ยังกดปกติได้ ไม่ชนกับ drag) */
+.drag-handle {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 22px; height: 22px; margin-right: 2px;
+  color: var(--text-muted); opacity: 0.55;
+  cursor: grab; touch-action: none; flex-shrink: 0;
+  border-radius: 6px; transition: opacity 0.15s, background 0.15s, color 0.15s;
+}
+.drag-handle:hover { opacity: 1; background: var(--bg-card-hover, rgba(128,128,128,0.12)); color: var(--text-main); }
+.drag-handle:active { cursor: grabbing; }
+.dash-block-handle-row { display: flex; justify-content: flex-end; margin-bottom: -4px; }
+/* ตอนกำลังลาก — การ์ดต้นทางจางลง, เงาช่องว่างปลายทางเป็นกรอบประ ให้เห็นชัดว่าจะไปวางตรงไหน */
+.dash-block.sortable-ghost { opacity: 0.35; }
+.dash-block.sortable-chosen .glass-card,
+.dash-block.sortable-chosen .kpi-row {
+  box-shadow: 0 0 0 2px var(--accent, #3b82f6), 0 10px 30px hsla(0,0%,0%,0.25);
+}
+.dash-block.sortable-drag { cursor: grabbing; }
+.btn-dash-reset-order {
+  display: inline-flex; align-items: center; gap: 6px;
+  background: transparent; border: 1px solid var(--border-card);
+  color: var(--text-muted); border-radius: 8px; padding: 6px 10px;
+  font-size: 12px; font-family: var(--font-thai); cursor: pointer;
+  transition: color 0.15s, border-color 0.15s, background 0.15s;
+  white-space: nowrap;
+}
+.btn-dash-reset-order:hover { color: var(--text-main); border-color: var(--text-muted); background: rgba(128,128,128,0.08); }
+
 @media (max-width: 640px) {
   .kpi-row { grid-template-columns: 1fr 1fr; }
   .chart-row { grid-template-columns: 1fr; }
   .chart-wide { grid-column: span 1; }
+  .dashboard-sortable { grid-template-columns: 1fr; }
+  .dash-block-wide { grid-column: span 1; }
   .ai-card-head { flex-direction: column; }
   .tab-btn { font-size: 12px; padding: 8px; }
 }
