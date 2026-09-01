@@ -5729,11 +5729,11 @@ ${JSON.stringify(summary, null, 2)}
     const storageEl = $('storage-stats-panel');
     if (!storageEl) return;
 
-    storageEl.innerHTML = `<div style="padding: 12px; text-align: center; color: var(--text-muted);">⏳ Loading...</div>`;
+    storageEl.innerHTML = `<div style="padding: 12px; text-align: center; color: var(--text-muted);">⏳ กำลังโหลด...</div>`;
 
     const stats = await getStorageStats();
     if (!stats) {
-      storageEl.innerHTML = `<div style="padding: 12px; color: var(--text-muted); font-size: 12px;">⚠️ Cannot retrieve storage</div>`;
+      storageEl.innerHTML = `<div style="padding: 12px; color: var(--text-muted); font-size: 12px;">⚠️ ดึงข้อมูลพื้นที่จัดเก็บไม่สำเร็จ</div>`;
       return;
     }
 
@@ -5742,14 +5742,33 @@ ${JSON.stringify(summary, null, 2)}
     const usagePercent = Math.min((estimatedSize / SUPABASE_FREE_LIMIT) * 100, 100);
     const remainingBytes = Math.max(SUPABASE_FREE_LIMIT - estimatedSize, 0);
 
+    // 🆕 สีตามธีมแอป (เดิม hardcode #ff6b6b/#ffd43b/#51cf66 ไม่ตรงกับโทน navy/gold ของแอป) — ok=เขียว, fixed=เหลืองอำพัน(เตือน), ng=แดง(วิกฤต)
+    const cssVar = (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+    const gaugeColor = usagePercent > 80 ? cssVar('--ng') : usagePercent > 50 ? cssVar('--fixed') : cssVar('--ok');
+    const gaugeTrackColor = cssVar('--border-input');
+
+    // 🆕 ไอคอนชุดเดียวกับที่ใช้ทั้งแอป (SVG line-icon) แทน emoji — คงที่ทุกอุปกรณ์ ไม่ใช่แสดงต่างกันไปตาม OS
+    const ICON_DB     = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14a9 3 0 0 0 18 0V5"/><path d="M3 12a9 3 0 0 0 18 0"/></svg>`;
+    const ICON_FOLDER = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z"/></svg>`;
+    const ICON_PIN    = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s7-6.5 7-11a7 7 0 1 0-14 0c0 4.5 7 11 7 11z"/><circle cx="12" cy="10" r="2.5"/></svg>`;
+    const ICON_WRENCH = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>`;
+    const ICON_CHECK  = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>`;
+    const ICON_DOC    = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>`;
+    const ICON_TPL    = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/></svg>`;
+    const ICON_BAR    = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>`;
+    const ICON_BOX    = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>`;
+    const ICON_BULB   = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18h6"/><path d="M10 22h4"/><path d="M12 2a7 7 0 0 0-4 12.9V17h8v-2.1A7 7 0 0 0 12 2z"/></svg>`;
+    const ICON_CLOCK  = `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>`;
+    const ICON_REFRESH = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v5h5"/><path d="M3.05 13a9 9 0 1 0 .5-4.5L3 8"/></svg>`;
+    const ICON_BACKUP = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>`;
+    const ICON_SEARCH = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>`;
+    const ICON_WARN   = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>`;
+
     // ✨ Gauge Chart สร้าง SVG
-    const gaugeColor = usagePercent > 80 ? '#ff6b6b' : usagePercent > 50 ? '#ffd43b' : '#51cf66';
-    const gaugeRotation = (usagePercent / 100) * 180 - 90; // 0-180 degrees
-    
     const gaugeSVG = `
-      <svg viewBox="0 0 120 70" style="width: 100%; height: 80px; margin-bottom: 8px;">
+      <svg viewBox="0 0 120 70" style="width: 100%; height: 80px;">
         <!-- Background arc -->
-        <path d="M 10 60 A 50 50 0 0 1 110 60" fill="none" stroke="var(--bg-tertiary)" stroke-width="8" stroke-linecap="round"/>
+        <path d="M 10 60 A 50 50 0 0 1 110 60" fill="none" stroke="${gaugeTrackColor}" stroke-width="8" stroke-linecap="round"/>
         <!-- Progress arc -->
         <path d="M 10 60 A 50 50 0 ${usagePercent > 50 ? '1' : '0'} 1 ${10 + 100 * Math.cos((usagePercent / 100) * Math.PI)} ${60 - 100 * Math.sin((usagePercent / 100) * Math.PI)}" 
               fill="none" stroke="${gaugeColor}" stroke-width="8" stroke-linecap="round"/>
@@ -5760,66 +5779,59 @@ ${JSON.stringify(summary, null, 2)}
     `;
 
     storageEl.innerHTML = `
-      <div class="storage-panel" style="padding: 12px; background: var(--bg-secondary); border-radius: 6px; font-size: 12px;">
-        <div style="margin-bottom: 8px; font-weight: bold; color: var(--text-main);">💾 Storage Status</div>
-        
+      <div class="storage-panel">
+        <div class="storage-panel-title">${ICON_DB} สถานะพื้นที่จัดเก็บ</div>
+
         <!-- Gauge Chart -->
-        <div style="margin-bottom: 10px;">
+        <div class="storage-gauge-wrap">
           ${gaugeSVG}
-          <div style="text-align: center; color: var(--text-muted); font-size: 10px;">
-            ${formatBytes(estimatedSize)} / ${formatBytes(SUPABASE_FREE_LIMIT)} 
-            | Remaining: <strong style="color: ${remainingBytes < 100000000 ? '#ff6b6b' : '#51cf66'}">${formatBytes(remainingBytes)}</strong>
+          <div class="storage-gauge-caption">
+            ${formatBytes(estimatedSize)} / ${formatBytes(SUPABASE_FREE_LIMIT)}
+            · เหลือ <strong class="${remainingBytes < 100000000 ? 'storage-low' : 'storage-ok'}">${formatBytes(remainingBytes)}</strong>
           </div>
         </div>
 
         <!-- Records Count -->
-        <div style="background: var(--bg-tertiary); padding: 8px; border-radius: 4px; font-size: 10px; margin-bottom: 8px;">
-          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 4px;">
-            <div>📁 Dept: <strong>${stats.departments}</strong></div>
-            <div>📍 Lines: <strong>${stats.lines}</strong></div>
-            <div>🔧 JIGs: <strong>${stats.jigs}</strong></div>
-            <div>✓ Points: <strong>${stats.checkpoints}</strong></div>
-            <div>📋 History: <strong>${stats.history}</strong></div>
-            <div>📝 Tpl: <strong>${stats.templates}</strong></div>
+        <div class="storage-stat-box">
+          <div class="storage-stat-grid">
+            <div>${ICON_FOLDER} แผนก: <strong>${stats.departments}</strong></div>
+            <div>${ICON_PIN} Line: <strong>${stats.lines}</strong></div>
+            <div>${ICON_WRENCH} JIG: <strong>${stats.jigs}</strong></div>
+            <div>${ICON_CHECK} จุดตรวจ: <strong>${stats.checkpoints}</strong></div>
+            <div>${ICON_DOC} ประวัติ: <strong>${stats.history}</strong></div>
+            <div>${ICON_TPL} เทมเพลต: <strong>${stats.templates}</strong></div>
           </div>
-          <div style="margin-top: 4px; padding-top: 4px; border-top: 1px solid var(--border-color); color: var(--text-main); text-align: center;">
-            📊 Total: <strong>${stats.totalRecords}</strong> records
-          </div>
+          <div class="storage-stat-total">${ICON_BAR} รวมทั้งหมด: <strong>${stats.totalRecords}</strong> รายการ</div>
         </div>
 
         <!-- 🆕 Byte-size breakdown ต่อตาราง (ขนาดจริง ไม่ใช่ประมาณการ) -->
-        <div style="background: var(--bg-tertiary); padding: 8px; border-radius: 4px; font-size: 10px; margin-bottom: 8px;">
-          <div style="margin-bottom: 4px; color: var(--text-muted);">📦 ขนาดจริงแยกตามตาราง:</div>
-          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 4px;">
-            <div>📁 Dept: <strong>${formatBytes(stats.sizeByTable.departments)}</strong></div>
-            <div>📍 Lines: <strong>${formatBytes(stats.sizeByTable.lines)}</strong></div>
-            <div>🔧 JIGs: <strong>${formatBytes(stats.sizeByTable.jigs)}</strong></div>
-            <div>✓ Points: <strong>${formatBytes(stats.sizeByTable.checkpoints)}</strong></div>
-            <div>📋 History: <strong>${formatBytes(stats.sizeByTable.history)}</strong></div>
-            <div>📝 Tpl: <strong>${formatBytes(stats.sizeByTable.templates)}</strong></div>
+        <div class="storage-stat-box">
+          <div class="storage-stat-box-label">${ICON_BOX} ขนาดจริงแยกตามตาราง:</div>
+          <div class="storage-stat-grid">
+            <div>${ICON_FOLDER} แผนก: <strong>${formatBytes(stats.sizeByTable.departments)}</strong></div>
+            <div>${ICON_PIN} Line: <strong>${formatBytes(stats.sizeByTable.lines)}</strong></div>
+            <div>${ICON_WRENCH} JIG: <strong>${formatBytes(stats.sizeByTable.jigs)}</strong></div>
+            <div>${ICON_CHECK} จุดตรวจ: <strong>${formatBytes(stats.sizeByTable.checkpoints)}</strong></div>
+            <div>${ICON_DOC} ประวัติ: <strong>${formatBytes(stats.sizeByTable.history)}</strong></div>
+            <div>${ICON_TPL} เทมเพลต: <strong>${formatBytes(stats.sizeByTable.templates)}</strong></div>
           </div>
         </div>
 
-        <div style="color: var(--text-muted); font-size: 9px; text-align: center; margin-bottom: 8px; line-height: 1.4;">
-          💡 คำนวณจากขนาดข้อมูลจริง (รวมรูปถ่าย base64) — แม่นยำกว่าประมาณการเดิมมาก<br>
-          แต่ยังไม่รวม overhead ของ index/database internals ของ Supabase ซึ่งจริงอาจสูงกว่านี้เล็กน้อย
-        </div>
+        <div class="storage-note">${ICON_BULB} <span>คำนวณจากขนาดข้อมูลจริง (รวมรูปถ่าย base64) — แม่นยำกว่าประมาณการเดิมมาก แต่ยังไม่รวม overhead ของ index/database internals ของ Supabase ซึ่งจริงอาจสูงกว่านี้เล็กน้อย</span></div>
 
-        <div style="color: var(--text-muted); font-size: 9px; text-align: right; margin-bottom: 8px;">
-          🕐 ${stats.timestamp}
-        </div>
+        <div class="storage-timestamp">${ICON_CLOCK} อัปเดตล่าสุด ${stats.timestamp}</div>
 
-        <!-- Buttons: Refresh + Backup (Clean removed) -->
-        <div style="display: flex; gap: 6px;">
-          <button id="btn-refresh-storage" style="flex: 1; padding: 6px 8px; background: var(--primary-color); color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 11px; font-weight: bold;">🔄 Refresh</button>
-          <button id="btn-backup-storage" style="flex: 1; padding: 6px 8px; background: #4dabf7; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 11px; font-weight: bold;">💾 Backup</button>
+        <!-- Buttons: Refresh + Backup -->
+        <div class="storage-btn-row">
+          <button id="btn-refresh-storage" class="storage-btn">${ICON_REFRESH} รีเฟรช</button>
+          <button id="btn-backup-storage" class="storage-btn storage-btn-primary">${ICON_BACKUP} สำรองข้อมูล</button>
         </div>
 
         <!-- 🆕 ปุ่มดูขนาดรูปพื้นหลังแยกตาม JIG — หาตัวที่กินพื้นที่เยอะผิดปกติ -->
-        <button id="btn-jig-image-sizes" style="width: 100%; margin-top: 6px; padding: 6px 8px; background: var(--bg-tertiary); color: var(--text-main); border: 1px solid var(--border-color); border-radius: 4px; cursor: pointer; font-size: 11px;">🔍 ดูขนาดรูปพื้นหลังแยกตาม JIG</button>
+        <button id="btn-jig-image-sizes" class="storage-btn storage-btn-full">${ICON_SEARCH} ดูขนาดรูปพื้นหลังแยกตาม JIG</button>
         <div id="jig-image-sizes-list" style="margin-top: 6px;"></div>
 
-        ${usagePercent > 90 ? `<div style="margin-top: 8px; padding: 8px; background: #ffe066; border-left: 3px solid #ff6b6b; border-radius: 3px; color: #333; font-size: 11px;">⚠️ <strong>Warning:</strong> Almost full! Delete old history or upgrade plan</div>` : ''}
+        ${usagePercent > 90 ? `<div class="storage-warning-banner">${ICON_WARN} <span><strong>เตือน:</strong> พื้นที่ใกล้เต็มแล้ว ลองลบประวัติเก่าหรืออัปเกรดแผน Supabase</span></div>` : ''}
       </div>
     `;
 
@@ -5851,21 +5863,28 @@ ${JSON.stringify(summary, null, 2)}
         return;
       }
 
+      const ICON_IMAGE = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>`;
+      const ICON_WARN2  = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>`;
+      const ICON_OK2    = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>`;
+
       // ค่าเฉลี่ย — ใช้เทียบหา "ตัวผิดปกติ" ที่ใหญ่กว่าค่าเฉลี่ยมากๆ (สัญญาณว่าอาจไม่ผ่านการบีบอัด)
       const avg = rows.reduce((s, r) => s + r.bytes, 0) / rows.length;
+      const hasOutlier = rows.some(r => r.bytes > avg * 2.5);
       const rowsHtml = rows.slice(0, 15).map(r => {
         const isOutlier = r.bytes > avg * 2.5; // ใหญ่กว่าค่าเฉลี่ย 2.5 เท่า+ ถือว่าน่าสงสัย
-        return `<div style="display:flex; justify-content:space-between; padding: 3px 0; ${isOutlier ? 'color:#ff6b6b; font-weight:600;' : ''}">
-          <span>${isOutlier ? '⚠️ ' : ''}${escHtml(r.name)}</span>
+        return `<div class="storage-jig-row${isOutlier ? ' outlier' : ''}">
+          <span>${isOutlier ? ICON_WARN2 : ICON_IMAGE} ${escHtml(r.name)}</span>
           <span>${formatBytes(r.bytes)}</span>
         </div>`;
       }).join('');
 
       listEl.innerHTML = `
-        <div style="background: var(--bg-tertiary); padding: 8px; border-radius: 4px; font-size: 11px;">
-          <div style="margin-bottom: 4px; color: var(--text-muted);">📷 ขนาดรูปพื้นหลัง แยกตาม JIG (${rows.length} รูป, เฉลี่ย ${formatBytes(avg)}/รูป, แสดง 15 อันดับแรก):</div>
+        <div class="storage-stat-box">
+          <div class="storage-stat-box-label">${ICON_IMAGE} ขนาดรูปพื้นหลัง แยกตาม JIG (${rows.length} รูป, เฉลี่ย ${formatBytes(avg)}/รูป, แสดง 15 อันดับแรก)</div>
           ${rowsHtml}
-          ${rows.some(r => r.bytes > avg * 2.5) ? `<div style="margin-top:6px; padding-top:6px; border-top:1px solid var(--border-color); color:#ff6b6b; font-size:10px;">⚠️ รายการที่ไฮไลต์ใหญ่กว่าค่าเฉลี่ยมาก อาจเป็นรูปที่ไม่ผ่านการบีบอัด — ลองอัปโหลดรูปพื้นหลังใหม่อีกครั้งเพื่อให้ระบบบีบอัดให้</div>` : `<div style="margin-top:6px; padding-top:6px; border-top:1px solid var(--border-color); color: var(--text-muted); font-size:10px;">✅ ขนาดใกล้เคียงกันทุกรูป ไม่พบตัวที่ผิดปกติ — ระบบบีบอัดทำงานปกติ</div>`}
+          ${hasOutlier
+            ? `<div class="storage-jig-outlier-note warn">${ICON_WARN2} <span>รายการที่ไฮไลต์ใหญ่กว่าค่าเฉลี่ยมาก อาจเป็นรูปที่ไม่ผ่านการบีบอัด — ลองอัปโหลดรูปพื้นหลังใหม่อีกครั้งเพื่อให้ระบบบีบอัดให้</span></div>`
+            : `<div class="storage-jig-outlier-note ok">${ICON_OK2} <span>ขนาดใกล้เคียงกันทุกรูป ไม่พบตัวที่ผิดปกติ — ระบบบีบอัดทำงานปกติ</span></div>`}
         </div>`;
     } catch (e) {
       console.error('showJigImageSizeBreakdown error:', e);
