@@ -41,6 +41,27 @@
   const currentThaiMonthAbbr = () => TH_MONTHS_ABBR[new Date().getMonth()];
 
   /* ══════════════════════════════════════
+     🆕 ไอคอน SVG มาตรฐาน — ใช้แทน emoji ในปุ่ม/ป้ายสถานะทั่ว Admin Panel
+     (emoji เรนเดอร์ไม่เหมือนกันในแต่ละ OS/browser ดูไม่เป็นมืออาชีพ —
+     เปลี่ยนเป็น SVG line-icon สไตล์เดียวกับไอคอนอื่นๆ ในแอปแทน ใช้ currentColor
+     เพื่อให้สีตามปุ่ม/บริบทเดิมโดยอัตโนมัติ ไม่ต้องแก้ CSS ของปุ่มเลย)
+  ══════════════════════════════════════ */
+  const ico = (inner, size = 13) =>
+    `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px; flex-shrink:0;">${inner}</svg>`;
+  const ICO_EDIT_P  = '<path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/>';
+  const ICO_TRASH_P = '<polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/>';
+  const ICO_KEY_P   = '<path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/>';
+  const ICO_TAG_P   = '<path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/>';
+  const ICO_HASH_P  = '<line x1="4" y1="9" x2="20" y2="9"/><line x1="4" y1="15" x2="20" y2="15"/><line x1="10" y1="3" x2="8" y2="21"/><line x1="16" y1="3" x2="14" y2="21"/>';
+  const ICO_PIN_P   = '<path d="M12 21s7-6.5 7-11a7 7 0 1 0-14 0c0 4.5 7 11 7 11z"/><circle cx="12" cy="10" r="2.5"/>';
+  const ICO_WRENCH_P = '<path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/>';
+  const ICO_PHONE_P = '<rect x="5" y="2" width="14" height="20" rx="2" ry="2"/><line x1="12" y1="18" x2="12.01" y2="18"/>';
+  const ICO_WIFI_P  = '<path d="M5 12.55a11 11 0 0 1 14.08 0"/><path d="M1.42 9a16 16 0 0 1 21.16 0"/><path d="M8.53 16.11a6 6 0 0 1 6.95 0"/><line x1="12" y1="20" x2="12.01" y2="20"/>';
+  const ICO_HELP_P  = '<circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/>';
+  const ICO_CHECK_P = '<path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 17.01"/>';
+  const ICO_INFO_P  = '<circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/>';
+
+  /* ══════════════════════════════════════
      SUPABASE — cloud sync (เก็บเป็นตารางแยกจริง อ่านง่ายใน Table Editor)
      ตาราง: departments, lines, jigs, checkpoints, templates, history
      กลยุทธ์: "sync ทั้งก้อน" — เวลาบันทึก จะลบของเก่าทั้งหมดในตารางที่เกี่ยวข้อง
@@ -2790,7 +2811,7 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
           </div>
         </div>
         <div>
-          <button class="adm-item-edit btn-user-reset" title="รีเซ็ตรหัสผ่าน">🔑</button>
+          <button class="adm-item-edit btn-user-reset" title="รีเซ็ตรหัสผ่าน">${ico(ICO_KEY_P)}</button>
           <button class="adm-item-edit btn-user-toggle" title="${u.active ? 'ปิดใช้งาน' : 'เปิดใช้งาน'}">${u.active ? '⏸️' : '▶️'}</button>
         </div>
       </div>
@@ -2854,10 +2875,10 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
       const timeStr = dt.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' });
       // badge ประเภทเครือข่าย — mobile=ค่ายมือถือ, wifi=ไม่ใช่มือถือ (ถือว่า WiFi บริษัท), ไม่มีข้อมูล=ไม่ทราบ
       const netBadge = l.network_type === 'mobile'
-        ? '<span class="llg-net llg-net-mobile">📱 เน็ตมือถือ</span>'
+        ? `<span class="llg-net llg-net-mobile">${ico(ICO_PHONE_P)} เน็ตมือถือ</span>`
         : l.network_type === 'wifi'
-          ? '<span class="llg-net llg-net-wifi">📶 WiFi บริษัท</span>'
-          : '<span class="llg-net llg-net-unknown">❓ ไม่ทราบเครือข่าย</span>';
+          ? `<span class="llg-net llg-net-wifi">${ico(ICO_WIFI_P)} WiFi บริษัท</span>`
+          : `<span class="llg-net llg-net-unknown">${ico(ICO_HELP_P)} ไม่ทราบเครือข่าย</span>`;
       return `
         <div class="adm-login-log-item">
           <div class="llg-top">
@@ -2968,7 +2989,7 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
         <div class="adm-item-info">
           <span class="tpl-item-name">${escHtml(t.name)}</span><span class="tpl-item-count">${t.items.length} หัวข้อ</span>
         </div>
-        <button class="adm-item-del btn-del-tpl" data-tid="${escHtml(t.id)}">🗑</button>
+        <button class="adm-item-del btn-del-tpl" data-tid="${escHtml(t.id)}" title="ลบเทมเพลต">${ico(ICO_TRASH_P)}</button>
       </div>`).join('');
 
     document.querySelectorAll('.btn-del-tpl').forEach(btn => {
@@ -3002,7 +3023,7 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
       <div class="adm-item" style="padding:6px; margin-bottom:4px">
         <div class="adm-item-info">
           <div style="font-size:12px"><strong>${i + 1}.</strong> ${escHtml(p.label)} <span style="font-size:10px; color:var(--text-muted)">(X:${p.x}, Y:${p.y})</span>
-            ${p.type === 'numeric' ? `<span class="cp-numeric-badge">🔢 ${p.min}-${p.max}${p.unit ? ' ' + escHtml(p.unit) : ''}</span>` : ''}
+            ${p.type === 'numeric' ? `<span class="cp-numeric-badge">${ico(ICO_HASH_P)} ${p.min}-${p.max}${p.unit ? ' ' + escHtml(p.unit) : ''}</span>` : ''}
           </div>
         </div>
         <div style="display:flex; gap:2px; align-items:center;">
@@ -3010,9 +3031,9 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
             <button class="adm-item-order btn-cp-up" data-jid="${escHtml(jid)}" data-idx="${i}" title="เลื่อนขึ้น" ${i === 0 ? 'disabled' : ''}>▲</button>
             <button class="adm-item-order btn-cp-down" data-jid="${escHtml(jid)}" data-idx="${i}" title="เลื่อนลง" ${i === pts.length - 1 ? 'disabled' : ''}>▼</button>
           </div>
-          <button class="adm-item-cfg btn-edit-cp" data-jid="${escHtml(jid)}" data-idx="${i}" title="แก้ไขหัวข้อ">✏️</button>
-          <button class="adm-item-cfg btn-cfg-numeric" data-jid="${escHtml(jid)}" data-idx="${i}" title="${p.type === 'numeric' ? 'เปลี่ยนกลับเป็น Pass/Fail' : 'ตั้งเป็นหัวข้อกรอกค่าตัวเลข'}">🔢</button>
-          <button class="adm-item-del btn-del-cp" data-jid="${escHtml(jid)}" data-idx="${i}">🗑</button>
+          <button class="adm-item-cfg btn-edit-cp" data-jid="${escHtml(jid)}" data-idx="${i}" title="แก้ไขหัวข้อ">${ico(ICO_EDIT_P)}</button>
+          <button class="adm-item-cfg btn-cfg-numeric" data-jid="${escHtml(jid)}" data-idx="${i}" title="${p.type === 'numeric' ? 'เปลี่ยนกลับเป็น Pass/Fail' : 'ตั้งเป็นหัวข้อกรอกค่าตัวเลข'}">${ico(ICO_HASH_P)}</button>
+          <button class="adm-item-del btn-del-cp" data-jid="${escHtml(jid)}" data-idx="${i}" title="ลบ">${ico(ICO_TRASH_P)}</button>
         </div>
       </div>`).join('') : '<div style="font-size:11px;color:var(--text-muted)">ยังไม่มีจุดตรวจ ใช้ค่าเริ่มต้น (10 จุด)</div>';
 
@@ -3136,9 +3157,9 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
     if (!jig) return;
     const hasImg = !!jig.bgImage;
     $('btn-cp-bg-remove').classList.toggle('hidden', !hasImg);
-    $('cp-bg-status').textContent = hasImg
-      ? '✅ มีรูปพื้นหลังกำหนดเองแล้ว — ใช้แสดงในหน้าตรวจสอบของ JIG นี้'
-      : 'ℹ️ ยังไม่มีรูปพื้นหลัง — ใช้แผนผังเริ่มต้น';
+    $('cp-bg-status').innerHTML = hasImg
+      ? `${ico(ICO_CHECK_P)} มีรูปพื้นหลังกำหนดเองแล้ว — ใช้แสดงในหน้าตรวจสอบของ JIG นี้`
+      : `${ico(ICO_INFO_P)} ยังไม่มีรูปพื้นหลัง — ใช้แผนผังเริ่มต้น`;
   }
 
   /* ── วาดแผนผังลากจุดใน Admin Panel ── */
@@ -3235,8 +3256,8 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
               <div>${escHtml(d.name)}</div>
               <div class="adm-item-code">${escHtml(d.id)}</div>
             </div>
-            <button class="adm-item-edit" data-etype="dept" data-id="${escHtml(d.id)}">✏️</button>
-            <button class="adm-item-del" data-dtype="dept" data-id="${escHtml(d.id)}">🗑</button>
+            <button class="adm-item-edit" data-etype="dept" data-id="${escHtml(d.id)}" title="แก้ไข">${ico(ICO_EDIT_P)}</button>
+            <button class="adm-item-del" data-dtype="dept" data-id="${escHtml(d.id)}" title="ลบ">${ico(ICO_TRASH_P)}</button>
           </div>`).join('')
       : '<div class="adm-item" style="color:var(--text-muted);font-style:italic">ยังไม่มีแผนก</div>';
 
@@ -3249,8 +3270,8 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
               <div>${escHtml(l.name)}</div>
               <div class="adm-item-code">${escHtml(l.id)} · ${escHtml(dept ? dept.name : l.deptId)}</div>
             </div>
-            <button class="adm-item-edit" data-etype="line" data-id="${escHtml(l.id)}">✏️</button>
-            <button class="adm-item-del" data-dtype="line" data-id="${escHtml(l.id)}">🗑</button>
+            <button class="adm-item-edit" data-etype="line" data-id="${escHtml(l.id)}" title="แก้ไข">${ico(ICO_EDIT_P)}</button>
+            <button class="adm-item-del" data-dtype="line" data-id="${escHtml(l.id)}" title="ลบ">${ico(ICO_TRASH_P)}</button>
           </div>`;}).join('')
       : '<div class="adm-item" style="color:var(--text-muted);font-style:italic">ยังไม่มี Line</div>';
 
@@ -3268,7 +3289,7 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
         const line = catalog.lines.find(l => l.id === j.lineId);
         const groupKey = j.lineId || '__none__';
         if (groupKey !== lastLineId) {
-          html += `<div class="adm-group-header" data-group="${escHtml(groupKey)}">📍 ${escHtml(line ? line.name : 'ไม่ระบุ Line')}</div>`;
+          html += `<div class="adm-group-header" data-group="${escHtml(groupKey)}">${ico(ICO_PIN_P)} ${escHtml(line ? line.name : 'ไม่ระบุ Line')}</div>`;
           lastLineId = groupKey;
         }
         const searchText = `${j.name} ${j.id} ${j.docNo || ''} ${line ? line.name : ''}`.toLowerCase();
@@ -3278,13 +3299,13 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
               ? `<img src="${escHtml(j.bgImage)}" alt="${escHtml(j.name)}">`
               : `<svg class="adm-item-thumb-empty" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>`}</div>
             <div class="adm-item-info">
-              <div>🔧 ${escHtml(j.name)}</div>
+              <div>${ico(ICO_WRENCH_P)} ${escHtml(j.name)}</div>
               <div class="adm-item-code">${escHtml(j.id)}${j.docNo ? ' · ' + escHtml(j.docNo) : ''} · ${escHtml(line ? line.name : j.lineId)}</div>
             </div>
           </div>
-          <button class="adm-item-runno" data-dtype="jig" data-id="${escHtml(j.id)}" title="แก้ไข Run No. อย่างเดียว (ไม่ต้องผ่านรหัส/ชื่อ)">🏷️</button>
-          <button class="adm-item-edit" data-etype="jig" data-id="${escHtml(j.id)}">✏️</button>
-          <button class="adm-item-del" data-dtype="jig" data-id="${escHtml(j.id)}">🗑</button>
+          <button class="adm-item-runno" data-dtype="jig" data-id="${escHtml(j.id)}" title="แก้ไข Run No. อย่างเดียว (ไม่ต้องผ่านรหัส/ชื่อ)">${ico(ICO_TAG_P)}</button>
+          <button class="adm-item-edit" data-etype="jig" data-id="${escHtml(j.id)}" title="แก้ไข">${ico(ICO_EDIT_P)}</button>
+          <button class="adm-item-del" data-dtype="jig" data-id="${escHtml(j.id)}" title="ลบ">${ico(ICO_TRASH_P)}</button>
         </div>`;
       });
       $('adm-jig-list').innerHTML = html;
