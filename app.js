@@ -370,9 +370,10 @@
 
   /* 🆕 ดึง "จำนวนบันทึกทั้งหมดในระบบ" แบบเป๊ะๆ ตรงจาก Supabase (count query — ไม่ต้องโหลดข้อมูลจริงลงมา)
      ไม่ผูกกับ filter ที่เลือกอยู่ในหน้าประวัติ เพื่อให้พี่บีมั่นใจได้ว่าเป็นตัวเลขจริงของทั้งระบบเสมอ
-     (ไม่ได้ถูกจำกัดไว้ที่ 100 รายการแต่อย่างใด — เก็บได้ไม่จำกัดตามพื้นที่ฐานข้อมูล) */
-  async function updateHistoryTotalCount() {
-    const el = $('hist-total-count');
+     (ไม่ได้ถูกจำกัดไว้ที่ 100 รายการแต่อย่างใด — เก็บได้ไม่จำกัดตามพื้นที่ฐานข้อมูล)
+     รับ elementId ได้ เพราะมีจุดที่ต้องโชว์มากกว่า 1 ที่ (หน้าประวัติ + หัว Admin Panel ตอน login) */
+  async function updateHistoryTotalCount(elementId = 'hist-total-count') {
+    const el = $(elementId);
     if (!el) return;
     if (!sb) { el.textContent = ''; return; }
     try {
@@ -2328,6 +2329,7 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
       if (admLoggedIn) {
         openPanel('admin-panel');
         if (_adminSessionPass) { renderStaffAccountList(); renderLoginLogList(); }
+        updateHistoryTotalCount('adm-history-total-count');
       }
       else {
         $('admin-login-modal').classList.remove('hidden');
@@ -2356,6 +2358,7 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
           _adminSessionPass = pass; // เก็บไว้ใน memory ใช้แนบ RPC (โหมด local ไม่มี RPC จริงอยู่แล้ว แต่ตั้งไว้ให้ครบ flow)
           $('admin-login-modal').classList.add('hidden');
           openPanel('admin-panel');
+          updateHistoryTotalCount('adm-history-total-count');
           toast('เข้าสู่ระบบสำเร็จ (local mode)', 'ok');
         } else {
           toast('รหัสผ่านไม่ถูกต้อง', 'ng');
@@ -2388,6 +2391,7 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
           localStorage.setItem('jig_admin_user', username);
           $('admin-login-modal').classList.add('hidden');
           openPanel('admin-panel');
+          updateHistoryTotalCount('adm-history-total-count');
           toast(`เข้าสู่ระบบสำเร็จ (${username})`, 'ok');
         } else {
           toast('ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง', 'ng');
