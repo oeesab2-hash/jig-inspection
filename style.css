@@ -1047,17 +1047,6 @@ h1, h2, h3, h4, label, button, input, select, textarea, p, span, div {
   font-size: 11px; font-weight: 500; color: var(--text-muted);
   font-family: var(--font-en); margin-left: 4px;
 }
-/* 🆕 Badge จำนวนบันทึกทั้งหมดในระบบ — โชว์ที่หัว Admin Panel ตอน login เข้ามา
-   ดีไซน์แบบ pill สากล (ตัวเลขใหญ่เด่น + label ตัวพิมพ์เล็กสีอ่อนกำกับไว้) คล้าย metric badge ของแดชบอร์ดทั่วไป */
-.total-record-badge {
-  display: inline-flex; align-items: center; gap: 6px;
-  padding: 5px 12px; border-radius: 20px;
-  background: var(--accent-dim); color: var(--accent);
-  border: 1px solid var(--chip-active-bdr);
-  font-family: var(--font-en);
-}
-.total-record-badge-n { font-size: 13px; font-weight: 700; letter-spacing: 0.2px; }
-.total-record-badge-l { font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.4px; opacity: 0.75; }
 .panel-head-actions { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
 .btn-close-panel {
   width: 32px; height: 32px; border-radius: 8px;
