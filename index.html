@@ -620,6 +620,33 @@
     </div>
 
     <div class="admin-section">
+      <div class="admin-section-title"><svg class="inline-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg> ตราสัญลักษณ์ / ชื่อบริษัท (Company Branding)</div>
+      <div style="font-size:11px; color:var(--text-muted); margin-bottom:8px;">
+        ใช้แสดงในหัวกระดาษ PDF และหน้าควบคุมเอกสาร — <strong>เว้นว่างไว้ = ใช้ค่าเริ่มต้นของระบบ (Summit Auto Body)</strong>
+      </div>
+      <div class="admin-input-row" style="flex-direction:column; align-items:stretch;">
+        <input type="text" id="adm-company-th" placeholder="ชื่อบริษัท (ภาษาไทย)">
+        <input type="text" id="adm-company-en" placeholder="Company Name (English)">
+        <div style="display:flex; gap:8px; align-items:center;">
+          <img id="adm-company-logo-preview" class="adm-company-logo-preview" alt="โลโก้บริษัท" style="display:none;">
+          <input type="file" id="adm-company-logo-file" accept="image/png,image/jpeg,image/svg+xml" style="flex:1; font-size:11px;">
+          <button type="button" class="btn-sec" id="btn-clear-company-logo">ล้างโลโก้</button>
+        </div>
+        <button class="btn-adm-add" id="btn-save-company-branding">บันทึกชื่อ/โลโก้</button>
+      </div>
+      <div style="font-size:10px; color:var(--text-muted); margin:6px 0 4px;">ไฟล์โลโก้ไม่เกิน 1MB — แนะนำ PNG พื้นหลังโปร่งใส</div>
+
+      <div style="margin-top:14px; padding-top:10px; border-top:1px dashed var(--border-input);">
+        <div class="admin-section-title" style="font-size:12px; margin-bottom:6px;">รายชื่อนิติบุคคล (ใช้ในหน้าควบคุมเอกสาร)</div>
+        <div id="adm-companies-list" style="margin-bottom:6px;"></div>
+        <div class="admin-input-row">
+          <input type="text" id="adm-company-new-name" placeholder="เพิ่มชื่อนิติบุคคล...">
+          <button class="btn-adm-add" id="btn-add-company">เพิ่ม</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="admin-section">
       <div class="admin-section-title"><svg class="inline-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg> ตั้งค่าเอกสารกลาง (ตามระบบ ISO)</div>
       <div style="font-size:11px; color:var(--text-muted); margin-bottom:8px;">
         <svg class="inline-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg> Doc No. คือเลขคุมเอกสารแบบฟอร์มตรวจ JIG — <strong>มีค่าเดียวทั้งบริษัท</strong> ไม่ผูกกับ JIG ตัวไหน ควรเปลี่ยนเมื่อฝ่าย ISO อนุมัติ Document Change เท่านั้น

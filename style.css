@@ -1088,6 +1088,21 @@ h1, h2, h3, h4, label, button, input, select, textarea, p, span, div {
   background: var(--bg-input); color: var(--text-main);
   font-family: var(--font-thai); outline: none;
 }
+/* 🆕 ปุ่มลบเล็กๆ ในรายการนิติบุคคล (Company Branding) */
+.btn-icon-sm {
+  width: 22px; height: 22px; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  border: 1px solid var(--border-input); border-radius: 6px;
+  background: var(--bg-input); color: var(--ng);
+  font-size: 12px; cursor: pointer; line-height: 1;
+  transition: background 0.15s;
+}
+.btn-icon-sm:hover { background: var(--ng-bg); }
+.adm-company-logo-preview {
+  width: 48px; height: 48px; object-fit: contain;
+  border: 1px solid var(--border-input); border-radius: 8px;
+  background: var(--bg-input); padding: 4px;
+}
 .admin-input-row input:focus, .admin-input-row .adm-sel:focus {
   border-color: var(--accent);
 }

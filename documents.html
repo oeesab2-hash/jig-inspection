@@ -322,12 +322,24 @@
   const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im90eXRwemltdXlhcWFndnh2ZXhmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ1MTMyMDEsImV4cCI6MjEwMDA4OTIwMX0.QQVIcDkIByAgyFTHrF7AmcZ-l-HfvLnbU8jh3Vnwyjw';
   const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-  const COMPANIES = [
+  let COMPANIES = [
     'บริษัท ซัมมิท โอโต บอดี้ อินดัสตรี จำกัด',
     'บริษัท ซัมมิท โอโต บอดี้ อินดัสตรี จำกัด (สาขาอยุธยา)',
     'บริษัท ซัมมิท แหลมฉบัง โอโต บอดี้ เวิร์ค จำกัด',
     'บริษัท ซัมมิท แหลมฉบัง โอโต บอดี้ เวิร์ค จำกัด (สาขาระยอง)',
-  ];
+  ]; // 🆕 ค่าเริ่มต้น (Summit) — ถ้า Admin Panel ตั้งรายชื่อนิติบุคคลเองไว้ใน app_settings จะถูกแทนที่ตอน loadCompaniesFromSettings()
+
+  // 🆕 ดึงรายชื่อนิติบุคคลจาก app_settings (ตั้งค่าได้ที่ Admin Panel > ตราสัญลักษณ์/ชื่อบริษัท) — ถ้ายังไม่เคยตั้งค่า ใช้ค่าเริ่มต้น Summit ด้านบนต่อไป
+  async function loadCompaniesFromSettings() {
+    try {
+      const { data, error } = await sb.from('app_settings').select('key, value').eq('key', 'companies_json').maybeSingle();
+      if (error) throw error; // ตาราง/คอลัมน์ยังไม่มี หรือยังไม่เคยตั้งค่า — ใช้ค่าเริ่มต้นต่อไป
+      if (data && data.value) {
+        const arr = JSON.parse(data.value);
+        if (Array.isArray(arr) && arr.length) COMPANIES = arr;
+      }
+    } catch (e) { /* เงียบไว้ — ใช้ค่าเริ่มต้น Summit ต่อไปถ้าดึงไม่ได้ */ }
+  }
 
   // ✅ จำ PIN ไว้ชั่วคราวระหว่างเปิดหน้านี้ — ไม่ต้องพิมพ์ซ้ำทุกครั้ง (แยกจาก PIN ของระบบ JIG)
   let _rememberedPin = null;
@@ -1183,7 +1195,7 @@
 
   function unlockDocsApp() {
     loginOverlay.classList.add('hidden');
-    loadAll();
+    loadCompaniesFromSettings().then(loadAll); // 🆕 ดึงรายชื่อนิติบุคคลก่อน แล้วค่อยโหลด/render เอกสาร
   }
 
   async function attemptDocsLogin() {
