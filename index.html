@@ -39,7 +39,7 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <!-- ⚠️ CACHE-BUST: เบราว์เซอร์/PWA มัก cache ไฟล์ .css ค้างไว้นานผิดปกติ (เหมือน app.js ด้านล่าง)
        เพิ่ม ?v= ให้บังคับโหลดไฟล์ใหม่ทุกครั้งที่แก้ style.css — ให้เปลี่ยนเลขนี้ทุกครั้งที่แก้ style.css -->
-  <link rel="stylesheet" href="style.css?v=20260901">
+  <link rel="stylesheet" href="style.css?v=20260902">
 </head>
 <body>
 
@@ -940,7 +940,7 @@
 <!-- 🆕 ใส่เลขเวอร์ชันต่อท้าย ?v=... เพื่อบังคับให้เบราว์เซอร์ (โดยเฉพาะ Safari บน iPhone ซึ่งแคชไฟล์ .js
      ค้างนานผิดปกติ) โหลด app.js ก้อนใหม่ทุกครั้งที่มีการอัปเดตโค้ด — ให้เปลี่ยนเลขนี้ทุกครั้งที่แก้ app.js
      แล้ว push ขึ้นใหม่ ไม่งั้นเครื่องที่เคยเข้าเว็บมาก่อนจะยังใช้ไฟล์เก่าจากแคชอยู่ -->
-<script src="app.js?v=20260901"></script>
+<script src="app.js?v=20260902"></script>
 <script>
 (function () {
   var collapseBtn = document.getElementById('sidebar-collapse-toggle');
@@ -1031,6 +1031,21 @@
     <div class="recheck-confirm-actions">
       <button id="btn-recheck-cancel" class="btn-modal-cancel">ยกเลิก</button>
       <button id="btn-recheck-confirm" class="btn-modal-confirm">ตรวจซ้ำ</button>
+    </div>
+  </div>
+</div>
+
+<!-- 🆕 GENERIC CONFIRM MODAL — แทนที่ confirm() ของเบราว์เซอร์ทุกจุดในแอป (Promise-based, ใช้ซ้ำได้ทุกที่ ผ่าน showConfirmModal())
+     ต่างจาก recheck-confirm-modal ด้านบน (เฉพาะกรณีตรวจซ้ำ JIG เท่านั้น) — อันนี้ทั่วไป ใช้ข้อความ/ปุ่ม/สีที่ปรับได้ตามแต่ละจุดที่เรียกใช้ -->
+<div id="generic-confirm-modal" class="modal-overlay hidden">
+  <div class="modal-box generic-confirm-box">
+    <div class="generic-confirm-icon" id="generic-confirm-icon">
+      <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+    </div>
+    <p class="generic-confirm-message" id="generic-confirm-message"></p>
+    <div class="generic-confirm-actions">
+      <button id="btn-generic-confirm-cancel" class="btn-modal-cancel">ยกเลิก</button>
+      <button id="btn-generic-confirm-ok" class="btn-modal-confirm">ยืนยัน</button>
     </div>
   </div>
 </div>

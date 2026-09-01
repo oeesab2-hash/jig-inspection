@@ -2057,7 +2057,7 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
           unit: cp.unit || null
         }))
       }));
-      if (!confirm(`นำเข้าข้อมูลนี้จะ "แทนที่" ข้อมูลปัจจุบันทั้งหมด\n(${cat.jigs.length} JIG, ${hist.length} ประวัติ)\nแนะนำให้ Export สำรองไว้ก่อน — ต้องการดำเนินการต่อหรือไม่?`)) return;
+      if (!(await showConfirmModal(`นำเข้าข้อมูลนี้จะ "แทนที่" ข้อมูลปัจจุบันทั้งหมด\n(${cat.jigs.length} JIG, ${hist.length} ประวัติ)\nแนะนำให้ Export สำรองไว้ก่อน — ต้องการดำเนินการต่อหรือไม่?`, { confirmLabel: 'ดำเนินการต่อ', danger: true }))) return;
 
       if (!sb) { toast('ไม่ได้เชื่อมต่อ Supabase', 'ng'); return; }
       toast('กำลังนำเข้าข้อมูลขึ้น Supabase...', 'ok');
@@ -2307,8 +2307,8 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
       });
     }
 
-    $('btn-app-logout').addEventListener('click', () => {
-      if (!confirm('ต้องการออกจากระบบใช่หรือไม่?')) return;
+    $('btn-app-logout').addEventListener('click', async () => {
+      if (!(await showConfirmModal('ต้องการออกจากระบบใช่หรือไม่?', { confirmLabel: 'ออกจากระบบ' }))) return;
       sessionStorage.removeItem('jig_app_user');
       location.reload();
     });
@@ -2444,8 +2444,8 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
 
     // ── Logout — อยู่ใน Admin Panel เพราะผูกกับ session ของ Admin โดยตรง
     // เคลียร์ทั้ง memory (_adminSessionPass), state (admLoggedIn) และ localStorage
-    $('btn-admin-logout').addEventListener('click', () => {
-      if (!confirm('ต้องการออกจากระบบ Admin ใช่หรือไม่?')) return;
+    $('btn-admin-logout').addEventListener('click', async () => {
+      if (!(await showConfirmModal('ต้องการออกจากระบบ Admin ใช่หรือไม่?', { confirmLabel: 'ออกจากระบบ' }))) return;
       admLoggedIn = false;
       _adminSessionPass = null;
       localStorage.removeItem('jig_admin_user');
@@ -2697,8 +2697,8 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
     // 🆕 PDF Auto-Save Folder
     if ($('btn-autosave-choose')) $('btn-autosave-choose').addEventListener('click', chooseAutoSaveFolder);
     if ($('btn-autosave-confirm')) $('btn-autosave-confirm').addEventListener('click', reconfirmAutoSavePermission);
-    if ($('btn-autosave-clear')) $('btn-autosave-clear').addEventListener('click', () => {
-      if (confirm('ยกเลิกการตั้งค่าโฟลเดอร์บันทึก PDF อัตโนมัติหรือไม่? (PDF จะกลับไปดาวน์โหลดแบบปกติ)')) clearAutoSaveFolder();
+    if ($('btn-autosave-clear')) $('btn-autosave-clear').addEventListener('click', async () => {
+      if (await showConfirmModal('ยกเลิกการตั้งค่าโฟลเดอร์บันทึก PDF อัตโนมัติหรือไม่? (PDF จะกลับไปดาวน์โหลดแบบปกติ)')) clearAutoSaveFolder();
     });
     // 🆕 JIG Document-Control Modal — ปิด/บันทึก
     $('btn-jig-doc-modal-close').addEventListener('click', closeJigDocModal);
@@ -3025,10 +3025,10 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
       </div>`).join('');
 
     document.querySelectorAll('.btn-del-tpl').forEach(btn => {
-      btn.addEventListener('click', () => {
+      btn.addEventListener('click', async () => {
         const t = catalog.templates.find(x => x.id === btn.dataset.tid);
         if (!t) return;
-        if (!confirm(`ลบเทมเพลต "${t.name}" หรือไม่? (ไม่กระทบหัวข้อที่นำเข้าไปยัง JIG ต่างๆ แล้ว)`)) return;
+        if (!(await showConfirmModal(`ลบเทมเพลต "${t.name}" หรือไม่? (ไม่กระทบหัวข้อที่นำเข้าไปยัง JIG ต่างๆ แล้ว)`, { confirmLabel: 'ลบเทมเพลต', danger: true }))) return;
         catalog.templates = catalog.templates.filter(x => x.id !== t.id);
         saveCatalog();
         if (sb) { // ✅ SECURITY: ผ่าน RPC 'delete_template' (เช็ค password admin) แทนการลบตรง
@@ -3152,13 +3152,13 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
 
   /* ── ตั้งค่าหัวข้อตรวจให้เป็นแบบ "กรอกค่าตัวเลข" พร้อมช่วงที่ยอมรับได้ (min-max)
      แทนการกดปุ่ม ✔/✖/🔧 ปกติ — ใช้กับหัวข้อวัดค่า เช่น แรงดันลม, แรงบิด, ระยะห่าง ── */
-  function configureNumericCheckpoint(jid, idx) {
+  async function configureNumericCheckpoint(jid, idx) {
     const jig = catalog.jigs.find(j => j.id === jid);
     const p = jig.checkpoints[idx];
     if (!p) return;
 
     if (p.type === 'numeric') {
-      if (!confirm(`เปลี่ยน "${p.label}" กลับเป็นแบบ ปกติ/ไม่ปกติ (Pass/Fail) แทนการกรอกตัวเลขหรือไม่?`)) return;
+      if (!(await showConfirmModal(`เปลี่ยน "${p.label}" กลับเป็นแบบ ปกติ/ไม่ปกติ (Pass/Fail) แทนการกรอกตัวเลขหรือไม่?`))) return;
       delete p.type; delete p.min; delete p.max; delete p.unit;
       saveCatalog();
       renderCpList(jid);
@@ -3578,7 +3578,7 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
   async function bulkDeleteSelected() {
     const ids = Array.from(_histSelected);
     if (!ids.length) return;
-    if (!confirm(`ลบ ${ids.length} รายการที่เลือกไว้? การลบนี้ย้อนกลับไม่ได้`)) return;
+    if (!(await showConfirmModal(`ลบ ${ids.length} รายการที่เลือกไว้? การลบนี้ย้อนกลับไม่ได้`, { confirmLabel: `ลบ ${ids.length} รายการ`, danger: true }))) return;
     let remaining = loadHistory();
     for (const id of ids) {
       await deleteHistoryFromSupabase(id);
@@ -3697,8 +3697,8 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
       const rec = loadHistory().find(h => String(h.id) === b.dataset.pdf);
       if (rec) generatePdf(rec);
     }));
-    list.querySelectorAll('[data-del]').forEach(b => b.addEventListener('click', () => {
-      if (!confirm('ลบรายการนี้?')) return;
+    list.querySelectorAll('[data-del]').forEach(b => b.addEventListener('click', async () => {
+      if (!(await showConfirmModal('ลบรายการนี้?', { confirmLabel: 'ลบ', danger: true }))) return;
       const delId = b.dataset.del;
       const remaining = loadHistory().filter(h => String(h.id) !== delId);
       localStorage.setItem(SK.history, JSON.stringify(remaining)); // อัปเดต local ทันที
@@ -4334,8 +4334,8 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
   ══════════════════════════════════════ */
   function bindActionButtons() {
     $('btn-submit').addEventListener('click', submitReport);
-    $('btn-reset').addEventListener('click', () => {
-      if (!confirm('ล้างผลการตรวจและเริ่มใหม่?')) return;
+    $('btn-reset').addEventListener('click', async () => {
+      if (!(await showConfirmModal('ล้างผลการตรวจและเริ่มใหม่?', { confirmLabel: 'เริ่มใหม่' }))) return;
       initCheckState();
       renderChecklist();
       updateStats();
@@ -4543,6 +4543,7 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
     bindTabNav();
     bindDashboard();
     bindRecheckConfirmModal();       // 🆕 modal ยืนยันก่อนตรวจซ้ำ JIG ที่ตรวจแล้ววันนี้
+    bindGenericConfirmModal();       // 🆕 modal ยืนยันทั่วไป แทนที่ confirm() ของเบราว์เซอร์ทุกจุด
     initDashboardSorting();          // 🆕 เปิดใช้งานลากสลับตำแหน่งการ์ด Dashboard
     bindDashboardResetOrderButton(); // 🆕 ปุ่มรีเซ็ตลำดับกลับเป็นค่าเริ่มต้น
     bindLineSearch();
@@ -4817,8 +4818,8 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
   function bindDashboardResetOrderButton() {
     const btn = $('btn-dash-reset-order');
     if (!btn) return;
-    btn.addEventListener('click', () => {
-      if (confirm('รีเซ็ตลำดับการ์ด Dashboard กลับเป็นค่าเริ่มต้น?')) resetDashboardOrder();
+    btn.addEventListener('click', async () => {
+      if (await showConfirmModal('รีเซ็ตลำดับการ์ด Dashboard กลับเป็นค่าเริ่มต้น?', { confirmLabel: 'รีเซ็ต' })) resetDashboardOrder();
     });
   }
 
@@ -4878,6 +4879,38 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
       const jigId = _recheckConfirmJigId;
       hideRecheckConfirmModal();
       if (jigId) selectJig(jigId);
+    });
+  }
+
+  // 🆕 Generic Confirm Modal — แทนที่ confirm() ของเบราว์เซอร์ทุกจุดในแอป (Promise-based)
+  //    ใช้แบบ: if (!(await showConfirmModal('ข้อความ'))) return;
+  //    ปุ่ม "ยกเลิก" เป็นค่าเริ่มต้นที่ปลอดภัยเสมอ (ทั้งกดยกเลิก, กด ✕/พื้นหลัง, หรือกด Esc ล้วน resolve เป็น false)
+  let _genericConfirmResolve = null;
+  function showConfirmModal(message, opts = {}) {
+    return new Promise((resolve) => {
+      _genericConfirmResolve = resolve;
+      $('generic-confirm-message').textContent = message;
+      $('btn-generic-confirm-ok').textContent = opts.confirmLabel || 'ยืนยัน';
+      $('btn-generic-confirm-cancel').textContent = opts.cancelLabel || 'ยกเลิก';
+      // 🆕 โหมด danger (สีแดง) ใช้กับแอ็กชันที่ย้อนกลับไม่ได้ เช่น ลบข้อมูล
+      $('btn-generic-confirm-ok').classList.toggle('danger', !!opts.danger);
+      $('generic-confirm-icon').classList.toggle('danger', !!opts.danger);
+      $('generic-confirm-modal').classList.remove('hidden');
+      $('btn-generic-confirm-ok').focus();
+    });
+  }
+  function hideConfirmModal(result) {
+    $('generic-confirm-modal').classList.add('hidden');
+    if (_genericConfirmResolve) { _genericConfirmResolve(result); _genericConfirmResolve = null; }
+  }
+  function bindGenericConfirmModal() {
+    $('btn-generic-confirm-cancel').addEventListener('click', () => hideConfirmModal(false));
+    $('btn-generic-confirm-ok').addEventListener('click', () => hideConfirmModal(true));
+    $('generic-confirm-modal').addEventListener('click', (e) => {
+      if (e.target.id === 'generic-confirm-modal') hideConfirmModal(false); // แตะพื้นหลังนอกกล่อง = ยกเลิก
+    });
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && !$('generic-confirm-modal').classList.contains('hidden')) hideConfirmModal(false);
     });
   }
   // ── ดึงรายการ JIG ที่มาร์ค "ไม่ได้ผลิต" ของวันนี้ จาก Supabase ──

@@ -267,9 +267,53 @@
   .form-msg { font-size: 12px; margin-top: 8px; }
   .form-msg.err { color: var(--ng); }
   .form-msg.ok { color: var(--ok); }
+
+  /* 🆕 Generic Confirm Modal — แทนที่ confirm() ของเบราว์เซอร์ในหน้านี้ (Promise-based) */
+  .doc-confirm-overlay {
+    position: fixed; inset: 0; z-index: 1200;
+    background: rgba(15, 23, 42, 0.55);
+    display: flex; align-items: center; justify-content: center;
+    padding: 20px;
+  }
+  .doc-confirm-overlay.hidden { display: none; }
+  .doc-confirm-box {
+    background: #fff; border-radius: 16px; padding: 28px 24px 22px;
+    width: min(380px, 90vw); text-align: center;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.35);
+  }
+  .doc-confirm-icon {
+    width: 52px; height: 52px; margin: 0 auto 14px;
+    display: flex; align-items: center; justify-content: center;
+    border-radius: 50%; background: rgba(47,111,209,0.12); color: var(--accent);
+  }
+  .doc-confirm-message { font-size: 13.5px; color: var(--text); margin-bottom: 20px; line-height: 1.6; white-space: pre-line; }
+  .doc-confirm-actions { display: flex; gap: 10px; }
+  .doc-confirm-actions button {
+    flex: 1; padding: 10px 14px; border-radius: 10px;
+    font-size: 13.5px; font-weight: 600; font-family: inherit;
+    cursor: pointer; border: none;
+  }
+  .doc-confirm-cancel { background: #f1f5f9; color: var(--text); border: 1px solid var(--border) !important; }
+  .doc-confirm-cancel:hover { background: #e2e8f0; }
+  .doc-confirm-ok { background: var(--navy); color: #fff; }
+  .doc-confirm-ok:hover { filter: brightness(1.1); }
 </style>
 </head>
 <body>
+  <!-- 🆕 GENERIC CONFIRM MODAL — แทนที่ confirm() ของเบราว์เซอร์ในหน้านี้ (Promise-based ผ่าน showConfirmModal()) -->
+  <div id="doc-confirm-overlay" class="doc-confirm-overlay hidden">
+    <div class="doc-confirm-box">
+      <div class="doc-confirm-icon">
+        <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+      </div>
+      <p class="doc-confirm-message" id="doc-confirm-message"></p>
+      <div class="doc-confirm-actions">
+        <button id="btn-doc-confirm-cancel" class="doc-confirm-cancel">ยกเลิก</button>
+        <button id="btn-doc-confirm-ok" class="doc-confirm-ok">ยืนยัน</button>
+      </div>
+    </div>
+  </div>
+
   <!-- ─── LOGIN GATE ─── -->
   <div id="docs-login-overlay" class="docs-login-overlay">
     <div class="docs-login-box">
@@ -321,6 +365,28 @@
   const SUPABASE_URL = 'https://otytpzimuyaqagvxvexf.supabase.co';
   const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im90eXRwemltdXlhcWFndnh2ZXhmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ1MTMyMDEsImV4cCI6MjEwMDA4OTIwMX0.QQVIcDkIByAgyFTHrF7AmcZ-l-HfvLnbU8jh3Vnwyjw';
   const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+  // 🆕 Generic Confirm Modal — แทนที่ confirm() ของเบราว์เซอร์ในหน้านี้ (Promise-based)
+  //    ใช้แบบ: if (!(await showConfirmModal('ข้อความ'))) return;
+  let _docConfirmResolve = null;
+  function showConfirmModal(message, opts = {}) {
+    return new Promise((resolve) => {
+      _docConfirmResolve = resolve;
+      document.getElementById('doc-confirm-message').textContent = message;
+      document.getElementById('btn-doc-confirm-ok').textContent = opts.confirmLabel || 'ยืนยัน';
+      document.getElementById('btn-doc-confirm-cancel').textContent = opts.cancelLabel || 'ยกเลิก';
+      document.getElementById('doc-confirm-overlay').classList.remove('hidden');
+    });
+  }
+  function hideConfirmModal(result) {
+    document.getElementById('doc-confirm-overlay').classList.add('hidden');
+    if (_docConfirmResolve) { _docConfirmResolve(result); _docConfirmResolve = null; }
+  }
+  document.getElementById('btn-doc-confirm-cancel').addEventListener('click', () => hideConfirmModal(false));
+  document.getElementById('btn-doc-confirm-ok').addEventListener('click', () => hideConfirmModal(true));
+  document.getElementById('doc-confirm-overlay').addEventListener('click', (e) => {
+    if (e.target.id === 'doc-confirm-overlay') hideConfirmModal(false); // แตะพื้นหลังนอกกล่อง = ยกเลิก
+  });
 
   let COMPANIES = [
     'บริษัท ซัมมิท โอโต บอดี้ อินดัสตรี จำกัด',
@@ -1246,8 +1312,8 @@
   loginUserInp.addEventListener('keydown', e => { if (e.key === 'Enter') loginPassInp.focus(); });
 
   // ── Logout — เคลียร์ session ('docs_authed') แล้วโชว์หน้า login gate อีกครั้ง
-  document.getElementById('btn-docs-logout').addEventListener('click', () => {
-    if (!confirm('ต้องการออกจากระบบควบคุมเอกสารใช่หรือไม่?')) return;
+  document.getElementById('btn-docs-logout').addEventListener('click', async () => {
+    if (!(await showConfirmModal('ต้องการออกจากระบบควบคุมเอกสารใช่หรือไม่?', { confirmLabel: 'ออกจากระบบ' }))) return;
     sessionStorage.removeItem('docs_authed');
     loginUserInp.value = '';
     loginPassInp.value = '';

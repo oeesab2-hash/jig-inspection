@@ -1917,6 +1917,35 @@ h1, h2, h3, h4, label, button, input, select, textarea, p, span, div {
 }
 .btn-modal-confirm:hover { filter: brightness(1.08); }
 .btn-modal-cancel:active, .btn-modal-confirm:active { transform: translateY(1px); }
+/* 🆕 ปุ่มยืนยันสีแดง — ใช้ตอนแอ็กชันนั้นอันตราย/ย้อนกลับไม่ได้ (เช่น ลบ) เพื่อเน้นย้ำอีกชั้นนอกจาก wording */
+.btn-modal-confirm.danger {
+  background: linear-gradient(120deg, var(--ng), hsl(0, 65%, 45%));
+  box-shadow: 0 4px 14px hsla(0, 70%, 50%, 0.3);
+}
+
+/* ─────────────────────────────
+   🆕 Generic Confirm Modal — แทนที่ confirm() ของเบราว์เซอร์ทุกจุดในแอป (Promise-based, ใช้ซ้ำได้ทุกที่)
+───────────────────────────── */
+.generic-confirm-box {
+  width: min(380px, 90vw);
+  text-align: center;
+  padding: 28px 24px 22px;
+}
+.generic-confirm-icon {
+  width: 52px; height: 52px; margin: 0 auto 14px;
+  display: flex; align-items: center; justify-content: center;
+  border-radius: 50%;
+  background: var(--accent-bg, hsla(210, 90%, 55%, 0.12));
+  color: var(--accent);
+}
+.generic-confirm-icon.danger {
+  background: var(--ng-bg); color: var(--ng);
+}
+.generic-confirm-message {
+  font-size: 13.5px; color: var(--text-main); margin-bottom: 20px;
+  line-height: 1.6; white-space: pre-line; /* รองรับ \n ในข้อความเดิมที่เคยส่งให้ confirm() */
+}
+.generic-confirm-actions { display: flex; gap: 10px; }
 
 /* ─────────────────────────────
    Admin Login Modal — dedicated professional layout
