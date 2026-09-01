@@ -1171,8 +1171,15 @@
       const progressClass = totalJigs > 0 && checkedCount === totalJigs
         ? 'line-chip-count-full'
         : (checkedCount > 0 ? 'line-chip-count-partial' : '');
-      const countLabel = totalJigs > 0 ? `${checkedCount}/${totalJigs} JIG` : `${lineJigs.length} JIG`;
-      return `<button class="chip line-chip ${sel}" data-line="${escHtml(l.id)}" title="${escHtml(l.name)} — ตรวจแล้ว ${checkedCount}/${totalJigs} JIG วันนี้">
+      // 🆕 โชว์จำนวน JIG ทั้งหมดกำกับไว้เสมอเมื่อมีการมาร์ค "ไม่ได้ผลิตวันนี้" บาง JIG
+      // เพื่อไม่ให้ผู้ใช้ต้องคลิกเข้าไปดูถึงจะรู้ว่า Line นี้มี JIG ทั้งหมดกี่ตัวจริงๆ
+      const countLabel = totalJigs > 0
+        ? `${checkedCount}/${totalJigs} JIG${skippedCount > 0 ? ` (ทั้งหมด ${lineJigs.length})` : ''}`
+        : `${lineJigs.length} JIG`;
+      const tooltipDetail = skippedCount > 0
+        ? `ตรวจแล้ว ${checkedCount}/${totalJigs} JIG วันนี้ — ทั้งหมด ${lineJigs.length} JIG (ไม่ได้ผลิตวันนี้ ${skippedCount} JIG)`
+        : `ตรวจแล้ว ${checkedCount}/${totalJigs} JIG วันนี้`;
+      return `<button class="chip line-chip ${sel}" data-line="${escHtml(l.id)}" title="${escHtml(l.name)} — ${tooltipDetail}">
         <span class="line-chip-text">
           <span class="line-chip-name">${escHtml(l.name)}</span>
           ${codeHtml}
