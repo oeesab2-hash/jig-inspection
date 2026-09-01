@@ -1941,6 +1941,7 @@ h1, h2, h3, h4, label, button, input, select, textarea, p, span, div {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 10px;
+  align-items: start; /* 🆕 กันการ์ดที่เนื้อหาสั้นกว่า (เช่น กราฟแท่ง NG ตาม Line) ถูกยืดสูงตามการ์ดข้าง ๆ จนเหลือพื้นที่ว่างด้านล่าง — ให้แต่ละการ์ดสูงตามเนื้อหาจริงแทน */
 }
 .dash-block { min-width: 0; }
 .dash-block-wide { grid-column: span 2; }
