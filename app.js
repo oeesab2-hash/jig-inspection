@@ -13,6 +13,10 @@
   ══════════════════════════════════════ */
   const SK = {
     catalog:  'jig_catalog_v2',   // { depts, lines, jigs }
+    // 🆕 [ลด Egress] เก็บเวอร์ชันล่าสุดของ catalog ที่เคยดึงมา — ใช้เทียบกับเวอร์ชันบน Supabase
+    // (ผ่าน catalog_meta.version) ก่อนตัดสินใจว่าจะดึง 5 ตารางเต็ม (รวมรูป JIG หลาย MB) ซ้ำไหม
+    // ถ้าเวอร์ชันตรงกัน แปลว่าไม่มีใครแก้ catalog เลยตั้งแต่ครั้งก่อน ใช้ของแคชในเครื่องได้เลย
+    catalogVersion: 'jig_catalog_version_v1',
     history:  'jig_history_v2',   // array of report records
     settings: 'jig_app_settings_v1', // { docNo, revLevel } — ค่ากลางทั้งระบบ (cache ไว้ใช้ offline)
     pdfLocalLog: 'jig_pdf_local_log_v1', // 🆕 บันทึกว่า "เครื่องนี้" เคย export PDF ของประวัติ id ไหนไปแล้วบ้าง
@@ -191,10 +195,46 @@
     }
   }
 
+  // 🆕 [ลด Egress] เช็คเวอร์ชันล่าสุดของ catalog บน Supabase — คำขอเล็กมาก (ตัวเลขตัวเดียว)
+  // ไม่ใช่การดึงข้อมูลจริง จึงแทบไม่กิน Egress เลย ใช้เทียบกับที่แคชไว้ในเครื่องก่อนตัดสินใจ
+  // ว่าจะดึง 5 ตารางเต็ม (รวมรูป JIG หลาย MB) ซ้ำหรือไม่
+  async function getCatalogVersionRemote() {
+    if (!sb) return null;
+    try {
+      const { data, error } = await sb.from('catalog_meta').select('version').eq('id', 1).single();
+      if (error) throw error;
+      return data ? data.version : null;
+    } catch (e) {
+      // ตารางนี้อาจยังไม่ถูกสร้าง (ยังไม่ได้รัน SQL migration) หรือเน็ตมีปัญหา —
+      // คืนค่า null แล้วปล่อยให้ pullCatalogFromSupabase() fallback ไปดึงข้อมูลเต็มแบบเดิม (ปลอดภัยไว้ก่อน)
+      console.warn('getCatalogVersionRemote error (จะดึง catalog เต็มแทน):', e);
+      return null;
+    }
+  }
+
   // ── ดึง Catalog จาก Supabase กลับมาประกอบเป็น object เดิม ──
   async function pullCatalogFromSupabase() {
     if (!sb) return null;
     try {
+      // 🆕 [ลด Egress] เช็คเวอร์ชันก่อนเสมอ — ถ้าตรงกับที่แคชไว้ในเครื่อง แปลว่าไม่มีใครแก้ catalog
+      // เลยตั้งแต่ครั้งก่อน ใช้ของแคชในเครื่องได้ทันที ข้ามการดึง 5 ตารางเต็ม (รวมรูป JIG หลาย MB)
+      const remoteVersion = await getCatalogVersionRemote();
+      if (remoteVersion !== null) {
+        const cachedVersion = localStorage.getItem(SK.catalogVersion);
+        if (cachedVersion !== null && String(remoteVersion) === cachedVersion) {
+          try {
+            const cachedRaw = localStorage.getItem(SK.catalog);
+            if (cachedRaw) {
+              const cached = JSON.parse(cachedRaw);
+              if (cached && (cached.depts || cached.jigs)) {
+                dbgLog('catalog เวอร์ชันตรงกับที่แคชไว้ (v' + remoteVersion + ') — ใช้แคชในเครื่อง ข้ามการโหลด 5 ตารางเต็ม');
+                return cached;
+              }
+            }
+          } catch (e) { /* แคชในเครื่องอ่านไม่ได้/เสีย — ปล่อยผ่านไปดึงข้อมูลเต็มด้านล่างแทน */ }
+        }
+      }
+
       const [d, l, j, c, t] = await Promise.all([
         sb.from('departments').select('*'),
         sb.from('lines').select('*'),
@@ -237,7 +277,15 @@
       const templates = (t.data || []).map(row => ({ id: row.id, name: row.name, items: row.items || [] }));
 
       if (!depts.length && !jigs.length) return null; // ยังไม่เคย sync ขึ้นเลย — ใช้ข้อมูล local ต่อไป
-      return { depts, lines, jigs, templates };
+      const result = { depts, lines, jigs, templates };
+
+      // 🆕 [ลด Egress] จำเวอร์ชันที่เพิ่งดึงมาไว้ — ครั้งหน้าถ้าเวอร์ชันยังเท่าเดิม จะข้ามขั้นตอนนี้ได้เลย
+      if (remoteVersion !== null) {
+        try { localStorage.setItem(SK.catalogVersion, String(remoteVersion)); }
+        catch (e) { console.warn('บันทึกเวอร์ชัน catalog cache ไม่สำเร็จ (พื้นที่เก็บอาจเต็ม):', e); }
+      }
+
+      return result;
     } catch (e) {
       console.warn('pullCatalogFromSupabase error (ใช้ข้อมูล local แทน):', e);
       return null;
