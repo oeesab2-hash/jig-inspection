@@ -5849,7 +5849,7 @@ ${JSON.stringify(summary, null, 2)}
           </div>
         </div>
 
-        <div class="storage-note">${ICON_BULB} <span>คำนวณจากขนาดข้อมูลจริง (รวมรูปถ่าย base64) — แม่นยำกว่าประมาณการเดิมมาก แต่ยังไม่รวม overhead ของ index/database internals ของ Supabase ซึ่งจริงอาจสูงกว่านี้เล็กน้อย</span></div>
+        <div class="storage-note">${ICON_BULB} <span>คำนวณขนาดจริงฝั่งเซิร์ฟเวอร์ด้วย pg_total_relation_size() (รวม index แล้ว) — ไม่ได้ดาวน์โหลดข้อมูลแถวจริงมาที่เครื่องเลย จึงไม่กิน Egress</span></div>
 
         <div class="storage-timestamp">${ICON_CLOCK} อัปเดตล่าสุด ${stats.timestamp}</div>
 
