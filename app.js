@@ -349,44 +349,56 @@
   }
 
   // ── ดึง History จาก Supabase กลับมาเป็น array เดิม ──
-  async function pullHistoryFromSupabase() {
+  // 🆕 แปลง 1 แถวจาก Supabase (snake_case) เป็น object ที่แอปใช้ (camelCase) — ใช้ร่วมกันทั้งตอน pull เต็มและตอน merge จาก realtime event เดียว กันโค้ดสองที่ drift ไม่ตรงกัน
+  function mapHistoryRow(row) {
+    return {
+      id: row.id, timestamp: row.ts,
+      deptId: row.dept_id, deptName: row.dept_name,
+      lineId: row.line_id, lineName: row.line_name,
+      jigId: row.jig_id, jigName: row.jig_name, jigDocNo: row.jig_doc_no,
+      date: row.insp_date, shift: row.shift, month: row.month,
+      inspector: row.inspector, notes: row.notes, items: row.items || [],
+      sigInspector: row.sig_inspector, sigSupervisor: row.sig_supervisor,
+      approvalStatus: row.approval_status || 'pending',
+      approvedBy: row.approved_by || null,
+      approvedAt: row.approved_at || null,
+      supervisorComment: row.supervisor_comment || null,
+      managerApprovalStatus: row.manager_approval_status || 'pending',
+      managerApprovedBy: row.manager_approved_by || null,
+      managerApprovedAt: row.manager_approved_at || null,
+      managerComment: row.manager_comment || null,
+      gps: row.gps_latitude ? {
+        latitude: row.gps_latitude,
+        longitude: row.gps_longitude,
+        accuracy: row.gps_accuracy,
+        timestamp: row.gps_timestamp,
+        status: row.gps_status || 'unknown'
+      } : undefined,
+      protected: !!row.protected,
+    };
+  }
+
+  // 🆕 ดึงประวัติจาก Supabase — ใส่ sinceIso (ISO timestamp) เพื่อดึงเฉพาะรายการใหม่กว่านั้น (ลด Egress มาก)
+  // ไม่ใส่ = ดึงทั้งหมดเหมือนเดิม (ใช้ตอน export/โหลดเต็มแบบตั้งใจเท่านั้น — ดู pullHistoryFromSupabase() ที่เรียกแบบไม่มี argument)
+  async function pullHistoryFromSupabase(sinceIso) {
     if (!sb) return null;
     try {
-      const { data, error } = await sb.from('history').select('*').order('ts', { ascending: false });
+      let q = sb.from('history').select('*').order('ts', { ascending: false });
+      if (sinceIso) q = q.gte('ts', sinceIso);
+      const { data, error } = await q;
       if (error) throw error;
       if (!data || !data.length) return null;
-      return data.map(row => ({
-        id: row.id, timestamp: row.ts,
-        deptId: row.dept_id, deptName: row.dept_name,
-        lineId: row.line_id, lineName: row.line_name,
-        jigId: row.jig_id, jigName: row.jig_name, jigDocNo: row.jig_doc_no,
-        date: row.insp_date, shift: row.shift, month: row.month,
-        inspector: row.inspector, notes: row.notes, items: row.items || [],
-        sigInspector: row.sig_inspector, sigSupervisor: row.sig_supervisor,
-        // ─── Approval Workflow (Stage 1: หัวหน้างาน) ───
-        approvalStatus: row.approval_status || 'pending',
-        approvedBy: row.approved_by || null,
-        approvedAt: row.approved_at || null,
-        supervisorComment: row.supervisor_comment || null,
-        // ─── Approval Workflow (Stage 2: ผู้จัดการฝ่ายผลิต) ───
-        managerApprovalStatus: row.manager_approval_status || 'pending',
-        managerApprovedBy: row.manager_approved_by || null,
-        managerApprovedAt: row.manager_approved_at || null,
-        managerComment: row.manager_comment || null,
-        // ─── GPS Data ───
-        gps: row.gps_latitude ? {
-          latitude: row.gps_latitude,
-          longitude: row.gps_longitude,
-          accuracy: row.gps_accuracy,
-          timestamp: row.gps_timestamp,
-          status: row.gps_status || 'unknown'
-        } : undefined,
-        protected: !!row.protected, // 🆕
-      }));
+      return data.map(mapHistoryRow);
     } catch (e) {
       console.warn('pullHistoryFromSupabase error (ใช้ข้อมูล local แทน):', e);
       return null;
     }
+  }
+
+  // 🆕 จำนวนวันย้อนหลังที่โหลดเป็นประจำตอนเปิดแอป/realtime sync (ลด Egress) — ดูประวัติเก่ากว่านี้ได้ผ่านปุ่ม "โหลดประวัติทั้งหมด" ใน Admin
+  const RECENT_HISTORY_DAYS = 90;
+  function recentHistoryCutoffIso() {
+    return new Date(Date.now() - RECENT_HISTORY_DAYS * 86400000).toISOString();
   }
 
   /* 🆕 (ปิดใช้งานแล้ว — ป้าย "Records" นี้ซ้ำซ้อนกับ "History: N" ในแผงสถานะพื้นที่จัดเก็บ (storage-stats-panel)
@@ -395,7 +407,7 @@
   // ฟังการเปลี่ยนแปลง realtime จากเพื่อนร่วมทีมคนอื่น แล้วรีเฟรชหน้าจอให้อัตโนมัติ
   function subscribeRealtime() {
     if (!sb) return;
-    let catalogTimer, historyTimer;
+    let catalogTimer;
 
     async function refreshCatalog() {
       if (_syncing) return;
@@ -408,15 +420,27 @@
         toast('📥 Catalog อัปเดตจากทีม', 'ok');
       }
     }
-    async function refreshHistory() {
+    // 🆕 เปลี่ยนจาก "มีคนบันทึก 1 รายการ → ทุกเครื่องโหลดประวัติทั้งหมดใหม่" (กิน Egress มหาศาลเมื่อมีหลายเครื่องเปิดพร้อมกัน)
+    // เป็น "merge เฉพาะแถวที่เปลี่ยนจริงจาก payload ที่ Supabase ส่งมาให้เลย" — ไม่ต้องยิง request ไปดึงซ้ำอีกครั้งเลย
+    function handleHistoryRealtimeChange(payload) {
       if (_syncing) return;
-      const remote = await pullHistoryFromSupabase();
-      if (remote) {
-        localStorage.setItem(SK.history, JSON.stringify(remote));
-        if (typeof populateHistoryPanel === 'function') populateHistoryPanel();
-        if (typeof refreshDashboard === 'function') refreshDashboard();
-        toast('📥 มีข้อมูลตรวจสอบใหม่จากทีม', 'ok');
+      let hist = loadHistory();
+      if (payload.eventType === 'DELETE') {
+        const delId = payload.old && payload.old.id;
+        if (delId == null) return;
+        const before = hist.length;
+        hist = hist.filter(h => String(h.id) !== String(delId));
+        if (hist.length === before) return; // ไม่ได้อยู่ใน local cache อยู่แล้ว (เช่น เก่ากว่า 90 วัน) — ไม่ต้องทำอะไรต่อ
+      } else {
+        if (!payload.new) return;
+        const mapped = mapHistoryRow(payload.new);
+        const idx = hist.findIndex(h => String(h.id) === String(mapped.id));
+        if (idx >= 0) hist[idx] = mapped; else hist.unshift(mapped);
       }
+      localStorage.setItem(SK.history, JSON.stringify(hist));
+      if (typeof populateHistoryPanel === 'function') populateHistoryPanel();
+      if (typeof refreshDashboard === 'function') refreshDashboard();
+      toast('📥 มีข้อมูลตรวจสอบใหม่จากทีม', 'ok');
     }
 
     const ch = sb.channel('db_changes');
@@ -426,9 +450,8 @@
         catalogTimer = setTimeout(refreshCatalog, 700);
       });
     });
-    ch.on('postgres_changes', { event: '*', schema: 'public', table: 'history' }, () => {
-      clearTimeout(historyTimer);
-      historyTimer = setTimeout(refreshHistory, 700);
+    ch.on('postgres_changes', { event: '*', schema: 'public', table: 'history' }, (payload) => {
+      handleHistoryRealtimeChange(payload);
     });
     let jigSkipsTimer = null;
     ch.on('postgres_changes', { event: '*', schema: 'public', table: 'jig_skips' }, () => {
@@ -1056,7 +1079,7 @@
     dbgLog('เริ่มดึง catalog + history จาก Supabase (sb=' + (sb ? 'พร้อมใช้งาน' : '❌ NULL — client สร้างไม่สำเร็จ!') + ')');
     const [remoteCat, remoteHist] = await Promise.all([
       withTimeout(pullCatalogFromSupabase().then(r => { dbgLog('pullCatalogFromSupabase() เสร็จแล้ว', r ? `${(r.depts||[]).length} depts` : 'null'); return r; }), 10000, 'TIMEOUT'),
-      withTimeout(pullHistoryFromSupabase().then(r => { dbgLog('pullHistoryFromSupabase() เสร็จแล้ว', r ? `${r.length} รายการ` : 'null'); return r; }), 10000, 'TIMEOUT'),
+      withTimeout(pullHistoryFromSupabase(recentHistoryCutoffIso()).then(r => { dbgLog('pullHistoryFromSupabase() เสร็จแล้ว', r ? `${r.length} รายการ (${RECENT_HISTORY_DAYS} วันล่าสุด — ลด Egress)` : 'null'); return r; }), 10000, 'TIMEOUT'),
     ]);
     dbgLog('Promise.all ของ catalog+history เสร็จแล้ว', `catTimedOut=${remoteCat === 'TIMEOUT'}, histTimedOut=${remoteHist === 'TIMEOUT'}`);
     const catTimedOut  = remoteCat === 'TIMEOUT';
@@ -3424,6 +3447,8 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
   // 🆕 เก็บ id ของรายการที่ติ๊กเลือกไว้ (เฉพาะระหว่างเปิด panel — ไม่ persist)
   let _histSelected = new Set();
 
+  let _fullHistoryLoaded = false; // 🆕 true เมื่อ Admin กด "โหลดประวัติทั้งหมด" แล้วในเซสชันนี้ — กันกดซ้ำโหลดเปลืองอีก
+
   function bindHistoryPanel() {
     $('tab-history').addEventListener('click', () => { _histSelected.clear(); openPanel('history-panel'); populateHistoryPanel(); });
     $('btn-close-hist').addEventListener('click', () => { _histSelected.clear(); closePanel('history-panel'); });
@@ -3441,6 +3466,25 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
       if (!hist.length) { toast('ไม่มีประวัติให้ส่งออก', 'ng'); return; }
       generatePdf(hist[0]);
     });
+    // 🆕 โหลดประวัติทั้งหมดจาก Supabase (ปกติโหลดแค่ ~90 วันล่าสุดเพื่อลด Egress) — ให้ Admin กดเองตอนจะดู/กรองข้อมูลเก่ากว่านั้น
+    if ($('btn-load-full-history')) {
+      $('btn-load-full-history').addEventListener('click', async () => {
+        if (!sb) { toast('ยังไม่ได้เชื่อมต่อ Supabase', 'ng'); return; }
+        const btn = $('btn-load-full-history');
+        btn.disabled = true; btn.textContent = 'กำลังโหลด...';
+        const remote = await pullHistoryFromSupabase(); // ไม่ใส่วันที่ = เต็มทั้งหมด
+        btn.disabled = false; btn.textContent = 'โหลดประวัติทั้งหมดจาก Supabase';
+        if (remote) {
+          localStorage.setItem(SK.history, JSON.stringify(remote));
+          _fullHistoryLoaded = true;
+          toast(`โหลดประวัติทั้งหมดแล้ว (${remote.length} รายการ)`, 'ok');
+          populateHistoryPanel();
+          if (typeof refreshDashboard === 'function') refreshDashboard(); // 🆕 อัปเดต Dashboard ให้เห็นข้อมูลเก่าด้วยถ้าเปิดค้างไว้
+        } else {
+          toast('โหลดไม่สำเร็จ ลองใหม่อีกครั้ง', 'ng');
+        }
+      });
+    }
 
     // ── เลือกทั้งหมด (เฉพาะรายการที่กำลังแสดงตาม filter ปัจจุบัน) ──
     $('hf-select-all').addEventListener('change', (e) => {
@@ -3617,6 +3661,10 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
   }
 
   function populateHistoryPanel() {
+    // 🆕 โชว์แถบ "โหลดประวัติทั้งหมด" เฉพาะ Admin และเฉพาะตอนยังไม่เคยกดโหลดเต็มในเซสชันนี้
+    const loadFullRow = $('hist-load-full-row');
+    if (loadFullRow) loadFullRow.classList.toggle('hidden', !admLoggedIn || _fullHistoryLoaded);
+
     // Populate dept filter
     const deptSel = $('hf-dept');
     const prevDept = deptSel.value;

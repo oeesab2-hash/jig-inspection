@@ -1305,6 +1305,15 @@ h1, h2, h3, h4, label, button, input, select, textarea, p, span, div {
 }
 .btn-export-pdf:hover { opacity: 0.9; }
 
+/* 🆕 แถบโหลดประวัติเต็ม (เฉพาะ Admin) — โผล่เมื่อ local cache มีแค่ ~90 วันล่าสุดตามค่าเริ่มต้น */
+.hist-load-full-row {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  flex-wrap: wrap; padding: 8px 10px; margin-bottom: 10px;
+  background: var(--accent-dim); border: 1px solid var(--chip-active-bdr);
+  border-radius: 9px;
+}
+.hist-load-full-hint { font-size: 11px; color: var(--text-muted); flex: 1; min-width: 180px; }
+
 .hist-summary {
   display: grid; grid-template-columns: repeat(3,1fr);
   gap: 6px; margin-bottom: 10px;
