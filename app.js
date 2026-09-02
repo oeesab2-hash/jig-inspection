@@ -2091,7 +2091,7 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
           unit: cp.unit || null
         }))
       }));
-      if (!confirm(`นำเข้าข้อมูลนี้จะ "แทนที่" ข้อมูลปัจจุบันทั้งหมด\n(${cat.jigs.length} JIG, ${hist.length} ประวัติ)\nแนะนำให้ Export สำรองไว้ก่อน — ต้องการดำเนินการต่อหรือไม่?`)) return;
+      if (!(await customConfirm(`นำเข้าข้อมูลนี้จะ "แทนที่" ข้อมูลปัจจุบันทั้งหมด\n(${cat.jigs.length} JIG, ${hist.length} ประวัติ)\nแนะนำให้ Export สำรองไว้ก่อน — ต้องการดำเนินการต่อหรือไม่?`, { danger: true }))) return;
 
       if (!sb) { toast('ไม่ได้เชื่อมต่อ Supabase', 'ng'); return; }
       toast('กำลังนำเข้าข้อมูลขึ้น Supabase...', 'ok');
@@ -2341,8 +2341,8 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
       });
     }
 
-    $('btn-app-logout').addEventListener('click', () => {
-      if (!confirm('ต้องการออกจากระบบใช่หรือไม่?')) return;
+    $('btn-app-logout').addEventListener('click', async () => {
+      if (!(await customConfirm('ต้องการออกจากระบบใช่หรือไม่?'))) return;
       sessionStorage.removeItem('jig_app_user');
       location.reload();
     });
@@ -2478,8 +2478,8 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
 
     // ── Logout — อยู่ใน Admin Panel เพราะผูกกับ session ของ Admin โดยตรง
     // เคลียร์ทั้ง memory (_adminSessionPass), state (admLoggedIn) และ localStorage
-    $('btn-admin-logout').addEventListener('click', () => {
-      if (!confirm('ต้องการออกจากระบบ Admin ใช่หรือไม่?')) return;
+    $('btn-admin-logout').addEventListener('click', async () => {
+      if (!(await customConfirm('ต้องการออกจากระบบ Admin ใช่หรือไม่?'))) return;
       admLoggedIn = false;
       _adminSessionPass = null;
       localStorage.removeItem('jig_admin_user');
@@ -2731,8 +2731,8 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
     // 🆕 PDF Auto-Save Folder
     if ($('btn-autosave-choose')) $('btn-autosave-choose').addEventListener('click', chooseAutoSaveFolder);
     if ($('btn-autosave-confirm')) $('btn-autosave-confirm').addEventListener('click', reconfirmAutoSavePermission);
-    if ($('btn-autosave-clear')) $('btn-autosave-clear').addEventListener('click', () => {
-      if (confirm('ยกเลิกการตั้งค่าโฟลเดอร์บันทึก PDF อัตโนมัติหรือไม่? (PDF จะกลับไปดาวน์โหลดแบบปกติ)')) clearAutoSaveFolder();
+    if ($('btn-autosave-clear')) $('btn-autosave-clear').addEventListener('click', async () => {
+      if (await customConfirm('ยกเลิกการตั้งค่าโฟลเดอร์บันทึก PDF อัตโนมัติหรือไม่? (PDF จะกลับไปดาวน์โหลดแบบปกติ)')) clearAutoSaveFolder();
     });
     // 🆕 JIG Document-Control Modal — ปิด/บันทึก
     $('btn-jig-doc-modal-close').addEventListener('click', closeJigDocModal);
@@ -3059,10 +3059,10 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
       </div>`).join('');
 
     document.querySelectorAll('.btn-del-tpl').forEach(btn => {
-      btn.addEventListener('click', () => {
+      btn.addEventListener('click', async () => {
         const t = catalog.templates.find(x => x.id === btn.dataset.tid);
         if (!t) return;
-        if (!confirm(`ลบเทมเพลต "${t.name}" หรือไม่? (ไม่กระทบหัวข้อที่นำเข้าไปยัง JIG ต่างๆ แล้ว)`)) return;
+        if (!(await customConfirm(`ลบเทมเพลต "${t.name}" หรือไม่? (ไม่กระทบหัวข้อที่นำเข้าไปยัง JIG ต่างๆ แล้ว)`, { danger: true }))) return;
         catalog.templates = catalog.templates.filter(x => x.id !== t.id);
         saveCatalog();
         if (sb) { // ✅ SECURITY: ผ่าน RPC 'delete_template' (เช็ค password admin) แทนการลบตรง
@@ -3186,13 +3186,13 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
 
   /* ── ตั้งค่าหัวข้อตรวจให้เป็นแบบ "กรอกค่าตัวเลข" พร้อมช่วงที่ยอมรับได้ (min-max)
      แทนการกดปุ่ม ✔/✖/🔧 ปกติ — ใช้กับหัวข้อวัดค่า เช่น แรงดันลม, แรงบิด, ระยะห่าง ── */
-  function configureNumericCheckpoint(jid, idx) {
+  async function configureNumericCheckpoint(jid, idx) {
     const jig = catalog.jigs.find(j => j.id === jid);
     const p = jig.checkpoints[idx];
     if (!p) return;
 
     if (p.type === 'numeric') {
-      if (!confirm(`เปลี่ยน "${p.label}" กลับเป็นแบบ ปกติ/ไม่ปกติ (Pass/Fail) แทนการกรอกตัวเลขหรือไม่?`)) return;
+      if (!(await customConfirm(`เปลี่ยน "${p.label}" กลับเป็นแบบ ปกติ/ไม่ปกติ (Pass/Fail) แทนการกรอกตัวเลขหรือไม่?`))) return;
       delete p.type; delete p.min; delete p.max; delete p.unit;
       saveCatalog();
       renderCpList(jid);
@@ -3612,7 +3612,7 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
   async function bulkDeleteSelected() {
     const ids = Array.from(_histSelected);
     if (!ids.length) return;
-    if (!confirm(`ลบ ${ids.length} รายการที่เลือกไว้? การลบนี้ย้อนกลับไม่ได้`)) return;
+    if (!(await customConfirm(`ลบ ${ids.length} รายการที่เลือกไว้? การลบนี้ย้อนกลับไม่ได้`, { danger: true }))) return;
     let remaining = loadHistory();
     for (const id of ids) {
       await deleteHistoryFromSupabase(id);
@@ -3731,8 +3731,8 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
       const rec = loadHistory().find(h => String(h.id) === b.dataset.pdf);
       if (rec) generatePdf(rec);
     }));
-    list.querySelectorAll('[data-del]').forEach(b => b.addEventListener('click', () => {
-      if (!confirm('ลบรายการนี้?')) return;
+    list.querySelectorAll('[data-del]').forEach(b => b.addEventListener('click', async () => {
+      if (!(await customConfirm('ลบรายการนี้?', { danger: true }))) return;
       const delId = b.dataset.del;
       const remaining = loadHistory().filter(h => String(h.id) !== delId);
       localStorage.setItem(SK.history, JSON.stringify(remaining)); // อัปเดต local ทันที
@@ -4370,8 +4370,8 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
   ══════════════════════════════════════ */
   function bindActionButtons() {
     $('btn-submit').addEventListener('click', submitReport);
-    $('btn-reset').addEventListener('click', () => {
-      if (!confirm('ล้างผลการตรวจและเริ่มใหม่?')) return;
+    $('btn-reset').addEventListener('click', async () => {
+      if (!(await customConfirm('ล้างผลการตรวจและเริ่มใหม่?'))) return;
       initCheckState();
       renderChecklist();
       updateStats();
@@ -4441,6 +4441,53 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
     el.className = `toast show ${type || 'ok'}`;
     clearTimeout(el._t);
     el._t = setTimeout(() => el.classList.remove('show'), 3200);
+  }
+
+  /* ══════════════════════════════════════
+     CUSTOM CONFIRM — แทนที่ confirm() ของเบราว์เซอร์ (หน้าตาไม่เป็นสากล ไม่ตรงธีมแอป)
+     ด้วย modal ของแอปเอง สวยงามเป็นมืออาชีพ พร้อม Promise เพื่อใช้แบบ await ได้เหมือน confirm() เดิม
+     ใช้ modal "generic-confirm-modal" ที่มีอยู่แล้วใน index.html (มีแค่ HTML/CSS ไว้ ยังไม่มีการเชื่อม JS)
+     วิธีใช้: if (!(await customConfirm('ข้อความ'))) return;
+             if (!(await customConfirm('ข้อความลบ', { danger: true }))) return;
+  ══════════════════════════════════════ */
+  function customConfirm(message, opts = {}) {
+    const { danger = false, okText = 'ยืนยัน', cancelText = 'ยกเลิก' } = opts;
+    return new Promise(resolve => {
+      const modal = $('generic-confirm-modal');
+      const msgEl = $('generic-confirm-message');
+      const iconEl = $('generic-confirm-icon');
+      const okBtn = $('btn-generic-confirm-ok');
+      const cancelBtn = $('btn-generic-confirm-cancel');
+      if (!modal || !msgEl || !okBtn || !cancelBtn) {
+        // fallback กันพังกรณี element หาย — ไม่ควรเกิดขึ้นจริง
+        resolve(window.confirm(message));
+        return;
+      }
+      msgEl.textContent = message;
+      iconEl?.classList.toggle('danger', danger);
+      okBtn.textContent = okText;
+      okBtn.classList.toggle('danger', danger);
+      cancelBtn.textContent = cancelText;
+      modal.classList.remove('hidden');
+
+      const onKey = e => {
+        if (e.key === 'Escape') cleanup(false);
+        else if (e.key === 'Enter') cleanup(true);
+      };
+      function cleanup(result) {
+        modal.classList.add('hidden');
+        okBtn.onclick = null;
+        cancelBtn.onclick = null;
+        modal.onclick = null;
+        document.removeEventListener('keydown', onKey);
+        resolve(result);
+      }
+      okBtn.onclick = () => cleanup(true);
+      cancelBtn.onclick = () => cleanup(false);
+      modal.onclick = e => { if (e.target === modal) cleanup(false); };
+      document.addEventListener('keydown', onKey);
+      setTimeout(() => okBtn.focus(), 30); // โฟกัสปุ่มยืนยันไว้ให้กด Enter ได้ทันที
+    });
   }
 
   /* ══════════════════════════════════════
@@ -4852,8 +4899,8 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
   function bindDashboardResetOrderButton() {
     const btn = $('btn-dash-reset-order');
     if (!btn) return;
-    btn.addEventListener('click', () => {
-      if (confirm('รีเซ็ตลำดับการ์ด Dashboard กลับเป็นค่าเริ่มต้น?')) resetDashboardOrder();
+    btn.addEventListener('click', async () => {
+      if (await customConfirm('รีเซ็ตลำดับการ์ด Dashboard กลับเป็นค่าเริ่มต้น?')) resetDashboardOrder();
     });
   }
 
