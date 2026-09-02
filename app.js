@@ -1219,10 +1219,10 @@
       const progressClass = totalJigs > 0 && checkedCount === totalJigs
         ? 'line-chip-count-full'
         : (checkedCount > 0 ? 'line-chip-count-partial' : '');
-      // 🆕 ย่อให้กระชับ — ทดสอบบนมือถือแล้วขึ้นบรรทัดใหม่/ล้นการ์ดถ้าใช้คำว่า "(ทั้งหมด X)"
-      // ใช้ตัวเลขในวงเล็บสั้นๆ แทน ความหมายเหมือนเดิม แค่ประหยัดที่กว่า
+      // 🆕 โชว์จำนวน JIG ทั้งหมดในวงเล็บเสมอทุก Line (ไม่ใช่แค่ตอนมี JIG ถูกมาร์ค "ไม่ได้ผลิตวันนี้")
+      // เพื่อให้รูปแบบตัวเลขเหมือนกันทุกใบ พี่บีจะได้เทียบกันง่ายๆ ไม่ต้องคอยสงสัยว่าทำไมบางอันมีวงเล็บบางอันไม่มี
       const countLabel = totalJigs > 0
-        ? `${checkedCount}/${totalJigs} JIG${skippedCount > 0 ? ` (${lineJigs.length})` : ''}`
+        ? `${checkedCount}/${totalJigs} JIG (${lineJigs.length})`
         : `${lineJigs.length} JIG`;
       const tooltipDetail = skippedCount > 0
         ? `ตรวจแล้ว ${checkedCount}/${totalJigs} JIG วันนี้ — ทั้งหมด ${lineJigs.length} JIG (ไม่ได้ผลิตวันนี้ ${skippedCount} JIG)`
