@@ -1027,6 +1027,12 @@
   /* ══════════════════════════════════════
      INIT
   ══════════════════════════════════════ */
+  // 🆕 ซ่อน boot loading screen แบบ fade — เรียกตอนที่เนื้อหาหลักพร้อมแสดงแล้ว (ดู hideBootLoading() ใน init())
+  function hideBootLoading() {
+    const el = $('boot-loading');
+    if (el) el.classList.add('hide');
+  }
+
   async function init() {
     dbgLog('init() เริ่มทำงาน');
     ensureLocalAdminPassBootstrap();
@@ -1089,6 +1095,7 @@
     dbgLog('กำลังเรียก renderFilter() (แสดงรายการแผนก/Line/JIG)');
     renderFilter();
     dbgLog('renderFilter() เสร็จแล้ว — ควรเห็นรายการแผนกบนจอแล้ว ✅');
+    hideBootLoading(); // 🆕 เนื้อหาหลักพร้อมแสดงแล้ว — ซ่อน boot loading screen (fade out)
     bindJigSearch();
     bindThemeToggle();
     bindAdminPanel();

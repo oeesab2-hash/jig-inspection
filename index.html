@@ -39,9 +39,31 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <!-- ⚠️ CACHE-BUST: เบราว์เซอร์/PWA มัก cache ไฟล์ .css ค้างไว้นานผิดปกติ (เหมือน app.js ด้านล่าง)
        เพิ่ม ?v= ให้บังคับโหลดไฟล์ใหม่ทุกครั้งที่แก้ style.css — ให้เปลี่ยนเลขนี้ทุกครั้งที่แก้ style.css -->
-  <link rel="stylesheet" href="style.css?v=20260902">
+  <link rel="stylesheet" href="style.css?v=20260903">
 </head>
 <body>
+
+<!-- 🆕 BOOT LOADING SCREEN — โผล่ทันทีตั้งแต่เปิดหน้า (ก่อนแม้แต่ app-login-gate) คลุมช่วงที่ยังโหลด
+     ข้อมูลจาก Supabase ไม่เสร็จ (ไม่ใช่ splash screen ของ OS ที่คุมไม่ได้ — อันนี้คุมเองได้ 100%)
+     ซ่อนโดย hideBootLoading() ใน app.js หลัง init() เสร็จ + มี safety-timeout กันค้างถ้า init() ช้าผิดปกติ -->
+<div id="boot-loading" class="boot-loading">
+  <div class="boot-loading-icon">
+    <svg viewBox="0 0 24 24" width="46" height="46" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M9 2h6a1 1 0 0 1 1 1v2H8V3a1 1 0 0 1 1-1z"/><rect x="5" y="4" width="14" height="18" rx="2"/><path d="M9 12l2 2 4-4"/></svg>
+  </div>
+  <div class="boot-loading-title">ระบบตรวจสอบสภาพจิ๊ก</div>
+  <div class="boot-loading-title-en">JIG Inspection System</div>
+  <div class="boot-loading-tagline">Quality Inspection Management</div>
+  <div class="boot-loading-spinner"><span></span><span></span><span></span></div>
+</div>
+<script>
+  // 🆕 Safety-timeout กันจอค้างที่ boot-loading ตลอดไป เผื่อ init() ใน app.js ช้าผิดปกติ/พัง
+  //    (เน็ตหลุด, Supabase timeout, หรือแม้แต่ app.js เองโหลดไม่สำเร็จ) — บังคับซ่อนหลัง 8 วินาที
+  //    ไม่ว่าจะเกิดอะไรขึ้น ผู้ใช้จะได้ไม่ค้างจอเปล่าตลอดไปโดยไม่รู้สาเหตุ
+  setTimeout(function () {
+    var el = document.getElementById('boot-loading');
+    if (el && !el.classList.contains('hide')) el.classList.add('hide');
+  }, 8000);
+</script>
 
 <!-- ─── APP LOGIN GATE — ต้อง Login ก่อนถึงจะใช้งานระบบได้ (บันทึก log ทุกครั้งที่ Login สำเร็จ) ─── -->
 <div id="app-login-gate" class="modal-overlay app-login-gate">
@@ -940,7 +962,7 @@
 <!-- 🆕 ใส่เลขเวอร์ชันต่อท้าย ?v=... เพื่อบังคับให้เบราว์เซอร์ (โดยเฉพาะ Safari บน iPhone ซึ่งแคชไฟล์ .js
      ค้างนานผิดปกติ) โหลด app.js ก้อนใหม่ทุกครั้งที่มีการอัปเดตโค้ด — ให้เปลี่ยนเลขนี้ทุกครั้งที่แก้ app.js
      แล้ว push ขึ้นใหม่ ไม่งั้นเครื่องที่เคยเข้าเว็บมาก่อนจะยังใช้ไฟล์เก่าจากแคชอยู่ -->
-<script src="app.js?v=20260902"></script>
+<script src="app.js?v=20260903"></script>
 <script>
 (function () {
   var collapseBtn = document.getElementById('sidebar-collapse-toggle');
