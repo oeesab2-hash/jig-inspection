@@ -774,6 +774,12 @@ h1, h2, h3, h4, label, button, input, select, textarea, p, span, div {
   border: 1px solid hsla(265, 55%, 65%, 0.4);
 }
 
+/* 🆕 badge ระยะเวลาตรวจ (เฉพาะ Admin เห็น) — ใช้สีกลางๆ แยกจาก badge.saved เพื่อไม่ให้สับสนความหมาย */
+.badge.timing {
+  background: var(--bg-input); color: var(--text-muted);
+  border: 1px solid var(--border-input); cursor: help;
+}
+
 /* 🆕 สถานะซิงค์ Supabase — โชว์ถาวรมุมขวาล่างของการ์ด (แถวเดียวกับปุ่ม PDF/ลบ)
    .synced = subtle เขียว (ปกติ) / .pending = แดงกะพริบ + กดได้เพื่อลองส่งซ้ำทันที */
 .hi-sync-status {

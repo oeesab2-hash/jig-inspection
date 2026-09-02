@@ -1483,6 +1483,7 @@
 
       function setStatus(v) {
         checkState[idx].status = v;
+        checkState[idx].markedAt = new Date().toISOString(); // 🆕 เวลาที่กดติ๊กจริง — ใช้วิเคราะห์ย้อนหลังว่าตรวจแต่ละจุดห่างกันสมเหตุสมผลไหม (ไม่ได้นั่งไล่กดรวด)
         div.querySelectorAll('.rbtn').forEach(b => b.classList.toggle('active', b.dataset.v === v));
         const zone = $(`ng-zone-${idx}`);
         zone.classList.toggle('show', v === 'ng' || v === 'fixed');
@@ -1733,6 +1734,7 @@
         status: i.status, note: i.note, photos: i.photos,
         type: i.type || null, min: i.min ?? null, max: i.max ?? null,
         value: i.value ?? null, unit: i.unit || '',
+        markedAt: i.markedAt || null, // 🆕 เวลาที่กดติ๊กจุดนี้จริง — เก็บใน items (jsonb เดิม) ไม่ต้องเพิ่มคอลัมน์ใหม่ใน Supabase
       })),
       sigInspector:  $('sig-inspector').value.trim(),
       // หมายเหตุ: ตัด sigSupervisor ออกแล้ว — ชื่อหัวหน้างานจะถูกบันทึกตอนกดอนุมัติจริงผ่าน Telegram (ดู approvedBy ด้านล่าง) ไม่ต้องพิมพ์ซ้ำตรงนี้
@@ -3597,6 +3599,23 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
     toast(`🗑 ลบแล้ว ${ids.length} รายการ`, 'ok');
   }
 
+  // 🆕 วิเคราะห์เวลาตรวจจาก markedAt ของแต่ละจุด (เฉพาะ Admin ใช้ดูย้อนหลังตอนสงสัยว่าตรวจจริงหรือนั่งไล่กด)
+  // คืนค่า null ถ้าเป็นข้อมูลเก่าก่อนมีฟีเจอร์นี้ (ไม่มี markedAt) หรือมีจุดตรวจน้อยเกินจะวิเคราะห์
+  function computeInspectionTiming(h) {
+    const marks = (h.items || []).map(i => i.markedAt).filter(Boolean).map(t => new Date(t).getTime()).sort((a, b) => a - b);
+    if (marks.length < 2) return null;
+    const totalSec = Math.round((marks[marks.length - 1] - marks[0]) / 1000);
+    const avgSecPerPoint = totalSec / (marks.length - 1);
+    // เกณฑ์: เฉลี่ยห่างกันน้อยกว่า 2 วินาที/จุด ถือว่าเร็วผิดปกติ (เดินไปตรวจจริงแต่ละจุดไม่น่าเร็วขนาดนี้ได้)
+    return { totalSec, count: marks.length, suspicious: avgSecPerPoint < 2 };
+  }
+
+  // 🆕 แปลงวินาทีเป็นข้อความอ่านง่าย เช่น "4 นาที 12 วินาที" หรือ "38 วินาที"
+  function formatDurationTh(totalSec) {
+    const m = Math.floor(totalSec / 60), s = totalSec % 60;
+    return m > 0 ? `${m} นาที ${s} วินาที` : `${s} วินาที`;
+  }
+
   function populateHistoryPanel() {
     // Populate dept filter
     const deptSel = $('hf-dept');
@@ -3660,6 +3679,15 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
               return `<span class="badge ${st.badgeClass}" title="${title}">${st.badge}</span>`;
             })()}
             ${gpsDisplay}
+            ${(() => {
+              if (!admLoggedIn) return ''; // 🆕 เฉพาะ Admin เห็น — พนักงานทั่วไปไม่เห็นว่าถูกจับเวลา
+              const timing = computeInspectionTiming(h);
+              if (!timing) return ''; // รายการเก่าก่อนมีฟีเจอร์นี้ — ไม่มีข้อมูลให้วิเคราะห์
+              const label = `⏱ ${formatDurationTh(timing.totalSec)}`;
+              return timing.suspicious
+                ? `<span class="badge ng" title="เฉลี่ยตรวจแต่ละจุดเร็วกว่า 2 วินาที — อาจเป็นการนั่งไล่กดโดยไม่ได้เดินตรวจจริง ลองเช็คดูเพิ่มเติม">${label} ⚠</span>`
+                : `<span class="badge timing" title="ระยะเวลารวมตั้งแต่ติ๊กจุดแรกถึงจุดสุดท้าย (${timing.count} จุด)">${label}</span>`;
+            })()}
             ${(() => {
               const saved = pdfLocalLog[h.id];
               if (!saved) return '';
