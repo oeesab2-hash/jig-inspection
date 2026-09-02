@@ -349,56 +349,44 @@
   }
 
   // ── ดึง History จาก Supabase กลับมาเป็น array เดิม ──
-  // 🆕 แปลง 1 แถวจาก Supabase (snake_case) เป็น object ที่แอปใช้ (camelCase) — ใช้ร่วมกันทั้งตอน pull เต็มและตอน merge จาก realtime event เดียว กันโค้ดสองที่ drift ไม่ตรงกัน
-  function mapHistoryRow(row) {
-    return {
-      id: row.id, timestamp: row.ts,
-      deptId: row.dept_id, deptName: row.dept_name,
-      lineId: row.line_id, lineName: row.line_name,
-      jigId: row.jig_id, jigName: row.jig_name, jigDocNo: row.jig_doc_no,
-      date: row.insp_date, shift: row.shift, month: row.month,
-      inspector: row.inspector, notes: row.notes, items: row.items || [],
-      sigInspector: row.sig_inspector, sigSupervisor: row.sig_supervisor,
-      approvalStatus: row.approval_status || 'pending',
-      approvedBy: row.approved_by || null,
-      approvedAt: row.approved_at || null,
-      supervisorComment: row.supervisor_comment || null,
-      managerApprovalStatus: row.manager_approval_status || 'pending',
-      managerApprovedBy: row.manager_approved_by || null,
-      managerApprovedAt: row.manager_approved_at || null,
-      managerComment: row.manager_comment || null,
-      gps: row.gps_latitude ? {
-        latitude: row.gps_latitude,
-        longitude: row.gps_longitude,
-        accuracy: row.gps_accuracy,
-        timestamp: row.gps_timestamp,
-        status: row.gps_status || 'unknown'
-      } : undefined,
-      protected: !!row.protected,
-    };
-  }
-
-  // 🆕 ดึงประวัติจาก Supabase — ใส่ sinceIso (ISO timestamp) เพื่อดึงเฉพาะรายการใหม่กว่านั้น (ลด Egress มาก)
-  // ไม่ใส่ = ดึงทั้งหมดเหมือนเดิม (ใช้ตอน export/โหลดเต็มแบบตั้งใจเท่านั้น — ดู pullHistoryFromSupabase() ที่เรียกแบบไม่มี argument)
-  async function pullHistoryFromSupabase(sinceIso) {
+  async function pullHistoryFromSupabase() {
     if (!sb) return null;
     try {
-      let q = sb.from('history').select('*').order('ts', { ascending: false });
-      if (sinceIso) q = q.gte('ts', sinceIso);
-      const { data, error } = await q;
+      const { data, error } = await sb.from('history').select('*').order('ts', { ascending: false });
       if (error) throw error;
       if (!data || !data.length) return null;
-      return data.map(mapHistoryRow);
+      return data.map(row => ({
+        id: row.id, timestamp: row.ts,
+        deptId: row.dept_id, deptName: row.dept_name,
+        lineId: row.line_id, lineName: row.line_name,
+        jigId: row.jig_id, jigName: row.jig_name, jigDocNo: row.jig_doc_no,
+        date: row.insp_date, shift: row.shift, month: row.month,
+        inspector: row.inspector, notes: row.notes, items: row.items || [],
+        sigInspector: row.sig_inspector, sigSupervisor: row.sig_supervisor,
+        // ─── Approval Workflow (Stage 1: หัวหน้างาน) ───
+        approvalStatus: row.approval_status || 'pending',
+        approvedBy: row.approved_by || null,
+        approvedAt: row.approved_at || null,
+        supervisorComment: row.supervisor_comment || null,
+        // ─── Approval Workflow (Stage 2: ผู้จัดการฝ่ายผลิต) ───
+        managerApprovalStatus: row.manager_approval_status || 'pending',
+        managerApprovedBy: row.manager_approved_by || null,
+        managerApprovedAt: row.manager_approved_at || null,
+        managerComment: row.manager_comment || null,
+        // ─── GPS Data ───
+        gps: row.gps_latitude ? {
+          latitude: row.gps_latitude,
+          longitude: row.gps_longitude,
+          accuracy: row.gps_accuracy,
+          timestamp: row.gps_timestamp,
+          status: row.gps_status || 'unknown'
+        } : undefined,
+        protected: !!row.protected, // 🆕
+      }));
     } catch (e) {
       console.warn('pullHistoryFromSupabase error (ใช้ข้อมูล local แทน):', e);
       return null;
     }
-  }
-
-  // 🆕 จำนวนวันย้อนหลังที่โหลดเป็นประจำตอนเปิดแอป/realtime sync (ลด Egress) — ดูประวัติเก่ากว่านี้ได้ผ่านปุ่ม "โหลดประวัติทั้งหมด" ใน Admin
-  const RECENT_HISTORY_DAYS = 90;
-  function recentHistoryCutoffIso() {
-    return new Date(Date.now() - RECENT_HISTORY_DAYS * 86400000).toISOString();
   }
 
   /* 🆕 (ปิดใช้งานแล้ว — ป้าย "Records" นี้ซ้ำซ้อนกับ "History: N" ในแผงสถานะพื้นที่จัดเก็บ (storage-stats-panel)
@@ -407,7 +395,7 @@
   // ฟังการเปลี่ยนแปลง realtime จากเพื่อนร่วมทีมคนอื่น แล้วรีเฟรชหน้าจอให้อัตโนมัติ
   function subscribeRealtime() {
     if (!sb) return;
-    let catalogTimer;
+    let catalogTimer, historyTimer;
 
     async function refreshCatalog() {
       if (_syncing) return;
@@ -420,27 +408,15 @@
         toast('📥 Catalog อัปเดตจากทีม', 'ok');
       }
     }
-    // 🆕 เปลี่ยนจาก "มีคนบันทึก 1 รายการ → ทุกเครื่องโหลดประวัติทั้งหมดใหม่" (กิน Egress มหาศาลเมื่อมีหลายเครื่องเปิดพร้อมกัน)
-    // เป็น "merge เฉพาะแถวที่เปลี่ยนจริงจาก payload ที่ Supabase ส่งมาให้เลย" — ไม่ต้องยิง request ไปดึงซ้ำอีกครั้งเลย
-    function handleHistoryRealtimeChange(payload) {
+    async function refreshHistory() {
       if (_syncing) return;
-      let hist = loadHistory();
-      if (payload.eventType === 'DELETE') {
-        const delId = payload.old && payload.old.id;
-        if (delId == null) return;
-        const before = hist.length;
-        hist = hist.filter(h => String(h.id) !== String(delId));
-        if (hist.length === before) return; // ไม่ได้อยู่ใน local cache อยู่แล้ว (เช่น เก่ากว่า 90 วัน) — ไม่ต้องทำอะไรต่อ
-      } else {
-        if (!payload.new) return;
-        const mapped = mapHistoryRow(payload.new);
-        const idx = hist.findIndex(h => String(h.id) === String(mapped.id));
-        if (idx >= 0) hist[idx] = mapped; else hist.unshift(mapped);
+      const remote = await pullHistoryFromSupabase();
+      if (remote) {
+        localStorage.setItem(SK.history, JSON.stringify(remote));
+        if (typeof populateHistoryPanel === 'function') populateHistoryPanel();
+        if (typeof refreshDashboard === 'function') refreshDashboard();
+        toast('📥 มีข้อมูลตรวจสอบใหม่จากทีม', 'ok');
       }
-      localStorage.setItem(SK.history, JSON.stringify(hist));
-      if (typeof populateHistoryPanel === 'function') populateHistoryPanel();
-      if (typeof refreshDashboard === 'function') refreshDashboard();
-      toast('📥 มีข้อมูลตรวจสอบใหม่จากทีม', 'ok');
     }
 
     const ch = sb.channel('db_changes');
@@ -450,8 +426,9 @@
         catalogTimer = setTimeout(refreshCatalog, 700);
       });
     });
-    ch.on('postgres_changes', { event: '*', schema: 'public', table: 'history' }, (payload) => {
-      handleHistoryRealtimeChange(payload);
+    ch.on('postgres_changes', { event: '*', schema: 'public', table: 'history' }, () => {
+      clearTimeout(historyTimer);
+      historyTimer = setTimeout(refreshHistory, 700);
     });
     let jigSkipsTimer = null;
     ch.on('postgres_changes', { event: '*', schema: 'public', table: 'jig_skips' }, () => {
@@ -1050,12 +1027,6 @@
   /* ══════════════════════════════════════
      INIT
   ══════════════════════════════════════ */
-  // 🆕 ซ่อน boot loading screen แบบ fade — เรียกตอนที่เนื้อหาหลักพร้อมแสดงแล้ว (ดู hideBootLoading() ใน init())
-  function hideBootLoading() {
-    const el = $('boot-loading');
-    if (el) el.classList.add('hide');
-  }
-
   async function init() {
     dbgLog('init() เริ่มทำงาน');
     ensureLocalAdminPassBootstrap();
@@ -1079,7 +1050,7 @@
     dbgLog('เริ่มดึง catalog + history จาก Supabase (sb=' + (sb ? 'พร้อมใช้งาน' : '❌ NULL — client สร้างไม่สำเร็จ!') + ')');
     const [remoteCat, remoteHist] = await Promise.all([
       withTimeout(pullCatalogFromSupabase().then(r => { dbgLog('pullCatalogFromSupabase() เสร็จแล้ว', r ? `${(r.depts||[]).length} depts` : 'null'); return r; }), 10000, 'TIMEOUT'),
-      withTimeout(pullHistoryFromSupabase(recentHistoryCutoffIso()).then(r => { dbgLog('pullHistoryFromSupabase() เสร็จแล้ว', r ? `${r.length} รายการ (${RECENT_HISTORY_DAYS} วันล่าสุด — ลด Egress)` : 'null'); return r; }), 10000, 'TIMEOUT'),
+      withTimeout(pullHistoryFromSupabase().then(r => { dbgLog('pullHistoryFromSupabase() เสร็จแล้ว', r ? `${r.length} รายการ` : 'null'); return r; }), 10000, 'TIMEOUT'),
     ]);
     dbgLog('Promise.all ของ catalog+history เสร็จแล้ว', `catTimedOut=${remoteCat === 'TIMEOUT'}, histTimedOut=${remoteHist === 'TIMEOUT'}`);
     const catTimedOut  = remoteCat === 'TIMEOUT';
@@ -1118,7 +1089,6 @@
     dbgLog('กำลังเรียก renderFilter() (แสดงรายการแผนก/Line/JIG)');
     renderFilter();
     dbgLog('renderFilter() เสร็จแล้ว — ควรเห็นรายการแผนกบนจอแล้ว ✅');
-    hideBootLoading(); // 🆕 เนื้อหาหลักพร้อมแสดงแล้ว — ซ่อน boot loading screen (fade out)
     bindJigSearch();
     bindThemeToggle();
     bindAdminPanel();
@@ -1201,11 +1171,10 @@
       const progressClass = totalJigs > 0 && checkedCount === totalJigs
         ? 'line-chip-count-full'
         : (checkedCount > 0 ? 'line-chip-count-partial' : '');
-      // 🆕 โชว์ตัวเลขในวงเล็บเสมอทุก Line เพื่อความสม่ำเสมอ (ไม่ใช่แค่ตอนมี JIG ถูกมาร์ค
-      // "ไม่ได้ผลิตวันนี้" เหมือนเดิม) — วงเล็บ = จำนวน JIG ทั้งหมดในไลน์นั้นจริงๆ เทียบกับตัวหาร
-      // ด้านหน้าที่ตัด JIG ที่ไม่ได้ผลิตออกไปแล้ว ถ้าตัวเลขเท่ากันแปลว่าไม่มี JIG ไหนถูกซ่อนไว้
+      // 🆕 ย่อให้กระชับ — ทดสอบบนมือถือแล้วขึ้นบรรทัดใหม่/ล้นการ์ดถ้าใช้คำว่า "(ทั้งหมด X)"
+      // ใช้ตัวเลขในวงเล็บสั้นๆ แทน ความหมายเหมือนเดิม แค่ประหยัดที่กว่า
       const countLabel = totalJigs > 0
-        ? `${checkedCount}/${totalJigs} JIG (${lineJigs.length})`
+        ? `${checkedCount}/${totalJigs} JIG${skippedCount > 0 ? ` (${lineJigs.length})` : ''}`
         : `${lineJigs.length} JIG`;
       const tooltipDetail = skippedCount > 0
         ? `ตรวจแล้ว ${checkedCount}/${totalJigs} JIG วันนี้ — ทั้งหมด ${lineJigs.length} JIG (ไม่ได้ผลิตวันนี้ ${skippedCount} JIG)`
@@ -1283,20 +1252,7 @@
         </div>`;
     }).join('');
     container.querySelectorAll('.jig-chip-main').forEach(el => {
-      el.addEventListener('click', () => {
-        const jigId = el.dataset.jig;
-        if (selection.jigId === jigId) return; // เปิดอยู่แล้ว ไม่ต้องถามซ้ำ (ตรงกับ guard ใน selectJig())
-        // 🆕 กันกดพลาดโดน JIG ที่ตรวจแล้ววันนี้ — เจอปัญหาจริงว่าพนักงานกดเข้าไปตรวจซ้ำโดยไม่ตั้งใจ
-        // ทั้งที่มี badge "ตรวจแล้ว" โชว์อยู่แล้ว ใส่ modal ยืนยันก่อน (ปุ่มยกเลิกเป็นค่าเริ่มต้นที่ปลอดภัย)
-        // ยังอนุญาตให้ตรวจซ้ำได้ถ้าตั้งใจจริง (เช่น แก้ NG แล้วต้องตรวจยืนยันใหม่) แค่ต้องกดยืนยันอีกที
-        const info = getJigCheckedTodayInfo(jigId);
-        if (info) {
-          const j = catalog.jigs.find(x => x.id === jigId);
-          showRecheckConfirmModal(jigId, j ? j.name : jigId, info);
-          return;
-        }
-        selectJig(jigId);
-      });
+      el.addEventListener('click', () => selectJig(el.dataset.jig));
     });
     container.querySelectorAll('.jig-skip-toggle').forEach(btn => {
       btn.addEventListener('click', e => {
@@ -1506,7 +1462,6 @@
 
       function setStatus(v) {
         checkState[idx].status = v;
-        checkState[idx].markedAt = new Date().toISOString(); // 🆕 เวลาที่กดติ๊กจริง — ใช้วิเคราะห์ย้อนหลังว่าตรวจแต่ละจุดห่างกันสมเหตุสมผลไหม (ไม่ได้นั่งไล่กดรวด)
         div.querySelectorAll('.rbtn').forEach(b => b.classList.toggle('active', b.dataset.v === v));
         const zone = $(`ng-zone-${idx}`);
         zone.classList.toggle('show', v === 'ng' || v === 'fixed');
@@ -1757,7 +1712,6 @@
         status: i.status, note: i.note, photos: i.photos,
         type: i.type || null, min: i.min ?? null, max: i.max ?? null,
         value: i.value ?? null, unit: i.unit || '',
-        markedAt: i.markedAt || null, // 🆕 เวลาที่กดติ๊กจุดนี้จริง — เก็บใน items (jsonb เดิม) ไม่ต้องเพิ่มคอลัมน์ใหม่ใน Supabase
       })),
       sigInspector:  $('sig-inspector').value.trim(),
       // หมายเหตุ: ตัด sigSupervisor ออกแล้ว — ชื่อหัวหน้างานจะถูกบันทึกตอนกดอนุมัติจริงผ่าน Telegram (ดู approvedBy ด้านล่าง) ไม่ต้องพิมพ์ซ้ำตรงนี้
@@ -2089,7 +2043,7 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
           unit: cp.unit || null
         }))
       }));
-      if (!(await showConfirmModal(`นำเข้าข้อมูลนี้จะ "แทนที่" ข้อมูลปัจจุบันทั้งหมด\n(${cat.jigs.length} JIG, ${hist.length} ประวัติ)\nแนะนำให้ Export สำรองไว้ก่อน — ต้องการดำเนินการต่อหรือไม่?`, { confirmLabel: 'ดำเนินการต่อ', danger: true }))) return;
+      if (!confirm(`นำเข้าข้อมูลนี้จะ "แทนที่" ข้อมูลปัจจุบันทั้งหมด\n(${cat.jigs.length} JIG, ${hist.length} ประวัติ)\nแนะนำให้ Export สำรองไว้ก่อน — ต้องการดำเนินการต่อหรือไม่?`)) return;
 
       if (!sb) { toast('ไม่ได้เชื่อมต่อ Supabase', 'ng'); return; }
       toast('กำลังนำเข้าข้อมูลขึ้น Supabase...', 'ok');
@@ -2339,8 +2293,8 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
       });
     }
 
-    $('btn-app-logout').addEventListener('click', async () => {
-      if (!(await showConfirmModal('ต้องการออกจากระบบใช่หรือไม่?', { confirmLabel: 'ออกจากระบบ' }))) return;
+    $('btn-app-logout').addEventListener('click', () => {
+      if (!confirm('ต้องการออกจากระบบใช่หรือไม่?')) return;
       sessionStorage.removeItem('jig_app_user');
       location.reload();
     });
@@ -2476,8 +2430,8 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
 
     // ── Logout — อยู่ใน Admin Panel เพราะผูกกับ session ของ Admin โดยตรง
     // เคลียร์ทั้ง memory (_adminSessionPass), state (admLoggedIn) และ localStorage
-    $('btn-admin-logout').addEventListener('click', async () => {
-      if (!(await showConfirmModal('ต้องการออกจากระบบ Admin ใช่หรือไม่?', { confirmLabel: 'ออกจากระบบ' }))) return;
+    $('btn-admin-logout').addEventListener('click', () => {
+      if (!confirm('ต้องการออกจากระบบ Admin ใช่หรือไม่?')) return;
       admLoggedIn = false;
       _adminSessionPass = null;
       localStorage.removeItem('jig_admin_user');
@@ -2729,8 +2683,8 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
     // 🆕 PDF Auto-Save Folder
     if ($('btn-autosave-choose')) $('btn-autosave-choose').addEventListener('click', chooseAutoSaveFolder);
     if ($('btn-autosave-confirm')) $('btn-autosave-confirm').addEventListener('click', reconfirmAutoSavePermission);
-    if ($('btn-autosave-clear')) $('btn-autosave-clear').addEventListener('click', async () => {
-      if (await showConfirmModal('ยกเลิกการตั้งค่าโฟลเดอร์บันทึก PDF อัตโนมัติหรือไม่? (PDF จะกลับไปดาวน์โหลดแบบปกติ)')) clearAutoSaveFolder();
+    if ($('btn-autosave-clear')) $('btn-autosave-clear').addEventListener('click', () => {
+      if (confirm('ยกเลิกการตั้งค่าโฟลเดอร์บันทึก PDF อัตโนมัติหรือไม่? (PDF จะกลับไปดาวน์โหลดแบบปกติ)')) clearAutoSaveFolder();
     });
     // 🆕 JIG Document-Control Modal — ปิด/บันทึก
     $('btn-jig-doc-modal-close').addEventListener('click', closeJigDocModal);
@@ -3057,10 +3011,10 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
       </div>`).join('');
 
     document.querySelectorAll('.btn-del-tpl').forEach(btn => {
-      btn.addEventListener('click', async () => {
+      btn.addEventListener('click', () => {
         const t = catalog.templates.find(x => x.id === btn.dataset.tid);
         if (!t) return;
-        if (!(await showConfirmModal(`ลบเทมเพลต "${t.name}" หรือไม่? (ไม่กระทบหัวข้อที่นำเข้าไปยัง JIG ต่างๆ แล้ว)`, { confirmLabel: 'ลบเทมเพลต', danger: true }))) return;
+        if (!confirm(`ลบเทมเพลต "${t.name}" หรือไม่? (ไม่กระทบหัวข้อที่นำเข้าไปยัง JIG ต่างๆ แล้ว)`)) return;
         catalog.templates = catalog.templates.filter(x => x.id !== t.id);
         saveCatalog();
         if (sb) { // ✅ SECURITY: ผ่าน RPC 'delete_template' (เช็ค password admin) แทนการลบตรง
@@ -3184,13 +3138,13 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
 
   /* ── ตั้งค่าหัวข้อตรวจให้เป็นแบบ "กรอกค่าตัวเลข" พร้อมช่วงที่ยอมรับได้ (min-max)
      แทนการกดปุ่ม ✔/✖/🔧 ปกติ — ใช้กับหัวข้อวัดค่า เช่น แรงดันลม, แรงบิด, ระยะห่าง ── */
-  async function configureNumericCheckpoint(jid, idx) {
+  function configureNumericCheckpoint(jid, idx) {
     const jig = catalog.jigs.find(j => j.id === jid);
     const p = jig.checkpoints[idx];
     if (!p) return;
 
     if (p.type === 'numeric') {
-      if (!(await showConfirmModal(`เปลี่ยน "${p.label}" กลับเป็นแบบ ปกติ/ไม่ปกติ (Pass/Fail) แทนการกรอกตัวเลขหรือไม่?`))) return;
+      if (!confirm(`เปลี่ยน "${p.label}" กลับเป็นแบบ ปกติ/ไม่ปกติ (Pass/Fail) แทนการกรอกตัวเลขหรือไม่?`)) return;
       delete p.type; delete p.min; delete p.max; delete p.unit;
       saveCatalog();
       renderCpList(jid);
@@ -3447,8 +3401,6 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
   // 🆕 เก็บ id ของรายการที่ติ๊กเลือกไว้ (เฉพาะระหว่างเปิด panel — ไม่ persist)
   let _histSelected = new Set();
 
-  let _fullHistoryLoaded = false; // 🆕 true เมื่อ Admin กด "โหลดประวัติทั้งหมด" แล้วในเซสชันนี้ — กันกดซ้ำโหลดเปลืองอีก
-
   function bindHistoryPanel() {
     $('tab-history').addEventListener('click', () => { _histSelected.clear(); openPanel('history-panel'); populateHistoryPanel(); });
     $('btn-close-hist').addEventListener('click', () => { _histSelected.clear(); closePanel('history-panel'); });
@@ -3466,25 +3418,6 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
       if (!hist.length) { toast('ไม่มีประวัติให้ส่งออก', 'ng'); return; }
       generatePdf(hist[0]);
     });
-    // 🆕 โหลดประวัติทั้งหมดจาก Supabase (ปกติโหลดแค่ ~90 วันล่าสุดเพื่อลด Egress) — ให้ Admin กดเองตอนจะดู/กรองข้อมูลเก่ากว่านั้น
-    if ($('btn-load-full-history')) {
-      $('btn-load-full-history').addEventListener('click', async () => {
-        if (!sb) { toast('ยังไม่ได้เชื่อมต่อ Supabase', 'ng'); return; }
-        const btn = $('btn-load-full-history');
-        btn.disabled = true; btn.textContent = 'กำลังโหลด...';
-        const remote = await pullHistoryFromSupabase(); // ไม่ใส่วันที่ = เต็มทั้งหมด
-        btn.disabled = false; btn.textContent = 'โหลดประวัติทั้งหมดจาก Supabase';
-        if (remote) {
-          localStorage.setItem(SK.history, JSON.stringify(remote));
-          _fullHistoryLoaded = true;
-          toast(`โหลดประวัติทั้งหมดแล้ว (${remote.length} รายการ)`, 'ok');
-          populateHistoryPanel();
-          if (typeof refreshDashboard === 'function') refreshDashboard(); // 🆕 อัปเดต Dashboard ให้เห็นข้อมูลเก่าด้วยถ้าเปิดค้างไว้
-        } else {
-          toast('โหลดไม่สำเร็จ ลองใหม่อีกครั้ง', 'ng');
-        }
-      });
-    }
 
     // ── เลือกทั้งหมด (เฉพาะรายการที่กำลังแสดงตาม filter ปัจจุบัน) ──
     $('hf-select-all').addEventListener('change', (e) => {
@@ -3631,7 +3564,7 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
   async function bulkDeleteSelected() {
     const ids = Array.from(_histSelected);
     if (!ids.length) return;
-    if (!(await showConfirmModal(`ลบ ${ids.length} รายการที่เลือกไว้? การลบนี้ย้อนกลับไม่ได้`, { confirmLabel: `ลบ ${ids.length} รายการ`, danger: true }))) return;
+    if (!confirm(`ลบ ${ids.length} รายการที่เลือกไว้? การลบนี้ย้อนกลับไม่ได้`)) return;
     let remaining = loadHistory();
     for (const id of ids) {
       await deleteHistoryFromSupabase(id);
@@ -3643,28 +3576,7 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
     toast(`🗑 ลบแล้ว ${ids.length} รายการ`, 'ok');
   }
 
-  // 🆕 วิเคราะห์เวลาตรวจจาก markedAt ของแต่ละจุด (เฉพาะ Admin ใช้ดูย้อนหลังตอนสงสัยว่าตรวจจริงหรือนั่งไล่กด)
-  // คืนค่า null ถ้าเป็นข้อมูลเก่าก่อนมีฟีเจอร์นี้ (ไม่มี markedAt) หรือมีจุดตรวจน้อยเกินจะวิเคราะห์
-  function computeInspectionTiming(h) {
-    const marks = (h.items || []).map(i => i.markedAt).filter(Boolean).map(t => new Date(t).getTime()).sort((a, b) => a - b);
-    if (marks.length < 2) return null;
-    const totalSec = Math.round((marks[marks.length - 1] - marks[0]) / 1000);
-    const avgSecPerPoint = totalSec / (marks.length - 1);
-    // เกณฑ์: เฉลี่ยห่างกันน้อยกว่า 2 วินาที/จุด ถือว่าเร็วผิดปกติ (เดินไปตรวจจริงแต่ละจุดไม่น่าเร็วขนาดนี้ได้)
-    return { totalSec, count: marks.length, suspicious: avgSecPerPoint < 2 };
-  }
-
-  // 🆕 แปลงวินาทีเป็นข้อความอ่านง่าย เช่น "4 นาที 12 วินาที" หรือ "38 วินาที"
-  function formatDurationTh(totalSec) {
-    const m = Math.floor(totalSec / 60), s = totalSec % 60;
-    return m > 0 ? `${m} นาที ${s} วินาที` : `${s} วินาที`;
-  }
-
   function populateHistoryPanel() {
-    // 🆕 โชว์แถบ "โหลดประวัติทั้งหมด" เฉพาะ Admin และเฉพาะตอนยังไม่เคยกดโหลดเต็มในเซสชันนี้
-    const loadFullRow = $('hist-load-full-row');
-    if (loadFullRow) loadFullRow.classList.toggle('hidden', !admLoggedIn || _fullHistoryLoaded);
-
     // Populate dept filter
     const deptSel = $('hf-dept');
     const prevDept = deptSel.value;
@@ -3728,15 +3640,6 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
             })()}
             ${gpsDisplay}
             ${(() => {
-              if (!admLoggedIn) return ''; // 🆕 เฉพาะ Admin เห็น — พนักงานทั่วไปไม่เห็นว่าถูกจับเวลา
-              const timing = computeInspectionTiming(h);
-              if (!timing) return ''; // รายการเก่าก่อนมีฟีเจอร์นี้ — ไม่มีข้อมูลให้วิเคราะห์
-              const label = `⏱ ${formatDurationTh(timing.totalSec)}`;
-              return timing.suspicious
-                ? `<span class="badge ng" title="เฉลี่ยตรวจแต่ละจุดเร็วกว่า 2 วินาที — อาจเป็นการนั่งไล่กดโดยไม่ได้เดินตรวจจริง ลองเช็คดูเพิ่มเติม">${label} ⚠</span>`
-                : `<span class="badge timing" title="ระยะเวลารวมตั้งแต่ติ๊กจุดแรกถึงจุดสุดท้าย (${timing.count} จุด)">${label}</span>`;
-            })()}
-            ${(() => {
               const saved = pdfLocalLog[h.id];
               if (!saved) return '';
               const when = new Date(saved.at).toLocaleString('th-TH');
@@ -3780,8 +3683,8 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
       const rec = loadHistory().find(h => String(h.id) === b.dataset.pdf);
       if (rec) generatePdf(rec);
     }));
-    list.querySelectorAll('[data-del]').forEach(b => b.addEventListener('click', async () => {
-      if (!(await showConfirmModal('ลบรายการนี้?', { confirmLabel: 'ลบ', danger: true }))) return;
+    list.querySelectorAll('[data-del]').forEach(b => b.addEventListener('click', () => {
+      if (!confirm('ลบรายการนี้?')) return;
       const delId = b.dataset.del;
       const remaining = loadHistory().filter(h => String(h.id) !== delId);
       localStorage.setItem(SK.history, JSON.stringify(remaining)); // อัปเดต local ทันที
@@ -4400,6 +4303,8 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
     document.querySelectorAll('.side-panel').forEach(p => p.classList.remove('open'));
     $(id).classList.add('open');
     $('panel-overlay').classList.add('show');
+    // 🆕 โหลด Storage Status เฉพาะตอนเปิด Admin Panel จริงๆ เท่านั้น (ไม่ auto-refresh พื้นหลังตลอดเวลาแล้ว — ดู getStorageStats() ด้านล่าง)
+    if (id === 'admin-panel' && typeof renderStorageStatus === 'function') renderStorageStatus();
   }
   function closePanel(id) {
     $(id).classList.remove('open');
@@ -4417,8 +4322,8 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
   ══════════════════════════════════════ */
   function bindActionButtons() {
     $('btn-submit').addEventListener('click', submitReport);
-    $('btn-reset').addEventListener('click', async () => {
-      if (!(await showConfirmModal('ล้างผลการตรวจและเริ่มใหม่?', { confirmLabel: 'เริ่มใหม่' }))) return;
+    $('btn-reset').addEventListener('click', () => {
+      if (!confirm('ล้างผลการตรวจและเริ่มใหม่?')) return;
       initCheckState();
       renderChecklist();
       updateStats();
@@ -4625,8 +4530,6 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
 
     bindTabNav();
     bindDashboard();
-    bindRecheckConfirmModal();       // 🆕 modal ยืนยันก่อนตรวจซ้ำ JIG ที่ตรวจแล้ววันนี้
-    bindGenericConfirmModal();       // 🆕 modal ยืนยันทั่วไป แทนที่ confirm() ของเบราว์เซอร์ทุกจุด
     initDashboardSorting();          // 🆕 เปิดใช้งานลากสลับตำแหน่งการ์ด Dashboard
     bindDashboardResetOrderButton(); // 🆕 ปุ่มรีเซ็ตลำดับกลับเป็นค่าเริ่มต้น
     bindLineSearch();
@@ -4901,8 +4804,8 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
   function bindDashboardResetOrderButton() {
     const btn = $('btn-dash-reset-order');
     if (!btn) return;
-    btn.addEventListener('click', async () => {
-      if (await showConfirmModal('รีเซ็ตลำดับการ์ด Dashboard กลับเป็นค่าเริ่มต้น?', { confirmLabel: 'รีเซ็ต' })) resetDashboardOrder();
+    btn.addEventListener('click', () => {
+      if (confirm('รีเซ็ตลำดับการ์ด Dashboard กลับเป็นค่าเริ่มต้น?')) resetDashboardOrder();
     });
   }
 
@@ -4936,65 +4839,6 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
     const hasNg = (latest.items || []).some(i => i.status === 'ng');
     const time = latest.timestamp ? new Date(latest.timestamp).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' }) : '';
     return { status: hasNg ? 'ng' : 'ok', time, count: records.length };
-  }
-
-  // 🆕 Modal ยืนยันก่อนตรวจซ้ำ JIG ที่ตรวจแล้ววันนี้ (แทนที่ confirm() ของเบราว์เซอร์ ให้ดูเป็นมืออาชีพ)
-  let _recheckConfirmJigId = null;
-  function showRecheckConfirmModal(jigId, jigName, info) {
-    _recheckConfirmJigId = jigId;
-    $('recheck-confirm-jigname').textContent = jigName;
-    const badge = $('recheck-confirm-badge');
-    badge.className = `jig-checked-badge ${info.status === 'ng' ? 'jig-checked-badge-ng' : 'jig-checked-badge-ok'}`;
-    badge.textContent = info.status === 'ng' ? '⚠️ พบ NG' : '✅ ผ่าน';
-    $('recheck-confirm-time').textContent = `ตรวจแล้ววันนี้เมื่อ ${info.time} น.`;
-    $('recheck-confirm-modal').classList.remove('hidden');
-  }
-  function hideRecheckConfirmModal() {
-    $('recheck-confirm-modal').classList.add('hidden');
-    _recheckConfirmJigId = null;
-  }
-  function bindRecheckConfirmModal() {
-    $('btn-recheck-cancel').addEventListener('click', hideRecheckConfirmModal);
-    $('recheck-confirm-modal').addEventListener('click', (e) => {
-      if (e.target.id === 'recheck-confirm-modal') hideRecheckConfirmModal(); // แตะพื้นหลังนอกกล่อง = ยกเลิก
-    });
-    $('btn-recheck-confirm').addEventListener('click', () => {
-      const jigId = _recheckConfirmJigId;
-      hideRecheckConfirmModal();
-      if (jigId) selectJig(jigId);
-    });
-  }
-
-  // 🆕 Generic Confirm Modal — แทนที่ confirm() ของเบราว์เซอร์ทุกจุดในแอป (Promise-based)
-  //    ใช้แบบ: if (!(await showConfirmModal('ข้อความ'))) return;
-  //    ปุ่ม "ยกเลิก" เป็นค่าเริ่มต้นที่ปลอดภัยเสมอ (ทั้งกดยกเลิก, กด ✕/พื้นหลัง, หรือกด Esc ล้วน resolve เป็น false)
-  let _genericConfirmResolve = null;
-  function showConfirmModal(message, opts = {}) {
-    return new Promise((resolve) => {
-      _genericConfirmResolve = resolve;
-      $('generic-confirm-message').textContent = message;
-      $('btn-generic-confirm-ok').textContent = opts.confirmLabel || 'ยืนยัน';
-      $('btn-generic-confirm-cancel').textContent = opts.cancelLabel || 'ยกเลิก';
-      // 🆕 โหมด danger (สีแดง) ใช้กับแอ็กชันที่ย้อนกลับไม่ได้ เช่น ลบข้อมูล
-      $('btn-generic-confirm-ok').classList.toggle('danger', !!opts.danger);
-      $('generic-confirm-icon').classList.toggle('danger', !!opts.danger);
-      $('generic-confirm-modal').classList.remove('hidden');
-      $('btn-generic-confirm-ok').focus();
-    });
-  }
-  function hideConfirmModal(result) {
-    $('generic-confirm-modal').classList.add('hidden');
-    if (_genericConfirmResolve) { _genericConfirmResolve(result); _genericConfirmResolve = null; }
-  }
-  function bindGenericConfirmModal() {
-    $('btn-generic-confirm-cancel').addEventListener('click', () => hideConfirmModal(false));
-    $('btn-generic-confirm-ok').addEventListener('click', () => hideConfirmModal(true));
-    $('generic-confirm-modal').addEventListener('click', (e) => {
-      if (e.target.id === 'generic-confirm-modal') hideConfirmModal(false); // แตะพื้นหลังนอกกล่อง = ยกเลิก
-    });
-    document.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape' && !$('generic-confirm-modal').classList.contains('hidden')) hideConfirmModal(false);
-    });
   }
   // ── ดึงรายการ JIG ที่มาร์ค "ไม่ได้ผลิต" ของวันนี้ จาก Supabase ──
   async function pullJigSkipsFromSupabase() {
@@ -5863,45 +5707,36 @@ ${JSON.stringify(summary, null, 2)}
      ═══════════════════════════════════════════════════════════════ */
 
   // ✅ ฟังก์ชัน: ดึงข้อมูลสถิติ storage จาก Supabase — คำนวณขนาดจริงจากข้อมูลจริง (ไม่ใช่ประมาณการหยาบๆ)
+  // 🆕 [แก้ปัญหา Egress เกิน] เดิมฟังก์ชันนี้ทำ SELECT * ทุกตาราง (รวม history ที่มีรูปถ่าย base64
+  // ฝังอยู่ในทุกแถว) แล้วเอามาชั่งน้ำหนักไบต์ฝั่ง browser ด้วย Blob — เท่ากับ "ดาวน์โหลดข้อมูลทั้งฐาน
+  // เพื่อไปวัดว่าฐานมันหนักแค่ไหน" ทุกครั้งที่เรียก ซึ่งเป็นตัวกิน Egress หลัก
+  // ตอนนี้เปลี่ยนไปเรียก RPC get_storage_stats() แทน — ให้ Postgres คำนวณขนาดจริงด้วย
+  // pg_total_relation_size() ที่ฝั่งเซิร์ฟเวอร์เลย ไม่มีข้อมูลแถวไหนถูกส่งออกมาที่ browser เลยสักไบต์เดียว
+  // (ต้องรัน SQL migration "get_storage_stats" ใน Supabase SQL Editor ก่อนใช้งานฟังก์ชันนี้ได้)
   async function getStorageStats() {
     if (!sb) return null;
     try {
-      // ── ดึงข้อมูล "เต็ม" ของทุกตาราง (ไม่ใช่แค่นับจำนวนแถว) เพื่อคำนวณขนาดไบต์จริง
-      //    รวมรูปถ่าย base64 ที่ฝังอยู่ใน history.items และ jigs.bg_image ด้วย — เป็นตัวกินพื้นที่หลัก
-      const [dep, lin, jig, cp, hist, tpl] = await Promise.all([
-        sb.from('departments').select('*'),
-        sb.from('lines').select('*'),
-        sb.from('jigs').select('*'),
-        sb.from('checkpoints').select('*'),
-        sb.from('history').select('*'),
-        sb.from('templates').select('*'),
-      ]);
-      const err = dep.error || lin.error || jig.error || cp.error || hist.error || tpl.error;
-      if (err) throw err;
+      const { data, error } = await sb.rpc('get_storage_stats');
+      if (error) throw error;
 
-      // คำนวณขนาดไบต์จริงของแต่ละตาราง ด้วย Blob (นับ UTF-8 byte length ตรงตามจริง)
-      const byteSizeOf = (rows) => new Blob([JSON.stringify(rows || [])]).size;
-      const sizeByTable = {
-        departments: byteSizeOf(dep.data),
-        lines:       byteSizeOf(lin.data),
-        jigs:        byteSizeOf(jig.data),   // รวม bg_image (base64 พื้นหลัง JIG)
-        checkpoints: byteSizeOf(cp.data),
-        history:     byteSizeOf(hist.data),  // รวมรูปถ่าย base64 ที่แนบในแต่ละใบตรวจ — ตัวใหญ่สุด
-        templates:   byteSizeOf(tpl.data),
-      };
+      const sizeByTable = {};
+      const countByTable = {};
+      (data || []).forEach(row => {
+        sizeByTable[row.table_name] = Number(row.size_bytes) || 0;
+        countByTable[row.table_name] = Number(row.row_count) || 0;
+      });
       const totalBytes = Object.values(sizeByTable).reduce((a, b) => a + b, 0);
 
       const stats = {
-        departments: (dep.data || []).length,
-        lines:       (lin.data || []).length,
-        jigs:        (jig.data || []).length,
-        checkpoints: (cp.data || []).length,
-        history:     (hist.data || []).length,
-        templates:   (tpl.data || []).length,
-        totalRecords: (dep.data || []).length + (lin.data || []).length + (jig.data || []).length +
-                      (cp.data || []).length + (hist.data || []).length + (tpl.data || []).length,
+        departments: countByTable.departments || 0,
+        lines:       countByTable.lines || 0,
+        jigs:        countByTable.jigs || 0,
+        checkpoints: countByTable.checkpoints || 0,
+        history:     countByTable.history || 0,
+        templates:   countByTable.templates || 0,
+        totalRecords: Object.values(countByTable).reduce((a, b) => a + b, 0),
         sizeByTable,
-        totalBytes, // ✅ ขนาดจริงจากข้อมูลจริง (ไม่ใช่ประมาณการ record × 500 bytes แบบเดิม)
+        totalBytes, // ✅ ขนาดจริงจาก pg_total_relation_size() ฝั่ง Postgres — แม่นยำและไม่กิน Egress
         timestamp: new Date().toLocaleString('th-TH'),
       };
 
@@ -6161,21 +5996,15 @@ ${JSON.stringify(summary, null, 2)}
     }
   }
 
-  // ✅ Auto-refresh storage status
+  // 🆕 [แก้ปัญหา Egress เกิน] เดิมมี auto-refresh ทุก 30 วินาที "ตั้งแต่แอปโหลดเสร็จ" — ไม่ว่าใครจะเปิดดู
+  // Storage Status อยู่หรือไม่ก็ตาม ทำให้ดาวน์โหลดข้อมูลทั้งฐาน (รวมรูปถ่าย base64 ใน history) ซ้ำๆ
+  // ตลอดเวลาที่แอปเปิดค้างไว้ — เป็นสาเหตุหลักที่ Egress พุ่งเกินโควตา ตอนนี้เปลี่ยนเป็นโหลดเฉพาะตอน
+  // Admin เปิด Admin Panel จริงๆ เท่านั้น (ดู openPanel()) และมีปุ่ม Refresh ให้กดเองเวลาต้องการดูค่าล่าสุด
+  // ฟังก์ชัน autoRefreshStorageStatus() คงไว้เผื่อ debug/เรียกเองในอนาคต แต่ไม่ผูกกับ window load แล้ว
   function autoRefreshStorageStatus(intervalSeconds = 30) {
     renderStorageStatus();
     setInterval(() => renderStorageStatus(), intervalSeconds * 1000);
   }
-
-  // ✅ เรียกเมื่อ initApp() เสร็จ
-  window.addEventListener('load', () => {
-    setTimeout(() => {
-      if (typeof renderStorageStatus === 'function') {
-        renderStorageStatus();
-        autoRefreshStorageStatus(30);
-      }
-    }, 1000);
-  });
 
 })();
 
