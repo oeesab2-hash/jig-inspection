@@ -2712,9 +2712,9 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
       if (!cpEditJigId) { toast('กรุณาเลือก JIG ก่อน', 'ng'); return; }
       if (!file.type.startsWith('image/')) { toast('กรุณาเลือกไฟล์รูปภาพ', 'ng'); e.target.value=''; return; }
       try {
-        // ลด maxDim 1000→700px, quality 0.82→0.65 เพื่อประหยัด storage
-        // (พื้นหลัง JIG ดูบ่อย จึงเก็บคุณภาพที่ดีกว่ารูปหลักฐาน)
-        const dataUrl = await resizeImageToDataURL(file, 700, 0.65);
+        // 🆕 ลด maxDim 700→500px, quality 0.65→0.55 อีกรอบ เพื่อลด Egress (รูปนี้ถูกดึงซ้ำทุกครั้งที่เปิดแอป — ยิ่งเล็กยิ่งประหยัด)
+        // (พื้นหลัง JIG ใช้แค่อ้างอิงตำแหน่งจุดตรวจ ไม่ต้องคมกริบระดับพิมพ์ ขนาดนี้ยังดูออกชัดเจนพอ)
+        const dataUrl = await resizeImageToDataURL(file, 500, 0.55);
         const jig = catalog.jigs.find(j => j.id === cpEditJigId);
         jig.bgImage = dataUrl;
         saveCatalog();
