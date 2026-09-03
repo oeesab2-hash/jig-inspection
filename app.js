@@ -894,6 +894,27 @@
     });
   }
   
+  // 🆕 เหมือน resizeImageToDataURL แต่รับ dataURL เดิม (ไม่ใช่ไฟล์ที่เพิ่งเลือก) — ใช้บีบอัดรูปที่มีอยู่แล้วในระบบซ้ำอีกรอบ
+  function resizeDataUrlToDataURL(dataUrl, maxDim, quality) {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => {
+        let { width, height } = img;
+        if (width > maxDim || height > maxDim) {
+          const scale = maxDim / Math.max(width, height);
+          width = Math.round(width * scale);
+          height = Math.round(height * scale);
+        }
+        const canvas = document.createElement('canvas');
+        canvas.width = width; canvas.height = height;
+        canvas.getContext('2d').drawImage(img, 0, 0, width, height);
+        resolve(canvas.toDataURL('image/jpeg', quality));
+      };
+      img.onerror = () => reject(new Error('ไม่สามารถอ่านรูปภาพเดิมได้'));
+      img.src = dataUrl;
+    });
+  }
+
   function formatFileSize(bytes) {
     if (bytes === 0) return '0 B';
     const k = 1024;
@@ -6050,6 +6071,9 @@ ${JSON.stringify(summary, null, 2)}
         <button id="btn-jig-image-sizes" class="storage-btn storage-btn-full">${ICON_SEARCH} ดูขนาดรูปพื้นหลังแยกตาม JIG</button>
         <div id="jig-image-sizes-list" style="margin-top: 6px;"></div>
 
+        <!-- 🆕 บีบอัดรูปพื้นหลัง JIG เก่าทั้งหมดใหม่ (500px/55%) — ลด Egress จากรูปที่อัปโหลดไว้ก่อนปรับค่าบีบอัด -->
+        <button id="btn-recompress-jig-images" class="storage-btn storage-btn-full" style="margin-top:6px;"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 14 10 14 10 20"/><polyline points="20 10 14 10 14 4"/><line x1="14" y1="10" x2="21" y2="3"/><line x1="3" y1="21" x2="10" y2="14"/></svg> บีบอัดรูปพื้นหลัง JIG ทั้งหมดใหม่</button>
+
         ${usagePercent > 90 ? `<div class="storage-warning-banner">${ICON_WARN} <span><strong>เตือน:</strong> พื้นที่ใกล้เต็มแล้ว ลองลบประวัติเก่าหรืออัปเกรดแผน Supabase</span></div>` : ''}
       </div>
     `;
@@ -6057,10 +6081,12 @@ ${JSON.stringify(summary, null, 2)}
     const refreshBtn = $('btn-refresh-storage');
     const backupBtn = $('btn-backup-storage');
     const jigSizesBtn = $('btn-jig-image-sizes');
+    const recompressBtn = $('btn-recompress-jig-images');
 
     if (refreshBtn) refreshBtn.addEventListener('click', () => renderStorageStatus());
     if (backupBtn) backupBtn.addEventListener('click', () => backupStorageData());
     if (jigSizesBtn) jigSizesBtn.addEventListener('click', showJigImageSizeBreakdown);
+    if (recompressBtn) recompressBtn.addEventListener('click', recompressAllJigImages);
   }
 
   // 🆕 ดึงขนาดรูปพื้นหลังของแต่ละ JIG มาเรียงจากใหญ่ไปเล็ก — ช่วยหา "ตัวการ" ที่กินพื้นที่เยอะผิดปกติ
@@ -6109,6 +6135,50 @@ ${JSON.stringify(summary, null, 2)}
       console.error('showJigImageSizeBreakdown error:', e);
       listEl.innerHTML = `<div style="padding: 8px; color: var(--text-muted); font-size: 11px;">⚠️ ดึงข้อมูลไม่สำเร็จ</div>`;
     }
+  }
+
+  // 🆕 บีบอัดรูปพื้นหลัง JIG ที่มีอยู่แล้วทั้งหมดใหม่ (500px/55%) — ใช้ตอนอยากลดขนาดรูปเก่าที่อัปโหลดไว้ก่อนปรับค่าบีบอัดใหม่
+  // ทำงานกับ catalog ที่โหลดในเครื่อง (ไม่ดึงจาก Supabase ใหม่) แล้ว saveCatalog() ดันขึ้น Supabase ให้เองทีเดียวตอนจบ
+  const RECOMPRESS_MAX_DIM = 500, RECOMPRESS_QUALITY = 0.55;
+  async function recompressAllJigImages() {
+    const targets = (catalog.jigs || []).filter(j => j.bgImage);
+    if (!targets.length) { toast('ไม่มี JIG ที่มีรูปพื้นหลังให้บีบอัด', 'ng'); return; }
+    const sizeBeforeAll = targets.reduce((s, j) => s + j.bgImage.length, 0); // base64 string length ≈ ขนาดจริงที่เก็บ/ส่งผ่านเน็ต (ตัวอักษร base64 เป็น ASCII ล้วน 1 ตัว = 1 byte)
+    if (!confirm(`จะบีบอัดรูปพื้นหลังของ JIG ทั้งหมด ${targets.length} ตัวใหม่ (ขนาดปัจจุบันรวม ~${formatFileSize(sizeBeforeAll)})\nต้องการดำเนินการต่อหรือไม่?`)) return;
+
+    const btn = $('btn-recompress-jig-images');
+    if (btn) { btn.disabled = true; }
+    let sizeBefore = 0, sizeAfter = 0, processed = 0, skipped = 0, failed = 0;
+
+    for (const jig of targets) {
+      try {
+        const before = jig.bgImage;
+        const resized = await resizeDataUrlToDataURL(before, RECOMPRESS_MAX_DIM, RECOMPRESS_QUALITY);
+        sizeBefore += before.length;
+        if (resized.length < before.length) {
+          jig.bgImage = resized;
+          sizeAfter += resized.length;
+        } else {
+          sizeAfter += before.length; // เล็กอยู่แล้ว/บีบอัดแล้วไม่ได้เล็กลงจริง — ไม่เปลี่ยนของเดิม กันคุณภาพแย่ลงเปล่าๆ
+          skipped++;
+        }
+        processed++;
+      } catch (e) {
+        console.warn('recompress error for jig', jig.id, e);
+        failed++;
+      }
+      if (btn) btn.textContent = `กำลังบีบอัด... (${processed + failed}/${targets.length})`;
+    }
+
+    saveCatalog(); // บันทึก local + ดัน Supabase ให้เอง (debounced push เหมือนตอนแก้ JIG ปกติ)
+
+    if (btn) { btn.disabled = false; btn.textContent = 'บีบอัดรูปพื้นหลัง JIG ทั้งหมดใหม่'; }
+    if (typeof renderAdminLists === 'function') renderAdminLists();
+    if (typeof renderSvgMap === 'function') renderSvgMap();
+
+    const savedPct = sizeBefore > 0 ? Math.round((1 - sizeAfter / sizeBefore) * 100) : 0;
+    const failNote = failed ? ` (อ่านไม่สำเร็จ ${failed} รูป — ข้ามไป)` : '';
+    toast(`บีบอัดเสร็จ ${processed} รูป (ข้าม ${skipped} รูปที่เล็กอยู่แล้ว)${failNote} — ลดขนาดได้ ~${savedPct}% (${formatFileSize(sizeBefore)} → ${formatFileSize(sizeAfter)})`, 'ok');
   }
 
   // ✅ ฟังก์ชัน: Backup ข้อมูล (SAFE - ดาวน์โหลดเท่านั้น ไม่ลบ)
