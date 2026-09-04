@@ -524,6 +524,7 @@
   // 🆕 companyNameTh/En/Logo — เว้นว่าง = ใช้ค่า default ของระบบ (ดู DEFAULT_COMPANY_* ด้านล่าง) เพื่อไม่ให้ deployment เดิม (Summit) พังตอนยังไม่ได้ตั้งค่า
   let appSettings = { docNo: 'DDM4-2-002', formRevLevel: 'Rev.01', revLevel: 'Rev.00', revDate: '', issueDate: '', companyNameTh: '', companyNameEn: '', companyLogo: '', companies: [] };
   let selection = { deptId: null, lineId: null, jigId: null };
+  let _submitInProgress = false; // 🆕 กันกดปุ่ม "บันทึกผลการตรวจ" ซ้ำรัวๆ ระหว่างที่ยังรอ GPS/ส่งขึ้นระบบอยู่ — ต้นเหตุที่ทำให้ประวัติซ้ำกัน
   let jigSearchTerm = ''; // filters the Level-3 JIG chip list
   let checkState = [];  // current inspection items
   let cpEditJigId = null; // JIG ที่กำลังแก้ไขจุดตรวจ/รูปพื้นหลังใน Admin Panel
@@ -1744,6 +1745,7 @@
   }
 
   async function submitReport() {
+    if (_submitInProgress) return; // 🆕 กันกดซ้ำระหว่างที่ยังทำงานอยู่ (รอ GPS/บันทึก/ส่ง Telegram) — ต้นเหตุประวัติซ้ำ
     if (!selection.jigId) { toast('กรุณาเลือก JIG ก่อนบันทึก', 'ng'); return; }
     if (!$('inp-inspector').value.trim()) { toast('กรุณาระบุชื่อผู้ตรวจสอบ', 'ng'); $('inp-inspector').focus(); return; }
     if (!$('inp-date').value) { toast('กรุณาเลือกวันที่', 'ng'); return; }
@@ -1751,6 +1753,12 @@
     const unchecked = checkState.filter(i => !i.status);
     if (unchecked.length) { toast(`ยังมี ${unchecked.length} รายการที่ยังไม่ตรวจ`, 'ng'); return; }
 
+    // 🆕 ผ่านทุกเงื่อนไขแล้ว เริ่มขั้นตอนที่ใช้เวลา (GPS/บันทึก/Telegram) — ล็อกปุ่มไว้กันกดซ้ำ จนกว่าจะจบไม่ว่าสำเร็จหรือพลาด (ดู finally ท้ายฟังก์ชัน)
+    _submitInProgress = true;
+    const submitBtn = $('btn-submit');
+    if (submitBtn) submitBtn.disabled = true;
+
+    try {
     // ─── ขอ GPS พอดีกดบันทึก (บังคับต้องได้) ─── 
     toast('🔄 กำลังเก็บค่า GPS... (ต้องได้พิกัดก่อนบันทึกได้)', 'ok');
     const gpsData = await getGPSCoordinates();
@@ -1877,6 +1885,19 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
         + `approve.html?id=${encodeURIComponent(record.id)}`;
 
       await sendTelegramMessage(telegramMsg, approveUrl, '✅ เปิดเพื่อตรวจสอบ');
+
+      // 🆕 กลับไปหน้า "เลือก Line การผลิต" ทันทีหลังบันทึกสำเร็จ — ตามที่พี่บีขอ
+      // กันปัญหาคนหน้างานกดบันทึกซ้ำที่ฟอร์มเดิม (ทำให้ประวัติซ้ำ) เพราะฟอร์มนี้จะถูกซ่อนไปเลย
+      // ต้องเลือก JIG ใหม่ทั้งกระบวนการถึงจะกดบันทึกได้อีกครั้ง
+      selection.lineId = null;
+      selection.jigId  = null;
+      hideInspectionCards();
+      renderFilter();
+    }
+    } finally {
+      // 🆕 คืนสถานะปุ่มเสมอไม่ว่าจะสำเร็จ/ไม่สำเร็จ/ error กลางทาง — กันปุ่มค้าง disabled ถ้าเกิด error ที่ไม่คาดคิด
+      _submitInProgress = false;
+      if (submitBtn) submitBtn.disabled = false;
     }
   }
 
