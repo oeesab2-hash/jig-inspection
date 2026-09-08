@@ -1,0 +1,1249 @@
+<!DOCTYPE html>
+<html lang="th" data-theme="light">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0">
+  <meta name="theme-color" content="#16324f">
+  <title>Dashboard ภาพรวม | JIG Inspection (TV Display)</title>
+  <!-- 🆕 หน้านี้เป็น "TV Dashboard" — สำเนาจาก index.html แยกต่างหาก ไม่แก้ index.html/app.js เดิมเลยแม้แต่บรรทัดเดียว
+       ใช้ app.js/style.css ชุดเดียวกับแอปหลักตรงๆ (ไม่ fork/ไม่ copy logic) ผ่าน "shim" 2 จุดที่ทำงานก่อน
+       app.js จะเริ่มรัน (ดูสคริปต์ก่อน BOOT LOADING SCREEN ด้านล่าง):
+         1) ปลอมค่า session ให้ผ่านหน้า Login (TV ไม่มีคนพิมพ์ user/pass) — เช็คแค่ PIN ของหน้านี้แทน
+         2) ปลอมผลเช็ค GPS ให้ผ่านเสมอ (TV ไม่มี GPS) กัน modal เตือนเด้ง
+       หลัง app.js โหลดเสร็จ มีสคริปต์ท้ายไฟล์คอยสลับไปแท็บ Dashboard อัตโนมัติ + ซ่อนเมนู/ปุ่มแก้ไขทั้งหมด
+       ให้เหลือแต่หน้าจอ Dashboard ล้วนๆ สำหรับเปิดทิ้งไว้บนทีวีครับ -->
+  <style>
+    /* ── PIN Gate — ด่านกันเบื้องต้นก่อนเข้าดู Dashboard (กรอกครั้งเดียว จำไว้ในเครื่อง TV เครื่องนั้น) ── */
+    #tv-pin-gate {
+      position: fixed; inset: 0; z-index: 999999;
+      background: linear-gradient(160deg, #0f2137, #16324f);
+      display: flex; align-items: center; justify-content: center; padding: 20px;
+    }
+    #tv-pin-gate.hidden { display: none; }
+    .tv-pin-box {
+      background: #fff; border-radius: 18px; padding: 34px 28px;
+      width: min(360px, 92vw); text-align: center;
+      box-shadow: 0 24px 70px hsla(0,0%,0%,0.4);
+    }
+    .tv-pin-icon {
+      width: 56px; height: 56px; margin: 0 auto 16px; border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      background: hsla(38, 70%, 50%, 0.15); color: #b8860b;
+    }
+    .tv-pin-title { font-size: 17px; font-weight: 700; color: #1e293b; margin-bottom: 4px; }
+    .tv-pin-sub { font-size: 12.5px; color: #64748b; margin-bottom: 20px; }
+    #tv-pin-input {
+      width: 100%; text-align: center; letter-spacing: 10px; font-size: 22px;
+      padding: 12px; border-radius: 10px; border: 1.5px solid #cbd5e1;
+      margin-bottom: 12px; font-family: inherit; outline: none;
+    }
+    #tv-pin-input:focus { border-color: #2f6fd1; }
+    #tv-pin-error { color: #dc2626; font-size: 12.5px; min-height: 18px; margin-bottom: 10px; }
+    #tv-pin-submit {
+      width: 100%; padding: 12px; border-radius: 10px; border: none;
+      background: linear-gradient(120deg, #16324f, #0f2137); color: #fff;
+      font-size: 14px; font-weight: 700; font-family: inherit; cursor: pointer;
+    }
+    #tv-pin-submit:hover { filter: brightness(1.1); }
+    /* ── ปรับเลย์เอาต์สำหรับจอทีวี — เต็มความกว้าง ไม่มี margin เผื่อ sidebar (ถูกซ่อนไปแล้ว) ── */
+    body.tv-mode .app-container { margin-left: 0 !important; max-width: 1600px !important; }
+    /* ── ซ่อนปุ่ม/องค์ประกอบที่เป็นการแก้ไข ไม่เหมาะกับจอดูอย่างเดียว ── */
+    body.tv-mode .drag-handle,
+    body.tv-mode #btn-dash-reset-order,
+    body.tv-mode .hi-bulk-btn { display: none !important; }
+  </style>
+  <!-- 🆕 ไอคอนแอป — ใช้ตอนปักหมุด/สร้าง shortcut บน PC, Android, iPhone/iPad -->
+  <link rel="icon" type="image/png" sizes="32x32" href="icon-32.png">
+  <link rel="icon" type="image/x-icon" href="favicon.ico">
+  <link rel="apple-touch-icon" sizes="180x180" href="icon-180.png">
+  <link rel="manifest" href="manifest.json">
+  <script>
+    // ใช้ธีมที่เคยเลือกไว้ (ถ้ามี) ก่อนหน้า render เพื่อไม่ให้จอกระพริบ — ค่าเริ่มต้นคือธีมสว่าง
+    (function () {
+      try {
+        var saved = localStorage.getItem('jig_theme');
+        if (saved === 'dark' || saved === 'light') {
+          document.documentElement.setAttribute('data-theme', saved);
+        }
+      } catch (e) { /* localStorage ไม่พร้อมใช้งาน — ใช้ค่าเริ่มต้น */ }
+    })();
+  </script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Thai:wght@300;400;500;600;700&family=Sarabun:wght@300;400;500;600;700&family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+  <script>
+/*! @license DOMPurify 3.1.6 | (c) Cure53 and other contributors | Released under the Apache license 2.0 and Mozilla Public License 2.0 | github.com/cure53/DOMPurify/blob/3.1.6/LICENSE */
+!function(e,t){"object"==typeof exports&&"undefined"!=typeof module?module.exports=t():"function"==typeof define&&define.amd?define(t):(e="undefined"!=typeof globalThis?globalThis:e||self).DOMPurify=t()}(this,(function(){"use strict";const{entries:e,setPrototypeOf:t,isFrozen:n,getPrototypeOf:o,getOwnPropertyDescriptor:r}=Object;let{freeze:i,seal:a,create:l}=Object,{apply:c,construct:s}="undefined"!=typeof Reflect&&Reflect;i||(i=function(e){return e}),a||(a=function(e){return e}),c||(c=function(e,t,n){return e.apply(t,n)}),s||(s=function(e,t){return new e(...t)});const u=b(Array.prototype.forEach),m=b(Array.prototype.pop),p=b(Array.prototype.push),f=b(String.prototype.toLowerCase),d=b(String.prototype.toString),h=b(String.prototype.match),g=b(String.prototype.replace),T=b(String.prototype.indexOf),y=b(String.prototype.trim),E=b(Object.prototype.hasOwnProperty),_=b(RegExp.prototype.test),A=(N=TypeError,function(){for(var e=arguments.length,t=new Array(e),n=0;n<e;n++)t[n]=arguments[n];return s(N,t)});var N;function b(e){return function(t){for(var n=arguments.length,o=new Array(n>1?n-1:0),r=1;r<n;r++)o[r-1]=arguments[r];return c(e,t,o)}}function S(e,o){let r=arguments.length>2&&void 0!==arguments[2]?arguments[2]:f;t&&t(e,null);let i=o.length;for(;i--;){let t=o[i];if("string"==typeof t){const e=r(t);e!==t&&(n(o)||(o[i]=e),t=e)}e[t]=!0}return e}function R(e){for(let t=0;t<e.length;t++){E(e,t)||(e[t]=null)}return e}function w(t){const n=l(null);for(const[o,r]of e(t)){E(t,o)&&(Array.isArray(r)?n[o]=R(r):r&&"object"==typeof r&&r.constructor===Object?n[o]=w(r):n[o]=r)}return n}function C(e,t){for(;null!==e;){const n=r(e,t);if(n){if(n.get)return b(n.get);if("function"==typeof n.value)return b(n.value)}e=o(e)}return function(){return null}}const L=i(["a","abbr","acronym","address","area","article","aside","audio","b","bdi","bdo","big","blink","blockquote","body","br","button","canvas","caption","center","cite","code","col","colgroup","content","data","datalist","dd","decorator","del","details","dfn","dialog","dir","div","dl","dt","element","em","fieldset","figcaption","figure","font","footer","form","h1","h2","h3","h4","h5","h6","head","header","hgroup","hr","html","i","img","input","ins","kbd","label","legend","li","main","map","mark","marquee","menu","menuitem","meter","nav","nobr","ol","optgroup","option","output","p","picture","pre","progress","q","rp","rt","ruby","s","samp","section","select","shadow","small","source","spacer","span","strike","strong","style","sub","summary","sup","table","tbody","td","template","textarea","tfoot","th","thead","time","tr","track","tt","u","ul","var","video","wbr"]),D=i(["svg","a","altglyph","altglyphdef","altglyphitem","animatecolor","animatemotion","animatetransform","circle","clippath","defs","desc","ellipse","filter","font","g","glyph","glyphref","hkern","image","line","lineargradient","marker","mask","metadata","mpath","path","pattern","polygon","polyline","radialgradient","rect","stop","style","switch","symbol","text","textpath","title","tref","tspan","view","vkern"]),v=i(["feBlend","feColorMatrix","feComponentTransfer","feComposite","feConvolveMatrix","feDiffuseLighting","feDisplacementMap","feDistantLight","feDropShadow","feFlood","feFuncA","feFuncB","feFuncG","feFuncR","feGaussianBlur","feImage","feMerge","feMergeNode","feMorphology","feOffset","fePointLight","feSpecularLighting","feSpotLight","feTile","feTurbulence"]),O=i(["animate","color-profile","cursor","discard","font-face","font-face-format","font-face-name","font-face-src","font-face-uri","foreignobject","hatch","hatchpath","mesh","meshgradient","meshpatch","meshrow","missing-glyph","script","set","solidcolor","unknown","use"]),x=i(["math","menclose","merror","mfenced","mfrac","mglyph","mi","mlabeledtr","mmultiscripts","mn","mo","mover","mpadded","mphantom","mroot","mrow","ms","mspace","msqrt","mstyle","msub","msup","msubsup","mtable","mtd","mtext","mtr","munder","munderover","mprescripts"]),k=i(["maction","maligngroup","malignmark","mlongdiv","mscarries","mscarry","msgroup","mstack","msline","msrow","semantics","annotation","annotation-xml","mprescripts","none"]),M=i(["#text"]),I=i(["accept","action","align","alt","autocapitalize","autocomplete","autopictureinpicture","autoplay","background","bgcolor","border","capture","cellpadding","cellspacing","checked","cite","class","clear","color","cols","colspan","controls","controlslist","coords","crossorigin","datetime","decoding","default","dir","disabled","disablepictureinpicture","disableremoteplayback","download","draggable","enctype","enterkeyhint","face","for","headers","height","hidden","high","href","hreflang","id","inputmode","integrity","ismap","kind","label","lang","list","loading","loop","low","max","maxlength","media","method","min","minlength","multiple","muted","name","nonce","noshade","novalidate","nowrap","open","optimum","pattern","placeholder","playsinline","popover","popovertarget","popovertargetaction","poster","preload","pubdate","radiogroup","readonly","rel","required","rev","reversed","role","rows","rowspan","spellcheck","scope","selected","shape","size","sizes","span","srclang","start","src","srcset","step","style","summary","tabindex","title","translate","type","usemap","valign","value","width","wrap","xmlns","slot"]),U=i(["accent-height","accumulate","additive","alignment-baseline","ascent","attributename","attributetype","azimuth","basefrequency","baseline-shift","begin","bias","by","class","clip","clippathunits","clip-path","clip-rule","color","color-interpolation","color-interpolation-filters","color-profile","color-rendering","cx","cy","d","dx","dy","diffuseconstant","direction","display","divisor","dur","edgemode","elevation","end","fill","fill-opacity","fill-rule","filter","filterunits","flood-color","flood-opacity","font-family","font-size","font-size-adjust","font-stretch","font-style","font-variant","font-weight","fx","fy","g1","g2","glyph-name","glyphref","gradientunits","gradienttransform","height","href","id","image-rendering","in","in2","k","k1","k2","k3","k4","kerning","keypoints","keysplines","keytimes","lang","lengthadjust","letter-spacing","kernelmatrix","kernelunitlength","lighting-color","local","marker-end","marker-mid","marker-start","markerheight","markerunits","markerwidth","maskcontentunits","maskunits","max","mask","media","method","mode","min","name","numoctaves","offset","operator","opacity","order","orient","orientation","origin","overflow","paint-order","path","pathlength","patterncontentunits","patterntransform","patternunits","points","preservealpha","preserveaspectratio","primitiveunits","r","rx","ry","radius","refx","refy","repeatcount","repeatdur","restart","result","rotate","scale","seed","shape-rendering","specularconstant","specularexponent","spreadmethod","startoffset","stddeviation","stitchtiles","stop-color","stop-opacity","stroke-dasharray","stroke-dashoffset","stroke-linecap","stroke-linejoin","stroke-miterlimit","stroke-opacity","stroke","stroke-width","style","surfacescale","systemlanguage","tabindex","targetx","targety","transform","transform-origin","text-anchor","text-decoration","text-rendering","textlength","type","u1","u2","unicode","values","viewbox","visibility","version","vert-adv-y","vert-origin-x","vert-origin-y","width","word-spacing","wrap","writing-mode","xchannelselector","ychannelselector","x","x1","x2","xmlns","y","y1","y2","z","zoomandpan"]),P=i(["accent","accentunder","align","bevelled","close","columnsalign","columnlines","columnspan","denomalign","depth","dir","display","displaystyle","encoding","fence","frame","height","href","id","largeop","length","linethickness","lspace","lquote","mathbackground","mathcolor","mathsize","mathvariant","maxsize","minsize","movablelimits","notation","numalign","open","rowalign","rowlines","rowspacing","rowspan","rspace","rquote","scriptlevel","scriptminsize","scriptsizemultiplier","selection","separator","separators","stretchy","subscriptshift","supscriptshift","symmetric","voffset","width","xmlns"]),F=i(["xlink:href","xml:id","xlink:title","xml:space","xmlns:xlink"]),H=a(/\{\{[\w\W]*|[\w\W]*\}\}/gm),z=a(/<%[\w\W]*|[\w\W]*%>/gm),B=a(/\${[\w\W]*}/gm),W=a(/^data-[\-\w.\u00B7-\uFFFF]/),G=a(/^aria-[\-\w]+$/),Y=a(/^(?:(?:(?:f|ht)tps?|mailto|tel|callto|sms|cid|xmpp):|[^a-z]|[a-z+.\-]+(?:[^a-z+.\-:]|$))/i),j=a(/^(?:\w+script|data):/i),X=a(/[\u0000-\u0020\u00A0\u1680\u180E\u2000-\u2029\u205F\u3000]/g),q=a(/^html$/i),$=a(/^[a-z][.\w]*(-[.\w]+)+$/i);var K=Object.freeze({__proto__:null,MUSTACHE_EXPR:H,ERB_EXPR:z,TMPLIT_EXPR:B,DATA_ATTR:W,ARIA_ATTR:G,IS_ALLOWED_URI:Y,IS_SCRIPT_OR_DATA:j,ATTR_WHITESPACE:X,DOCTYPE_NAME:q,CUSTOM_ELEMENT:$});const V=1,Z=3,J=7,Q=8,ee=9,te=function(){return"undefined"==typeof window?null:window};var ne=function t(){let n=arguments.length>0&&void 0!==arguments[0]?arguments[0]:te();const o=e=>t(e);if(o.version="3.1.6",o.removed=[],!n||!n.document||n.document.nodeType!==ee)return o.isSupported=!1,o;let{document:r}=n;const a=r,c=a.currentScript,{DocumentFragment:s,HTMLTemplateElement:N,Node:b,Element:R,NodeFilter:H,NamedNodeMap:z=n.NamedNodeMap||n.MozNamedAttrMap,HTMLFormElement:B,DOMParser:W,trustedTypes:G}=n,j=R.prototype,X=C(j,"cloneNode"),$=C(j,"remove"),ne=C(j,"nextSibling"),oe=C(j,"childNodes"),re=C(j,"parentNode");if("function"==typeof N){const e=r.createElement("template");e.content&&e.content.ownerDocument&&(r=e.content.ownerDocument)}let ie,ae="";const{implementation:le,createNodeIterator:ce,createDocumentFragment:se,getElementsByTagName:ue}=r,{importNode:me}=a;let pe={};o.isSupported="function"==typeof e&&"function"==typeof re&&le&&void 0!==le.createHTMLDocument;const{MUSTACHE_EXPR:fe,ERB_EXPR:de,TMPLIT_EXPR:he,DATA_ATTR:ge,ARIA_ATTR:Te,IS_SCRIPT_OR_DATA:ye,ATTR_WHITESPACE:Ee,CUSTOM_ELEMENT:_e}=K;let{IS_ALLOWED_URI:Ae}=K,Ne=null;const be=S({},[...L,...D,...v,...x,...M]);let Se=null;const Re=S({},[...I,...U,...P,...F]);let we=Object.seal(l(null,{tagNameCheck:{writable:!0,configurable:!1,enumerable:!0,value:null},attributeNameCheck:{writable:!0,configurable:!1,enumerable:!0,value:null},allowCustomizedBuiltInElements:{writable:!0,configurable:!1,enumerable:!0,value:!1}})),Ce=null,Le=null,De=!0,ve=!0,Oe=!1,xe=!0,ke=!1,Me=!0,Ie=!1,Ue=!1,Pe=!1,Fe=!1,He=!1,ze=!1,Be=!0,We=!1,Ge=!0,Ye=!1,je={},Xe=null;const qe=S({},["annotation-xml","audio","colgroup","desc","foreignobject","head","iframe","math","mi","mn","mo","ms","mtext","noembed","noframes","noscript","plaintext","script","style","svg","template","thead","title","video","xmp"]);let $e=null;const Ke=S({},["audio","video","img","source","image","track"]);let Ve=null;const Ze=S({},["alt","class","for","id","label","name","pattern","placeholder","role","summary","title","value","style","xmlns"]),Je="http://www.w3.org/1998/Math/MathML",Qe="http://www.w3.org/2000/svg",et="http://www.w3.org/1999/xhtml";let tt=et,nt=!1,ot=null;const rt=S({},[Je,Qe,et],d);let it=null;const at=["application/xhtml+xml","text/html"];let lt=null,ct=null;const st=r.createElement("form"),ut=function(e){return e instanceof RegExp||e instanceof Function},mt=function(){let e=arguments.length>0&&void 0!==arguments[0]?arguments[0]:{};if(!ct||ct!==e){if(e&&"object"==typeof e||(e={}),e=w(e),it=-1===at.indexOf(e.PARSER_MEDIA_TYPE)?"text/html":e.PARSER_MEDIA_TYPE,lt="application/xhtml+xml"===it?d:f,Ne=E(e,"ALLOWED_TAGS")?S({},e.ALLOWED_TAGS,lt):be,Se=E(e,"ALLOWED_ATTR")?S({},e.ALLOWED_ATTR,lt):Re,ot=E(e,"ALLOWED_NAMESPACES")?S({},e.ALLOWED_NAMESPACES,d):rt,Ve=E(e,"ADD_URI_SAFE_ATTR")?S(w(Ze),e.ADD_URI_SAFE_ATTR,lt):Ze,$e=E(e,"ADD_DATA_URI_TAGS")?S(w(Ke),e.ADD_DATA_URI_TAGS,lt):Ke,Xe=E(e,"FORBID_CONTENTS")?S({},e.FORBID_CONTENTS,lt):qe,Ce=E(e,"FORBID_TAGS")?S({},e.FORBID_TAGS,lt):{},Le=E(e,"FORBID_ATTR")?S({},e.FORBID_ATTR,lt):{},je=!!E(e,"USE_PROFILES")&&e.USE_PROFILES,De=!1!==e.ALLOW_ARIA_ATTR,ve=!1!==e.ALLOW_DATA_ATTR,Oe=e.ALLOW_UNKNOWN_PROTOCOLS||!1,xe=!1!==e.ALLOW_SELF_CLOSE_IN_ATTR,ke=e.SAFE_FOR_TEMPLATES||!1,Me=!1!==e.SAFE_FOR_XML,Ie=e.WHOLE_DOCUMENT||!1,Fe=e.RETURN_DOM||!1,He=e.RETURN_DOM_FRAGMENT||!1,ze=e.RETURN_TRUSTED_TYPE||!1,Pe=e.FORCE_BODY||!1,Be=!1!==e.SANITIZE_DOM,We=e.SANITIZE_NAMED_PROPS||!1,Ge=!1!==e.KEEP_CONTENT,Ye=e.IN_PLACE||!1,Ae=e.ALLOWED_URI_REGEXP||Y,tt=e.NAMESPACE||et,we=e.CUSTOM_ELEMENT_HANDLING||{},e.CUSTOM_ELEMENT_HANDLING&&ut(e.CUSTOM_ELEMENT_HANDLING.tagNameCheck)&&(we.tagNameCheck=e.CUSTOM_ELEMENT_HANDLING.tagNameCheck),e.CUSTOM_ELEMENT_HANDLING&&ut(e.CUSTOM_ELEMENT_HANDLING.attributeNameCheck)&&(we.attributeNameCheck=e.CUSTOM_ELEMENT_HANDLING.attributeNameCheck),e.CUSTOM_ELEMENT_HANDLING&&"boolean"==typeof e.CUSTOM_ELEMENT_HANDLING.allowCustomizedBuiltInElements&&(we.allowCustomizedBuiltInElements=e.CUSTOM_ELEMENT_HANDLING.allowCustomizedBuiltInElements),ke&&(ve=!1),He&&(Fe=!0),je&&(Ne=S({},M),Se=[],!0===je.html&&(S(Ne,L),S(Se,I)),!0===je.svg&&(S(Ne,D),S(Se,U),S(Se,F)),!0===je.svgFilters&&(S(Ne,v),S(Se,U),S(Se,F)),!0===je.mathMl&&(S(Ne,x),S(Se,P),S(Se,F))),e.ADD_TAGS&&(Ne===be&&(Ne=w(Ne)),S(Ne,e.ADD_TAGS,lt)),e.ADD_ATTR&&(Se===Re&&(Se=w(Se)),S(Se,e.ADD_ATTR,lt)),e.ADD_URI_SAFE_ATTR&&S(Ve,e.ADD_URI_SAFE_ATTR,lt),e.FORBID_CONTENTS&&(Xe===qe&&(Xe=w(Xe)),S(Xe,e.FORBID_CONTENTS,lt)),Ge&&(Ne["#text"]=!0),Ie&&S(Ne,["html","head","body"]),Ne.table&&(S(Ne,["tbody"]),delete Ce.tbody),e.TRUSTED_TYPES_POLICY){if("function"!=typeof e.TRUSTED_TYPES_POLICY.createHTML)throw A('TRUSTED_TYPES_POLICY configuration option must provide a "createHTML" hook.');if("function"!=typeof e.TRUSTED_TYPES_POLICY.createScriptURL)throw A('TRUSTED_TYPES_POLICY configuration option must provide a "createScriptURL" hook.');ie=e.TRUSTED_TYPES_POLICY,ae=ie.createHTML("")}else void 0===ie&&(ie=function(e,t){if("object"!=typeof e||"function"!=typeof e.createPolicy)return null;let n=null;const o="data-tt-policy-suffix";t&&t.hasAttribute(o)&&(n=t.getAttribute(o));const r="dompurify"+(n?"#"+n:"");try{return e.createPolicy(r,{createHTML:e=>e,createScriptURL:e=>e})}catch(e){return console.warn("TrustedTypes policy "+r+" could not be created."),null}}(G,c)),null!==ie&&"string"==typeof ae&&(ae=ie.createHTML(""));i&&i(e),ct=e}},pt=S({},["mi","mo","mn","ms","mtext"]),ft=S({},["foreignobject","annotation-xml"]),dt=S({},["title","style","font","a","script"]),ht=S({},[...D,...v,...O]),gt=S({},[...x,...k]),Tt=function(e){p(o.removed,{element:e});try{re(e).removeChild(e)}catch(t){$(e)}},yt=function(e,t){try{p(o.removed,{attribute:t.getAttributeNode(e),from:t})}catch(e){p(o.removed,{attribute:null,from:t})}if(t.removeAttribute(e),"is"===e&&!Se[e])if(Fe||He)try{Tt(t)}catch(e){}else try{t.setAttribute(e,"")}catch(e){}},Et=function(e){let t=null,n=null;if(Pe)e="<remove></remove>"+e;else{const t=h(e,/^[\r\n\t ]+/);n=t&&t[0]}"application/xhtml+xml"===it&&tt===et&&(e='<html xmlns="http://www.w3.org/1999/xhtml"><head></head><body>'+e+"</body></html>");const o=ie?ie.createHTML(e):e;if(tt===et)try{t=(new W).parseFromString(o,it)}catch(e){}if(!t||!t.documentElement){t=le.createDocument(tt,"template",null);try{t.documentElement.innerHTML=nt?ae:o}catch(e){}}const i=t.body||t.documentElement;return e&&n&&i.insertBefore(r.createTextNode(n),i.childNodes[0]||null),tt===et?ue.call(t,Ie?"html":"body")[0]:Ie?t.documentElement:i},_t=function(e){return ce.call(e.ownerDocument||e,e,H.SHOW_ELEMENT|H.SHOW_COMMENT|H.SHOW_TEXT|H.SHOW_PROCESSING_INSTRUCTION|H.SHOW_CDATA_SECTION,null)},At=function(e){return e instanceof B&&("string"!=typeof e.nodeName||"string"!=typeof e.textContent||"function"!=typeof e.removeChild||!(e.attributes instanceof z)||"function"!=typeof e.removeAttribute||"function"!=typeof e.setAttribute||"string"!=typeof e.namespaceURI||"function"!=typeof e.insertBefore||"function"!=typeof e.hasChildNodes)},Nt=function(e){return"function"==typeof b&&e instanceof b},bt=function(e,t,n){pe[e]&&u(pe[e],(e=>{e.call(o,t,n,ct)}))},St=function(e){let t=null;if(bt("beforeSanitizeElements",e,null),At(e))return Tt(e),!0;const n=lt(e.nodeName);if(bt("uponSanitizeElement",e,{tagName:n,allowedTags:Ne}),e.hasChildNodes()&&!Nt(e.firstElementChild)&&_(/<[/\w]/g,e.innerHTML)&&_(/<[/\w]/g,e.textContent))return Tt(e),!0;if(e.nodeType===J)return Tt(e),!0;if(Me&&e.nodeType===Q&&_(/<[/\w]/g,e.data))return Tt(e),!0;if(!Ne[n]||Ce[n]){if(!Ce[n]&&wt(n)){if(we.tagNameCheck instanceof RegExp&&_(we.tagNameCheck,n))return!1;if(we.tagNameCheck instanceof Function&&we.tagNameCheck(n))return!1}if(Ge&&!Xe[n]){const t=re(e)||e.parentNode,n=oe(e)||e.childNodes;if(n&&t){for(let o=n.length-1;o>=0;--o){const r=X(n[o],!0);r.__removalCount=(e.__removalCount||0)+1,t.insertBefore(r,ne(e))}}}return Tt(e),!0}return e instanceof R&&!function(e){let t=re(e);t&&t.tagName||(t={namespaceURI:tt,tagName:"template"});const n=f(e.tagName),o=f(t.tagName);return!!ot[e.namespaceURI]&&(e.namespaceURI===Qe?t.namespaceURI===et?"svg"===n:t.namespaceURI===Je?"svg"===n&&("annotation-xml"===o||pt[o]):Boolean(ht[n]):e.namespaceURI===Je?t.namespaceURI===et?"math"===n:t.namespaceURI===Qe?"math"===n&&ft[o]:Boolean(gt[n]):e.namespaceURI===et?!(t.namespaceURI===Qe&&!ft[o])&&!(t.namespaceURI===Je&&!pt[o])&&!gt[n]&&(dt[n]||!ht[n]):!("application/xhtml+xml"!==it||!ot[e.namespaceURI]))}(e)?(Tt(e),!0):"noscript"!==n&&"noembed"!==n&&"noframes"!==n||!_(/<\/no(script|embed|frames)/i,e.innerHTML)?(ke&&e.nodeType===Z&&(t=e.textContent,u([fe,de,he],(e=>{t=g(t,e," ")})),e.textContent!==t&&(p(o.removed,{element:e.cloneNode()}),e.textContent=t)),bt("afterSanitizeElements",e,null),!1):(Tt(e),!0)},Rt=function(e,t,n){if(Be&&("id"===t||"name"===t)&&(n in r||n in st))return!1;if(ve&&!Le[t]&&_(ge,t));else if(De&&_(Te,t));else if(!Se[t]||Le[t]){if(!(wt(e)&&(we.tagNameCheck instanceof RegExp&&_(we.tagNameCheck,e)||we.tagNameCheck instanceof Function&&we.tagNameCheck(e))&&(we.attributeNameCheck instanceof RegExp&&_(we.attributeNameCheck,t)||we.attributeNameCheck instanceof Function&&we.attributeNameCheck(t))||"is"===t&&we.allowCustomizedBuiltInElements&&(we.tagNameCheck instanceof RegExp&&_(we.tagNameCheck,n)||we.tagNameCheck instanceof Function&&we.tagNameCheck(n))))return!1}else if(Ve[t]);else if(_(Ae,g(n,Ee,"")));else if("src"!==t&&"xlink:href"!==t&&"href"!==t||"script"===e||0!==T(n,"data:")||!$e[e]){if(Oe&&!_(ye,g(n,Ee,"")));else if(n)return!1}else;return!0},wt=function(e){return"annotation-xml"!==e&&h(e,_e)},Ct=function(e){bt("beforeSanitizeAttributes",e,null);const{attributes:t}=e;if(!t)return;const n={attrName:"",attrValue:"",keepAttr:!0,allowedAttributes:Se};let r=t.length;for(;r--;){const i=t[r],{name:a,namespaceURI:l,value:c}=i,s=lt(a);let p="value"===a?c:y(c);if(n.attrName=s,n.attrValue=p,n.keepAttr=!0,n.forceKeepAttr=void 0,bt("uponSanitizeAttribute",e,n),p=n.attrValue,Me&&_(/((--!?|])>)|<\/(style|title)/i,p)){yt(a,e);continue}if(n.forceKeepAttr)continue;if(yt(a,e),!n.keepAttr)continue;if(!xe&&_(/\/>/i,p)){yt(a,e);continue}ke&&u([fe,de,he],(e=>{p=g(p,e," ")}));const f=lt(e.nodeName);if(Rt(f,s,p)){if(!We||"id"!==s&&"name"!==s||(yt(a,e),p="user-content-"+p),ie&&"object"==typeof G&&"function"==typeof G.getAttributeType)if(l);else switch(G.getAttributeType(f,s)){case"TrustedHTML":p=ie.createHTML(p);break;case"TrustedScriptURL":p=ie.createScriptURL(p)}try{l?e.setAttributeNS(l,a,p):e.setAttribute(a,p),At(e)?Tt(e):m(o.removed)}catch(e){}}}bt("afterSanitizeAttributes",e,null)},Lt=function e(t){let n=null;const o=_t(t);for(bt("beforeSanitizeShadowDOM",t,null);n=o.nextNode();)bt("uponSanitizeShadowNode",n,null),St(n)||(n.content instanceof s&&e(n.content),Ct(n));bt("afterSanitizeShadowDOM",t,null)};return o.sanitize=function(e){let t=arguments.length>1&&void 0!==arguments[1]?arguments[1]:{},n=null,r=null,i=null,l=null;if(nt=!e,nt&&(e="\x3c!--\x3e"),"string"!=typeof e&&!Nt(e)){if("function"!=typeof e.toString)throw A("toString is not a function");if("string"!=typeof(e=e.toString()))throw A("dirty is not a string, aborting")}if(!o.isSupported)return e;if(Ue||mt(t),o.removed=[],"string"==typeof e&&(Ye=!1),Ye){if(e.nodeName){const t=lt(e.nodeName);if(!Ne[t]||Ce[t])throw A("root node is forbidden and cannot be sanitized in-place")}}else if(e instanceof b)n=Et("\x3c!----\x3e"),r=n.ownerDocument.importNode(e,!0),r.nodeType===V&&"BODY"===r.nodeName||"HTML"===r.nodeName?n=r:n.appendChild(r);else{if(!Fe&&!ke&&!Ie&&-1===e.indexOf("<"))return ie&&ze?ie.createHTML(e):e;if(n=Et(e),!n)return Fe?null:ze?ae:""}n&&Pe&&Tt(n.firstChild);const c=_t(Ye?e:n);for(;i=c.nextNode();)St(i)||(i.content instanceof s&&Lt(i.content),Ct(i));if(Ye)return e;if(Fe){if(He)for(l=se.call(n.ownerDocument);n.firstChild;)l.appendChild(n.firstChild);else l=n;return(Se.shadowroot||Se.shadowrootmode)&&(l=me.call(a,l,!0)),l}let m=Ie?n.outerHTML:n.innerHTML;return Ie&&Ne["!doctype"]&&n.ownerDocument&&n.ownerDocument.doctype&&n.ownerDocument.doctype.name&&_(q,n.ownerDocument.doctype.name)&&(m="<!DOCTYPE "+n.ownerDocument.doctype.name+">\n"+m),ke&&u([fe,de,he],(e=>{m=g(m,e," ")})),ie&&ze?ie.createHTML(m):m},o.setConfig=function(){mt(arguments.length>0&&void 0!==arguments[0]?arguments[0]:{}),Ue=!0},o.clearConfig=function(){ct=null,Ue=!1},o.isValidAttribute=function(e,t,n){ct||mt({});const o=lt(e),r=lt(t);return Rt(o,r,n)},o.addHook=function(e,t){"function"==typeof t&&(pe[e]=pe[e]||[],p(pe[e],t))},o.removeHook=function(e){if(pe[e])return m(pe[e])},o.removeHooks=function(e){pe[e]&&(pe[e]=[])},o.removeAllHooks=function(){pe={}},o}();return ne}));
+
+  </script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  <!-- 🆕 SortableJS — ใช้ทำฟีเจอร์ลาก-สลับตำแหน่งการ์ดใน Dashboard รองรับ touch บนมือถือ/แท็บเล็ตจริง
+       (ไม่ใช่ HTML5 native drag ที่ใช้กับนิ้วสัมผัสไม่ได้) -->
+  <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.7/Sortable.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <!-- ⚠️ CACHE-BUST: เบราว์เซอร์/PWA มัก cache ไฟล์ .css ค้างไว้นานผิดปกติ (เหมือน app.js ด้านล่าง)
+       เพิ่ม ?v= ให้บังคับโหลดไฟล์ใหม่ทุกครั้งที่แก้ style.css — ให้เปลี่ยนเลขนี้ทุกครั้งที่แก้ style.css -->
+  <link rel="stylesheet" href="style.css?v=20260903">
+</head>
+<body>
+
+<!-- 🆕 PIN GATE — ด่านแรกสุดก่อนเห็นอะไรทั้งสิ้น (สูงกว่า boot-loading อีกที) -->
+<div id="tv-pin-gate">
+  <div class="tv-pin-box">
+    <div class="tv-pin-icon">
+      <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+    </div>
+    <div class="tv-pin-title">TV Dashboard</div>
+    <div class="tv-pin-sub">กรอกรหัส PIN เพื่อดูภาพรวมการตรวจสอบ</div>
+    <input type="password" id="tv-pin-input" inputmode="numeric" maxlength="6" placeholder="••••••" autocomplete="off">
+    <div id="tv-pin-error"></div>
+    <button id="tv-pin-submit">เข้าดู Dashboard</button>
+  </div>
+</div>
+<script>
+  // ⚠️ ตั้งค่า PIN ของหน้านี้ตรงนี้ครับพี่บี — ค่าเริ่มต้นตอนนี้คือ SUmmit123 เปลี่ยนเป็นเลขที่พี่บีต้องการได้เลย
+  // (PIN นี้เก็บไว้ในไฟล์ตรงๆ เหมือน anon key ของ Supabase ที่ฝังอยู่ใน app.js อยู่แล้ว —
+  //  กันคนทั่วไปที่บังเอิญได้ลิงก์ ไม่ใช่ระบบรักษาความปลอดภัยระดับสูง)
+  var TV_DASHBOARD_PIN = 'Summit123';
+  var TV_PIN_STORAGE_KEY = 'tv_dashboard_pin_ok_v1';
+
+  (function () {
+    var gate = document.getElementById('tv-pin-gate');
+    var input = document.getElementById('tv-pin-input');
+    var errorEl = document.getElementById('tv-pin-error');
+    var submitBtn = document.getElementById('tv-pin-submit');
+
+    function tryUnlock() {
+      if (input.value === TV_DASHBOARD_PIN) {
+        try { localStorage.setItem(TV_PIN_STORAGE_KEY, '1'); } catch (e) {}
+        gate.classList.add('hidden');
+      } else {
+        errorEl.textContent = 'PIN ไม่ถูกต้อง ลองใหม่อีกครั้ง';
+        input.value = '';
+        input.focus();
+      }
+    }
+
+    var alreadyUnlocked = false;
+    try { alreadyUnlocked = localStorage.getItem(TV_PIN_STORAGE_KEY) === '1'; } catch (e) {}
+    if (alreadyUnlocked) {
+      gate.classList.add('hidden');
+    } else {
+      submitBtn.addEventListener('click', tryUnlock);
+      input.addEventListener('keydown', function (e) { if (e.key === 'Enter') tryUnlock(); });
+      setTimeout(function () { input.focus(); }, 200);
+    }
+
+    // 🆕 SHIM #1 — ปลอม session ให้ app.js เข้าใจว่า login แล้ว (ข้ามหน้า Login จริง — TV ไม่มีคนพิมพ์ user/pass)
+    //    app.js เช็คแค่ว่ามีค่านี้ใน sessionStorage หรือไม่ตอนโหลดหน้า ไม่ได้ยืนยันกับ Supabase ซ้ำ
+    //    จึงตั้งค่าปลอมตรงนี้ได้โดยไม่ต้องแก้ app.js เลยสักบรรทัด
+    try {
+      sessionStorage.setItem('jig_app_user', JSON.stringify({
+        user_id: 'tv-dashboard', username: 'tv-dashboard',
+        full_name: 'TV Dashboard', role: 'viewer'
+      }));
+    } catch (e) {}
+
+    // 🆕 SHIM #2 — ปลอมผลเช็ค GPS ให้สำเร็จเสมอ (TV ไม่มี GPS) กัน modal เตือนเด้งขึ้นมา
+    //    ปลอดภัย เพราะหน้านี้ไม่มีการตรวจสอบ/บันทึกอะไรที่ต้องใช้พิกัดจริงอยู่แล้ว (ดูอย่างเดียว)
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition = function (success) {
+        if (success) success({ coords: { latitude: 0, longitude: 0, accuracy: 1 } });
+      };
+    }
+
+    document.body.classList.add('tv-mode');
+  })();
+</script>
+
+<!-- 🆕 BOOT LOADING SCREEN — โผล่ทันทีตั้งแต่เปิดหน้า (ก่อนแม้แต่ app-login-gate) คลุมช่วงที่ยังโหลด
+     ข้อมูลจาก Supabase ไม่เสร็จ (ไม่ใช่ splash screen ของ OS ที่คุมไม่ได้ — อันนี้คุมเองได้ 100%)
+     ซ่อนโดย hideBootLoading() ใน app.js หลัง init() เสร็จ + มี safety-timeout กันค้างถ้า init() ช้าผิดปกติ -->
+<div id="boot-loading" class="boot-loading">
+  <div class="boot-loading-icon">
+    <svg viewBox="0 0 24 24" width="46" height="46" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M9 2h6a1 1 0 0 1 1 1v2H8V3a1 1 0 0 1 1-1z"/><rect x="5" y="4" width="14" height="18" rx="2"/><path d="M9 12l2 2 4-4"/></svg>
+  </div>
+  <div class="boot-loading-title">ระบบตรวจสอบสภาพจิ๊ก</div>
+  <div class="boot-loading-title-en">JIG Inspection System</div>
+  <div class="boot-loading-tagline">Quality Inspection Management</div>
+  <div class="boot-loading-spinner"><span></span><span></span><span></span></div>
+</div>
+<script>
+  // 🆕 Safety-timeout กันจอค้างที่ boot-loading ตลอดไป เผื่อ init() ใน app.js ช้าผิดปกติ/พัง
+  //    (เน็ตหลุด, Supabase timeout, หรือแม้แต่ app.js เองโหลดไม่สำเร็จ) — บังคับซ่อนหลัง 8 วินาที
+  //    ไม่ว่าจะเกิดอะไรขึ้น ผู้ใช้จะได้ไม่ค้างจอเปล่าตลอดไปโดยไม่รู้สาเหตุ
+  setTimeout(function () {
+    var el = document.getElementById('boot-loading');
+    if (el && !el.classList.contains('hide')) el.classList.add('hide');
+  }, 8000);
+</script>
+
+<!-- ─── APP LOGIN GATE — ต้อง Login ก่อนถึงจะใช้งานระบบได้ (บันทึก log ทุกครั้งที่ Login สำเร็จ) ─── -->
+<div id="app-login-gate" class="modal-overlay app-login-gate">
+  <div class="modal-box admin-login-box">
+    <div class="admin-login-icon">
+      <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+    </div>
+    <h3 class="admin-login-title">เข้าสู่ระบบ JIG Inspection</h3>
+    <p class="admin-login-subtitle">กรุณา Login ด้วยบัญชีของท่านก่อนเริ่มใช้งาน<br>ระบบจะบันทึกการเข้าใช้งานทุกครั้ง</p>
+
+    <div class="admin-login-field">
+      <label for="inp-app-user">ชื่อผู้ใช้</label>
+      <div class="admin-login-input-wrap">
+        <svg class="admin-login-input-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+        <input type="text" id="inp-app-user" placeholder="กรอกชื่อผู้ใช้" autocomplete="username">
+      </div>
+    </div>
+
+    <div class="admin-login-field">
+      <label for="inp-app-pass">รหัสผ่าน</label>
+      <div class="admin-login-input-wrap">
+        <svg class="admin-login-input-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+        <input type="password" id="inp-app-pass" placeholder="กรอกรหัสผ่าน" autocomplete="current-password">
+        <button type="button" id="btn-toggle-app-pass" class="admin-login-eye" title="แสดง/ซ่อนรหัสผ่าน">
+          <svg class="eye-open" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+          <svg class="eye-closed" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:none"><path d="M17.94 17.94A10.94 10.94 0 0 1 12 20c-7 0-11-8-11-8a18.6 18.6 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+        </button>
+      </div>
+    </div>
+
+    <div id="app-login-msg" class="app-login-msg"></div>
+
+    <button id="btn-app-login-submit" class="admin-login-submit">
+      <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/></svg>
+      เข้าสู่ระบบ
+    </button>
+  </div>
+</div>
+
+<!-- ─── SIDEBAR NAVIGATION ─── -->
+<aside class="sidebar" id="app-sidebar">
+  <div class="sidebar-top">
+    <button id="sidebar-collapse-toggle" class="sidebar-collapse-toggle" title="ย่อ/ขยายเมนู">
+      <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+    </button>
+    <div class="sidebar-brand">
+      <div class="sidebar-brand-logo">
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="#1e3a5f" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+      </div>
+      <span class="sidebar-brand-text">JIG Inspection</span>
+    </div>
+  </div>
+
+  <nav class="sidebar-nav">
+    <span class="sidebar-nav-label">เมนูหลัก</span>
+    <button class="tab-btn side-nav-item active" data-tab="inspect">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+      <span class="sidebar-link-text">ตรวจสอบ</span>
+    </button>
+    <button class="tab-btn side-nav-item" data-tab="dashboard">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+      <span class="sidebar-link-text">Dashboard</span>
+    </button>
+    <button class="tab-btn side-nav-item" id="tab-history">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v5h5"/><path d="M3.05 13a9 9 0 1 0 .5-4.5L3 8"/><path d="M12 7v5l4 2"/></svg>
+      <span class="sidebar-link-text">ประวัติ</span>
+    </button>
+
+    <div class="sidebar-divider"></div>
+    <span class="sidebar-nav-label">เอกสาร &amp; อนุมัติ</span>
+    <a class="side-nav-item" href="documents.html" target="_blank" rel="noopener">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+      <span class="sidebar-link-text">ควบคุมเอกสาร</span>
+    </a>
+  </nav>
+
+  <div class="sidebar-bottom">
+    <span class="sidebar-link-text sidebar-foot-text">JIG Inspection System</span>
+  </div>
+</aside>
+<div class="sidebar-overlay" id="sidebar-overlay"></div>
+
+<div class="app-container">
+
+  <!-- ─── HEADER ─── -->
+  <header class="app-header">
+    <div class="brand">
+      <button id="sidebar-open-toggle" class="btn-icon hamburger-btn" title="เมนู">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+      </button>
+      <div class="brand-text">
+        <h1 id="header-title">ใบรายงานการตรวจสอบสภาพจิ๊ก</h1>
+        <p id="header-sub">เลือกแผนก &rarr; Line &rarr; JIG เพื่อเริ่มตรวจสอบ</p>
+      </div>
+    </div>
+    <div class="header-actions">
+      <span id="app-user-badge" class="app-user-badge" title="ผู้ใช้งานปัจจุบัน"></span>
+      <button id="theme-toggle" class="btn-icon" title="สลับธีม">
+        <svg class="icon-moon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" style="display:none"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+        <svg class="icon-sun" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+      </button>
+      <button id="btn-admin-toggle" class="btn-icon" title="Admin Panel">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>
+      </button>
+      <button id="btn-app-logout" class="btn-icon" title="ออกจากระบบ">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+      </button>
+    </div>
+  </header>
+
+  <!-- ─── VIEW: INSPECTION FORM ─── -->
+  <main class="dashboard" id="view-inspect">
+
+    <!-- ════════════════════════════════════
+         STEP 0 — 3-Level Filter Selector
+         ════════════════════════════════════ -->
+    <div class="glass-card filter-card" id="filter-card">
+      <h2 class="card-title"><span class="title-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21V11l5 3v-3l5 3V8l5 3v10z"/><path d="M3 21h18"/></svg></span> เลือก JIG ที่ต้องการตรวจสอบ</h2>
+
+      <!-- Breadcrumb trail -->
+      <div class="breadcrumb-trail" id="breadcrumb">
+        <span class="bc-item active" data-level="0">
+          <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+          เริ่มต้น
+        </span>
+      </div>
+
+      <!-- Level 1: แผนก (Department) -->
+      <div class="filter-level" id="level-dept">
+        <div class="level-label">
+          <span class="level-num">1</span>
+          <span>เลือก <strong>แผนก</strong> (Department)</span>
+        </div>
+        <div class="filter-chips" id="chips-dept"><span class="chip-loading"><span class="chip-loading-spinner"></span>กำลังโหลดข้อมูล...</span></div>
+      </div>
+
+      <!-- Level 2: Line -->
+      <div class="filter-level hidden" id="level-line">
+        <div class="level-label">
+          <span class="level-num">2</span>
+          <span>เลือก <strong>Line</strong> การผลิต</span>
+        </div>
+        <div class="filter-chips line-chips-grid" id="chips-line"></div>
+      </div>
+
+      <!-- Level 3: JIG -->
+      <div class="filter-level hidden" id="level-jig">
+        <div class="level-label">
+          <span class="level-num">3</span>
+          <span>เลือก <strong>JIG</strong> ที่ต้องการตรวจ</span>
+        </div>
+        <div class="jig-search-wrap">
+          <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          <input type="text" id="jig-search" class="jig-search-input" placeholder="ค้นหา JIG ด้วยชื่อหรือรหัส..." autocomplete="off">
+          <button type="button" id="jig-search-clear" class="jig-search-clear hidden" aria-label="ล้างคำค้นหา">✕</button>
+        </div>
+        <div class="filter-chips jig-chips-grid" id="chips-jig"></div>
+      </div>
+
+      <!-- Selected JIG Info Banner -->
+      <div class="selected-jig-banner hidden" id="selected-banner">
+        <div class="sb-icon"><svg class="inline-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg></div>
+        <div class="sb-info">
+          <div class="sb-name" id="sb-jig-name"></div>
+          <div class="sb-meta" id="sb-jig-meta"></div>
+        </div>
+        <button class="sb-change" id="btn-change-jig">เปลี่ยน JIG</button>
+      </div>
+    </div>
+
+    <!-- ════════════════════════════════════
+         STEP 1 — Meta Info (ปรากฏหลัง select JIG)
+         ════════════════════════════════════ -->
+    <div class="glass-card meta-card hidden" id="meta-card">
+      <h2 class="card-title"><span class="title-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="18" rx="2"/><path d="M9 2h6v3H9z"/><path d="M8 11h8M8 15h8"/></svg></span> ข้อมูลทั่วไป</h2>
+      <div class="meta-grid">
+        <div class="form-group">
+          <label for="inp-inspector">ผู้ตรวจสอบ</label>
+          <input type="text" id="inp-inspector" placeholder="ชื่อผู้ตรวจ">
+        </div>
+        <div class="form-group">
+          <label for="inp-date">วันที่ตรวจ</label>
+          <input type="date" id="inp-date">
+        </div>
+        <div class="form-group">
+          <label for="inp-shift">กะ</label>
+          <select id="inp-shift">
+            <option value="">เลือกกะ</option>
+            <option>กะ 1</option>
+            <option>กะ 2</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label for="inp-month">เดือน</label>
+          <select id="inp-month">
+            <option value="">เดือน</option>
+            <option>ม.ค.</option><option>ก.พ.</option><option>มี.ค.</option>
+            <option>เม.ย.</option><option>พ.ค.</option><option>มิ.ย.</option>
+            <option>ก.ค.</option><option>ส.ค.</option><option>ก.ย.</option>
+            <option>ต.ค.</option><option>พ.ย.</option><option>ธ.ค.</option>
+          </select>
+        </div>
+      </div>
+    </div>
+
+    <!-- ════════════════════════════════════
+         STEP 2 — SVG Map
+         ════════════════════════════════════ -->
+    <div class="glass-card map-card hidden" id="map-card">
+      <h2 class="card-title"><span class="title-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg></span> แผนผังจุดตรวจสอบ JIG</h2>
+      <div class="jig-svg-wrap">
+        <svg id="jig-schematic" viewBox="0 0 600 340" preserveAspectRatio="xMidYMid meet">
+          <defs>
+            <linearGradient id="metal-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%" stop-color="var(--svg-metal-start)"/>
+              <stop offset="100%" stop-color="var(--svg-metal-end)"/>
+            </linearGradient>
+            <clipPath id="map-clip"><rect x="20" y="30" width="560" height="280" rx="12"/></clipPath>
+          </defs>
+          <rect x="20" y="30" width="560" height="280" rx="12" fill="var(--svg-base-bg)" stroke="var(--svg-border)" stroke-width="1.5"/>
+          <line x1="20" y1="170" x2="580" y2="170" stroke="var(--svg-center-line)" stroke-dasharray="6,4" stroke-width="1"/>
+          <!-- รูปพื้นหลังกำหนดเอง (ถ้า JIG นี้มีการอัปโหลดไว้) -->
+          <image id="svg-bg-image" x="20" y="30" width="560" height="280" preserveAspectRatio="xMidYMid slice" clip-path="url(#map-clip)" style="display:none" href=""/>
+          <!-- แผนผังเริ่มต้น (แสดงเมื่อยังไม่มีรูปพื้นหลังกำหนดเอง) -->
+          <g id="svg-default-drawing">
+            <path d="M 60 90 L 140 70 L 460 70 L 540 90 L 540 250 L 460 270 L 140 270 L 60 250 Z" fill="url(#metal-grad)" stroke="var(--svg-metal-border)" stroke-width="2"/>
+            <rect x="110" y="100" width="60" height="140" rx="4" fill="var(--svg-subplate)"/>
+            <rect x="270" y="100" width="60" height="140" rx="4" fill="var(--svg-subplate)"/>
+            <rect x="430" y="100" width="60" height="140" rx="4" fill="var(--svg-subplate)"/>
+            <line x1="140" y1="70" x2="140" y2="270" stroke="var(--svg-border)" stroke-width="1"/>
+            <line x1="460" y1="70" x2="460" y2="270" stroke="var(--svg-border)" stroke-width="1"/>
+            <rect x="30" y="152" width="28" height="36" rx="3" fill="var(--svg-subplate)" stroke="var(--svg-border)"/>
+          </g>
+          <text id="svg-jig-label" x="300" y="22" text-anchor="middle" fill="var(--text-muted)" font-size="11" font-family="Outfit">JIG SILL ASM FLOOR RR — JRG01 IM026</text>
+          <!-- จุดตรวจสอบ — สร้างแบบไดนามิกโดย JS ตามค่าที่ตั้งไว้ต่อ JIG -->
+          <g id="svg-points-group"></g>
+        </svg>
+      </div>
+      <div class="stats-mini-row">
+        <div class="stat-mini ok"><span class="num" id="stat-ok">0</span><span class="lbl">ปกติ (OK)</span></div>
+        <div class="stat-mini ng"><span class="num" id="stat-ng">0</span><span class="lbl">ไม่ปกติ (NG)</span></div>
+        <div class="stat-mini pending"><span class="num" id="stat-pending">10</span><span class="lbl">คงเหลือ</span></div>
+      </div>
+    </div>
+
+    <!-- ════════════════════════════════════
+         STEP 3 — Checklist
+         ════════════════════════════════════ -->
+    <div class="glass-card checklist-card hidden" id="checklist-card">
+      <div class="card-header-flex">
+        <h2 class="card-title"><span class="title-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg></span> รายการตรวจสอบ</h2>
+        <div class="legend-row">
+          <span class="badge ok">✔ ปกติ</span>
+          <span class="badge ng">✖ NG</span>
+          <span class="badge fixed"><svg class="inline-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg> แก้ไขแล้ว</span>
+        </div>
+      </div>
+      <div id="checklist-wrapper"></div>
+    </div>
+
+    <!-- ════════════════════════════════════
+         STEP 4 — Notes + Signatures
+         ════════════════════════════════════ -->
+    <div class="glass-card notes-card hidden" id="notes-card">
+      <h2 class="card-title"><span class="title-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg></span> หมายเหตุเพิ่มเติม</h2>
+      <textarea id="report-notes" class="note-area" placeholder="ระบุรายละเอียดเพิ่มเติม..."></textarea>
+    </div>
+
+    <div class="glass-card sig-card hidden" id="sig-card">
+      <h2 class="card-title"><span class="title-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg></span> ลายเซ็นรับรอง (พิมพ์ชื่อ)</h2>
+      <div class="sig-row">
+        <div class="sig-block">
+          <label>ผู้ตรวจสอบ</label>
+          <input type="text" id="sig-inspector" class="sig-text-input" placeholder="พิมพ์ชื่อผู้ตรวจสอบ">
+        </div>
+      </div>
+    </div>
+    <!-- หมายเหตุ: ตัดช่อง "หัวหน้างาน" ออกแล้ว — เพราะหัวหน้างานจะพิมพ์ชื่อยืนยันอีกครั้งตอนกดอนุมัติผ่าน Telegram (approve.html) อยู่แล้ว การให้พิมพ์ตรงนี้ด้วยเลยเป็นการลงชื่อซ้ำซ้อน -->
+
+    <!-- Action Buttons -->
+    <div class="btn-row hidden" id="action-row">
+      <button id="btn-submit" class="btn-submit"><svg class="inline-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg> บันทึกผลการตรวจ</button>
+      <button id="btn-reset" class="btn-sec"><svg class="inline-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg> เริ่มใหม่</button>
+    </div>
+
+  </main>
+
+  <!-- ─── VIEW: DASHBOARD ─── -->
+  <div id="view-dashboard" class="hidden">
+
+    <!-- ─── สถานะ Line วันนี้ — read-only, จัดกลุ่มตามแผนก ─── -->
+    <div class="glass-card" style="margin-bottom:16px;">
+      <div class="card-header-flex">
+        <h2 class="card-title"><span class="title-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="10" rx="2"/><circle cx="12" cy="7" r="4"/></svg></span> สถานะ Line วันนี้</h2>
+        <span class="chart-legend line-status-legend">
+          <span class="cl-dot" style="background:var(--pending)"></span>ยังไม่ตรวจ
+          <span class="cl-dot" style="background:var(--fixed)"></span>กำลังตรวจ (ยังไม่ครบ)
+          <span class="cl-dot ok"></span>ตรวจครบ ปกติ
+          <span class="cl-dot ng"></span>พบ NG
+        </span>
+      </div>
+
+      <div class="line-view-toolbar">
+        <div class="jig-search-wrap line-search-wrap" id="line-search-wrap">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          <input type="text" class="jig-search-input" id="line-search-input" placeholder="ค้นหาชื่อ Line...">
+          <button class="jig-search-clear hidden" id="line-search-clear">✕</button>
+        </div>
+      </div>
+
+      <div id="line-status-list"></div>
+    </div>
+
+    <!-- 🆕 DASHBOARD SORTABLE — 7 การ์ด/บล็อกลากสลับตำแหน่งกันได้ (SortableJS) จับที่ไอคอน ⠿
+         เท่านั้น ไม่ใช่ทั้งการ์ด กันชนกับการ scroll ด้วยนิ้วบนมือถือ/แท็บเล็ต — บันทึกลำดับไว้
+         เฉพาะเครื่อง/เบราว์เซอร์นั้น (localStorage) ไม่กระทบคนอื่น -->
+    <div id="dashboard-sortable" class="dashboard-sortable">
+
+      <!-- NG วันนี้ — รายการ NG ที่พบวันนี้แบบละเอียด (โชว์ "วันนี้" เสมอ ไม่ผูกกับตัวกรองเดือน, แต่กรองตาม Line ที่เลือกด้วย)
+           🆕 วางติดกับ "สถานะ Line วันนี้" เลย ไม่มี filter คั่นกลาง — ย้ายแถบ filter ไปอยู่ด้านล่างแทน (ดูถัดจากบล็อกนี้) -->
+      <div class="dash-block dash-block-wide" data-block-id="ng-today">
+        <div class="glass-card" id="ng-today-card">
+          <h2 class="card-title">
+            <span class="drag-handle" title="ลากเพื่อสลับตำแหน่ง"><svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><circle cx="9" cy="6" r="1.6"/><circle cx="15" cy="6" r="1.6"/><circle cx="9" cy="12" r="1.6"/><circle cx="15" cy="12" r="1.6"/><circle cx="9" cy="18" r="1.6"/><circle cx="15" cy="18" r="1.6"/></svg></span>
+            <span class="title-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg></span> <span id="ng-today-title-text">NG วันนี้</span> <span id="ng-today-count" class="ng-today-count-badge"></span> <span id="ng-today-urgent" class="ng-today-urgent-badge hidden">⚠ URGENT</span>
+          </h2>
+          <div id="ng-today-list"></div>
+        </div>
+      </div>
+
+      <!-- 🆕 Month filter + Line filter + live clock — ย้ายมาอยู่ตรงนี้ (ใต้ NG วันนี้) แทนที่จะอยู่เหนือมัน
+           เป็น static element ไม่ใช่ .dash-block เลยไม่ถูก SortableJS ลากสลับปนกับการ์ดอื่น (ดู draggable: '.dash-block' ใน app.js) -->
+      <div class="dash-filter-row">
+        <div class="dash-filter-left">
+          <label for="dash-month-filter"><svg class="inline-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg> ดูข้อมูลเดือน:</label>
+          <select id="dash-month-filter">
+            <option value="all">ทั้งหมด (All)</option>
+          </select>
+          <label for="dash-line-filter"><svg class="inline-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21V11l5 3v-3l5 3V8l5 3v10z"/><path d="M3 21h18"/></svg> Line:</label>
+          <select id="dash-line-filter">
+            <option value="all">ทุก Line (All)</option>
+          </select>
+        </div>
+        <div class="dash-live-clock">
+          <span class="live-dot"></span>
+          <span id="dash-clock-date"></span>
+          <span id="dash-clock-time"></span>
+        </div>
+        <!-- ปุ่มรีเซ็ตลำดับการ์ด Dashboard กลับเป็นค่าเริ่มต้น (เผื่อลากมั่วแล้วอยากกลับไปแบบเดิม) -->
+        <button id="btn-dash-reset-order" class="btn-dash-reset-order" title="รีเซ็ตลำดับการ์ดกลับเป็นค่าเริ่มต้น">
+          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 4v6h6"/><path d="M23 20v-6h-6"/><path d="M20.49 9A9 9 0 0 0 5.64 5.64L1 10m22 4-4.64 4.36A9 9 0 0 1 3.51 15"/></svg>
+          รีเซ็ตลำดับการ์ด
+        </button>
+      </div>
+
+      <!-- KPI Row -->
+      <div class="dash-block dash-block-wide" data-block-id="kpi-row">
+        <div class="dash-block-handle-row"><span class="drag-handle" title="ลากเพื่อสลับตำแหน่ง"><svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><circle cx="9" cy="6" r="1.6"/><circle cx="15" cy="6" r="1.6"/><circle cx="9" cy="12" r="1.6"/><circle cx="15" cy="12" r="1.6"/><circle cx="9" cy="18" r="1.6"/><circle cx="15" cy="18" r="1.6"/></svg></span></div>
+        <div class="kpi-row">
+          <div class="kpi-card" id="kpi-total">
+            <div class="kpi-icon"><svg class="inline-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="18" rx="2"/><path d="M9 2h6v3H9z"/><path d="M8 11h8M8 15h8"/></svg></div>
+            <div class="kpi-body">
+              <div class="kpi-num" id="kpi-n-total">0</div>
+              <div class="kpi-lbl">จำนวนครั้งที่ตรวจสอบ</div>
+              <div class="kpi-delta" id="kpi-delta-total"></div>
+            </div>
+          </div>
+          <div class="kpi-card ng" id="kpi-ng">
+            <div class="kpi-icon"><svg class="inline-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg></div>
+            <div class="kpi-body">
+              <div class="kpi-num" id="kpi-n-ng">0</div>
+              <div class="kpi-lbl">รายการ NG ทั้งหมด</div>
+              <div class="kpi-delta" id="kpi-delta-ng"></div>
+            </div>
+          </div>
+          <div class="kpi-card ok" id="kpi-pass">
+            <div class="kpi-icon"><svg class="inline-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg></div>
+            <div class="kpi-body">
+              <div class="kpi-num" id="kpi-n-pass">0%</div>
+              <div class="kpi-lbl">อัตราผ่าน (Pass Rate)</div>
+              <div class="kpi-delta" id="kpi-delta-pass"></div>
+            </div>
+          </div>
+          <div class="kpi-card accent" id="kpi-jig">
+            <div class="kpi-icon"><svg class="inline-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg></div>
+            <div class="kpi-body">
+              <div class="kpi-num" id="kpi-n-jig">0</div>
+              <div class="kpi-lbl">JIG ที่ตรวจแล้ว</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Trend -->
+      <div class="dash-block dash-block-wide" data-block-id="chart-trend">
+        <div class="glass-card chart-card chart-wide">
+          <div class="card-header-flex">
+            <h2 class="card-title">
+              <span class="drag-handle" title="ลากเพื่อสลับตำแหน่ง"><svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><circle cx="9" cy="6" r="1.6"/><circle cx="15" cy="6" r="1.6"/><circle cx="9" cy="12" r="1.6"/><circle cx="15" cy="12" r="1.6"/><circle cx="9" cy="18" r="1.6"/><circle cx="15" cy="18" r="1.6"/></svg></span>
+              <span class="title-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg></span> <span id="trend-title-text">แนวโน้มการตรวจสอบ (30 วัน)</span>
+            </h2>
+            <span class="chart-legend">
+              <span class="cl-dot ok"></span>ผ่าน
+              <span class="cl-dot ng"></span>NG
+            </span>
+          </div>
+          <div class="chart-wrap"><canvas id="chart-trend"></canvas></div>
+        </div>
+      </div>
+
+      <!-- NG by Line -->
+      <div class="dash-block" data-block-id="chart-byline">
+        <div class="glass-card chart-card">
+          <h2 class="card-title">
+            <span class="drag-handle" title="ลากเพื่อสลับตำแหน่ง"><svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><circle cx="9" cy="6" r="1.6"/><circle cx="15" cy="6" r="1.6"/><circle cx="9" cy="12" r="1.6"/><circle cx="15" cy="12" r="1.6"/><circle cx="9" cy="18" r="1.6"/><circle cx="15" cy="18" r="1.6"/></svg></span>
+            <span class="title-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg></span> <span id="byline-title-text">NG ตาม Line</span>
+          </h2>
+          <div class="chart-wrap"><canvas id="chart-byline"></canvas></div>
+        </div>
+      </div>
+
+      <!-- Pass rate donut by Dept -->
+      <div class="dash-block" data-block-id="chart-donut">
+        <div class="glass-card chart-card">
+          <h2 class="card-title">
+            <span class="drag-handle" title="ลากเพื่อสลับตำแหน่ง"><svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><circle cx="9" cy="6" r="1.6"/><circle cx="15" cy="6" r="1.6"/><circle cx="9" cy="12" r="1.6"/><circle cx="15" cy="12" r="1.6"/><circle cx="9" cy="18" r="1.6"/><circle cx="15" cy="18" r="1.6"/></svg></span>
+            <span class="title-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.21 15.89A10 10 0 1 1 8 2.83"/><path d="M22 12A10 10 0 0 0 12 2v10z"/></svg></span> <span id="donut-title-text">อัตราผ่านตาม Line</span>
+          </h2>
+          <div class="chart-wrap chart-donut-wrap"><canvas id="chart-dept"></canvas></div>
+          <div id="donut-legend" class="donut-legend"></div>
+        </div>
+      </div>
+
+      <!-- Top NG Checkpoints -->
+      <div class="dash-block dash-block-wide" data-block-id="ng-ranking">
+        <div class="glass-card">
+          <h2 class="card-title">
+            <span class="drag-handle" title="ลากเพื่อสลับตำแหน่ง"><svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><circle cx="9" cy="6" r="1.6"/><circle cx="15" cy="6" r="1.6"/><circle cx="9" cy="12" r="1.6"/><circle cx="15" cy="12" r="1.6"/><circle cx="9" cy="18" r="1.6"/><circle cx="15" cy="18" r="1.6"/></svg></span>
+            <span class="title-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg></span> <span id="ng-rank-title-text">จุดตรวจที่พบ NG บ่อยที่สุด</span>
+          </h2>
+          <div id="ng-ranking"></div>
+        </div>
+      </div>
+
+      <!-- AI Analysis -->
+      <div class="dash-block dash-block-wide" data-block-id="ai-panel">
+        <div class="glass-card ai-card">
+          <div class="ai-card-head">
+            <div>
+              <h2 class="card-title" style="margin-bottom:4px">
+                <span class="drag-handle" title="ลากเพื่อสลับตำแหน่ง"><svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><circle cx="9" cy="6" r="1.6"/><circle cx="15" cy="6" r="1.6"/><circle cx="9" cy="12" r="1.6"/><circle cx="15" cy="12" r="1.6"/><circle cx="9" cy="18" r="1.6"/><circle cx="15" cy="18" r="1.6"/></svg></span>
+                <span class="title-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="16" rx="2"/><rect x="9" y="9" width="6" height="6"/><line x1="9" y1="1" x2="9" y2="4"/><line x1="15" y1="1" x2="15" y2="4"/><line x1="9" y1="20" x2="9" y2="23"/><line x1="15" y1="20" x2="15" y2="23"/><line x1="20" y1="9" x2="23" y2="9"/><line x1="20" y1="14" x2="23" y2="14"/><line x1="1" y1="9" x2="4" y2="9"/><line x1="1" y1="14" x2="4" y2="14"/></svg></span> AI วิเคราะห์ข้อมูล
+              </h2>
+              <p class="ai-subtitle">วิเคราะห์ pattern NG, แนวโน้ม, และคำแนะนำเชิงป้องกัน</p>
+            </div>
+            <div class="ai-btn-group">
+              <select id="sel-ai-period" class="ai-period-select" title="เลือกช่วงเวลาที่จะวิเคราะห์">
+                <option value="all" selected>ทั้งหมด</option>
+              </select>
+              <button id="btn-ai-analyze" class="btn-ai">
+                <span class="ai-btn-icon"><svg class="inline-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg></span> วิเคราะห์ด้วย AI
+              </button>
+              <button id="btn-ai-key" class="btn-ai-sec" title="ตั้งค่า Gemini API Key">
+                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M4.93 19.07a10 10 0 0 1 0-14.14"/></svg>
+                API Key
+              </button>
+            </div>
+          </div>
+          <div id="ai-result" class="ai-result">
+            <div class="ai-placeholder">
+              <div class="ai-ph-icon"><svg class="inline-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="16" rx="2"/><rect x="9" y="9" width="6" height="6"/><line x1="9" y1="1" x2="9" y2="4"/><line x1="15" y1="1" x2="15" y2="4"/><line x1="9" y1="20" x2="9" y2="23"/><line x1="15" y1="20" x2="15" y2="23"/><line x1="20" y1="9" x2="23" y2="9"/><line x1="20" y1="14" x2="23" y2="14"/><line x1="1" y1="9" x2="4" y2="9"/><line x1="1" y1="14" x2="4" y2="14"/></svg></div>
+              <div class="ai-ph-text">กดปุ่ม <strong>"วิเคราะห์ด้วย AI"</strong> เพื่อรับรายงานวิเคราะห์<br>จากข้อมูลการตรวจสอบทั้งหมด</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+  </div>
+
+  <!-- ─── AI API KEY MODAL ─── -->
+  <div id="ai-key-modal" class="modal-overlay hidden">
+    <div class="modal-box">
+      <div class="modal-head">
+        <h3><svg class="inline-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/></svg> Gemini API Key</h3>
+        <button id="btn-modal-close" class="btn-close-panel">✕</button>
+      </div>
+      <p class="modal-desc">ใส่ Gemini API Key เพื่อใช้ AI วิเคราะห์ขั้นสูง<br>หากไม่มีจะใช้ Smart Analysis แทน (ไม่ต้องการ internet)</p>
+      <div class="modal-inp-row">
+        <input type="password" id="inp-api-key" placeholder="AIza..." autocomplete="off">
+        <button id="btn-save-key" class="btn-adm-add">บันทึก</button>
+      </div>
+      <p class="modal-warn"><svg class="inline-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg> API Key จะถูกเก็บไว้ในเบราว์เซอร์นี้เท่านั้น (localStorage) แบบไม่เข้ารหัส — ไม่ควรใช้บนเครื่องสาธารณะ/เครื่องที่ใช้ร่วมกัน และห้ามแชร์ Key นี้ให้ผู้อื่น</p>
+      <p class="modal-hint">รับ API Key ฟรีที่ <a href="https://aistudio.google.com" target="_blank" style="color:var(--accent)">aistudio.google.com</a></p>
+    </div>
+  </div>
+
+  <!-- 🆕 JIG Document-Control Modal — แก้ไข Doc No./Rev.Level/Rev No./Rev Date/Issued Form เฉพาะ JIG นี้ (เว้นว่าง = ใช้ค่ากลาง) -->
+  <div id="jig-doc-modal" class="modal-overlay hidden">
+    <div class="modal-box" style="width:min(480px, 92vw);">
+      <div class="modal-head">
+        <h3><svg class="inline-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg> แก้ไข JIG <span id="jig-doc-modal-title" style="color:var(--text-muted);font-weight:400;font-size:12px;"></span></h3>
+        <button id="btn-jig-doc-modal-close" class="btn-close-panel">✕</button>
+      </div>
+
+      <div style="font-size:11px; color:var(--text-muted); margin-bottom:2px;">รหัส JIG</div>
+      <div class="modal-inp-row"><input type="text" id="jdoc-id" placeholder="เช่น JRG01"></div>
+
+      <div style="font-size:11px; color:var(--text-muted); margin-bottom:2px;">ชื่อชิ้นงาน</div>
+      <div class="modal-inp-row"><input type="text" id="jdoc-name" placeholder="ชื่อชิ้นงาน"></div>
+
+      <div style="font-size:11px; color:var(--text-muted); margin-bottom:2px;">Run No.</div>
+      <div class="modal-inp-row"><input type="text" id="jdoc-runno" placeholder="เช่น SL-RG01-002"></div>
+
+      <p class="modal-warn" style="margin-top:10px;">
+        <svg class="inline-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg> ช่องด้านล่างนี้เป็นค่าเอกสารเฉพาะ JIG นี้ — <strong>เว้นว่างไว้ = ใช้ค่ากลางของบริษัท</strong> (ตั้งค่าที่ "ตั้งค่าเอกสารกลาง")
+        กรอกเมื่อ JIG ตัวนี้ใช้แบบฟอร์ม/เลข Rev ที่ต่างจากค่ากลางเท่านั้น
+      </p>
+
+      <div style="font-size:11px; color:var(--text-muted); margin-bottom:2px;">Doc No. <span id="jdoc-docno-default" style="opacity:.7;"></span></div>
+      <div class="modal-inp-row"><input type="text" id="jdoc-docno" placeholder="ค่าเริ่มต้น = ใช้ค่ากลาง"></div>
+
+      <div style="font-size:11px; color:var(--text-muted); margin-bottom:2px;">Rev. No. (เนื้อหา) <span id="jdoc-rev-default" style="opacity:.7;"></span></div>
+      <div class="modal-inp-row"><input type="text" id="jdoc-rev" placeholder="ค่าเริ่มต้น = ใช้ค่ากลาง"></div>
+
+      <div style="font-size:11px; color:var(--text-muted); margin-bottom:2px;">Issued Date <span id="jdoc-issuedate-default" style="opacity:.7;"></span></div>
+      <div class="modal-inp-row"><input type="date" id="jdoc-issuedate"></div>
+
+      <div class="modal-inp-row" style="margin-top:12px;">
+        <button id="btn-jdoc-save" class="btn-adm-add" style="flex:1;">บันทึก</button>
+      </div>
+    </div>
+  </div>
+
+
+  <!-- ─── ADMIN PANEL (Slide-in) ─── -->
+  <div id="admin-panel" class="side-panel">
+    <!-- Storage Status Panel -->
+    <div id="storage-stats-panel" style="margin-bottom: 12px;"></div>
+    <div class="panel-resize-handle" id="admin-resize-handle" title="ลากเพื่อปรับขนาด (ดับเบิลคลิกเพื่อรีเซ็ต)"></div>
+    <div class="panel-head">
+      <h2><svg class="inline-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg> Admin Panel — จัดการระบบ</h2>
+      <div class="panel-head-actions">
+        <button id="btn-admin-logout" class="btn-logout-admin" title="ออกจากระบบ Admin">
+          <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+          ออกจากระบบ
+        </button>
+        <button id="btn-close-admin" class="btn-close-panel">✕</button>
+      </div>
+    </div>
+    
+    <!-- Change Password -->
+    <div class="admin-section">
+      <div class="admin-section-title"><svg class="inline-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/></svg> เปลี่ยนรหัสผ่าน Admin</div>
+      <div class="admin-input-row">
+        <input type="password" id="adm-old-pass" placeholder="รหัสผ่านเดิม">
+      </div>
+      <div class="admin-input-row">
+        <input type="password" id="adm-new-pass" placeholder="รหัสผ่านใหม่">
+        <button class="btn-adm-add" id="btn-adm-pass">เปลี่ยน</button>
+      </div>
+    </div>
+
+    <!-- Staff Accounts — บัญชี Login สำหรับพนักงาน -->
+    <div class="admin-section">
+      <div class="admin-section-title"><svg class="inline-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg> จัดการบัญชีผู้ใช้งาน (Login เข้าเว็บ)</div>
+      <div style="font-size:11px; color:var(--text-muted); margin-bottom:8px;">
+        ต้องกรอกรหัสผ่าน Admin ทุกครั้งที่เพิ่ม/แก้ไขบัญชี — เพื่อยืนยันสิทธิ์ก่อนเขียนข้อมูล
+      </div>
+      <div class="admin-input-row">
+        <input type="text" id="adm-user-username" placeholder="Username (eng, ไม่ซ้ำ)">
+        <input type="text" id="adm-user-fullname" placeholder="ชื่อ-นามสกุล">
+      </div>
+      <div class="admin-input-row">
+        <input type="text" id="adm-user-password" placeholder="รหัสผ่านเริ่มต้น">
+        <select id="adm-user-role" class="adm-sel">
+          <option value="inspector">inspector</option>
+          <option value="supervisor">supervisor</option>
+          <option value="manager">manager</option>
+        </select>
+        <button class="btn-adm-add" id="btn-adm-add-user">+ เพิ่มผู้ใช้</button>
+      </div>
+      <div class="admin-list admin-list-scroll" id="adm-user-list"></div>
+    </div>
+
+    <!-- Login Audit Log — เก็บ log ผู้เข้าใช้งาน -->
+    <div class="admin-section">
+      <div class="admin-section-title"><svg class="inline-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v5h5"/><path d="M3.05 13a9 9 0 1 0 .5-4.5L3 8"/><path d="M12 7v5l4 2"/></svg> ประวัติการเข้าใช้งาน (Login Log)</div>
+      <button id="btn-adm-refresh-logs" class="btn-sec" style="width:100%;"><svg class="inline-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v5h5"/><path d="M3.05 13a9 9 0 1 0 .5-4.5L3 8"/></svg> โหลด/รีเฟรช ประวัติ Login</button>
+      <div class="admin-list admin-list-scroll" id="adm-login-log-list" style="margin-top:8px;"></div>
+    </div>
+
+    <!-- Add Department -->
+    <div class="admin-section">
+      <div class="admin-section-title"><svg class="inline-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21V11l5 3v-3l5 3V8l5 3v10z"/><path d="M3 21h18"/></svg> เพิ่มแผนก</div>
+      <div class="admin-input-row">
+        <input type="text" id="adm-dept-id" placeholder="รหัส (เช่น BODY)">
+        <input type="text" id="adm-dept-name" placeholder="ชื่อแผนก (เช่น แผนก Body)">
+        <button class="btn-adm-add" id="btn-adm-dept">เพิ่ม</button>
+      </div>
+      <div class="admin-list" id="adm-dept-list"></div>
+    </div>
+
+    <!-- Add Line -->
+    <div class="admin-section">
+      <div class="admin-section-title"><svg class="inline-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg> เพิ่ม Line</div>
+      <div class="admin-input-row">
+        <select id="adm-line-dept" class="adm-sel"><option value="">เลือกแผนก</option></select>
+        <input type="text" id="adm-line-id" placeholder="รหัส (เช่น L1)">
+        <input type="text" id="adm-line-name" placeholder="ชื่อ Line (เช่น Line 1)">
+        <button class="btn-adm-add" id="btn-adm-line">เพิ่ม</button>
+      </div>
+      <div class="admin-list admin-list-scroll" id="adm-line-list"></div>
+    </div>
+
+    <!-- Document Settings (ค่ากลางทั้งระบบ ตาม ISO — Doc No. เดียวทั้งบริษัท) -->
+    <div class="admin-section">
+      <div class="admin-section-title"><svg class="inline-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg> ควบคุมเอกสาร (Document Control)</div>
+      <div style="font-size:11px; color:var(--text-muted); margin-bottom:8px;">
+        ทะเบียนเอกสารแม่บท (Master List) และประวัติการแก้ไข (Amendment Record) — แยกระบบ PIN จากการอนุมัติ JIG
+      </div>
+      <a href="documents.html" target="_blank" class="btn-sec" style="width:100%; display:flex; align-items:center; justify-content:center; box-sizing:border-box; text-decoration:none;"><svg class="inline-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg> เปิดหน้าควบคุมเอกสาร</a>
+    </div>
+
+    <div class="admin-section">
+      <div class="admin-section-title"><svg class="inline-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg> ตราสัญลักษณ์ / ชื่อบริษัท (Company Branding)</div>
+      <div style="font-size:11px; color:var(--text-muted); margin-bottom:8px;">
+        ใช้แสดงในหัวกระดาษ PDF และหน้าควบคุมเอกสาร — <strong>เว้นว่างไว้ = ใช้ค่าเริ่มต้นของระบบ (Summit Auto Body)</strong>
+      </div>
+      <div class="admin-input-row" style="flex-direction:column; align-items:stretch;">
+        <input type="text" id="adm-company-th" placeholder="ชื่อบริษัท (ภาษาไทย)">
+        <input type="text" id="adm-company-en" placeholder="Company Name (English)">
+        <div style="display:flex; gap:8px; align-items:center;">
+          <img id="adm-company-logo-preview" class="adm-company-logo-preview" alt="โลโก้บริษัท" style="display:none;">
+          <input type="file" id="adm-company-logo-file" accept="image/png,image/jpeg,image/svg+xml" style="flex:1; font-size:11px;">
+          <button type="button" class="btn-sec" id="btn-clear-company-logo">ล้างโลโก้</button>
+        </div>
+        <button class="btn-adm-add" id="btn-save-company-branding">บันทึกชื่อ/โลโก้</button>
+      </div>
+      <div style="font-size:10px; color:var(--text-muted); margin:6px 0 4px;">ไฟล์โลโก้ไม่เกิน 1MB — แนะนำ PNG พื้นหลังโปร่งใส</div>
+
+      <div style="margin-top:14px; padding-top:10px; border-top:1px dashed var(--border-input);">
+        <div class="admin-section-title" style="font-size:12px; margin-bottom:6px;">รายชื่อนิติบุคคล (ใช้ในหน้าควบคุมเอกสาร)</div>
+        <div id="adm-companies-list" style="margin-bottom:6px;"></div>
+        <div class="admin-input-row">
+          <input type="text" id="adm-company-new-name" placeholder="เพิ่มชื่อนิติบุคคล...">
+          <button class="btn-adm-add" id="btn-add-company">เพิ่ม</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="admin-section">
+      <div class="admin-section-title"><svg class="inline-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg> ตั้งค่าเอกสารกลาง (ตามระบบ ISO)</div>
+      <div style="font-size:11px; color:var(--text-muted); margin-bottom:8px;">
+        <svg class="inline-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg> Doc No. คือเลขคุมเอกสารแบบฟอร์มตรวจ JIG — <strong>มีค่าเดียวทั้งบริษัท</strong> ไม่ผูกกับ JIG ตัวไหน ควรเปลี่ยนเมื่อฝ่าย ISO อนุมัติ Document Change เท่านั้น
+      </div>
+      <div class="admin-input-row">
+        <input type="text" id="adm-doc-no" placeholder="Doc No. (เช่น DDM4-2-002)">
+        <input type="text" id="adm-rev-level" placeholder="Rev. No. เนื้อหา (เช่น 00)" title="Rev. No. ของเนื้อหา — เปลี่ยนเมื่อเพิ่ม/ลบ/แก้ไขจุดตรวจ">
+        <input type="date" id="adm-issue-date" title="Issued Date — วันที่ออกแบบฟอร์มนี้ครั้งแรก (ค่าคงที่ ไม่เปลี่ยนตาม Rev)">
+        <button class="btn-adm-add" id="btn-save-app-settings">บันทึก</button>
+      </div>
+      <div style="font-size:10px; color:var(--text-muted); margin-top:4px;">
+        Rev. No. = Rev ของ "เนื้อหา" (เพิ่ม/ลบ/แก้ไขจุดตรวจ) &nbsp;|&nbsp; Issued Date = วันออกฟอร์มครั้งแรก (คงที่)
+      </div>
+    </div>
+
+    <!-- Add JIG -->
+    <div class="admin-section">
+      <div class="admin-section-title"><svg class="inline-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg> เพิ่ม JIG</div>
+      <div class="admin-input-row">
+        <select id="adm-jig-dept" class="adm-sel"><option value="">แผนก</option></select>
+        <select id="adm-jig-line" class="adm-sel"><option value="">Line</option></select>
+        <input type="text" id="adm-jig-id" placeholder="รหัส JIG (เช่น JRG01)">
+        <input type="text" id="adm-jig-name" placeholder="ชื่อชิ้นงาน">
+        <input type="text" id="adm-jig-docno" placeholder="Run No. (เช่น SL-RG01-002) — เว้นว่างได้">
+        <button class="btn-adm-add" id="btn-adm-jig">เพิ่ม</button>
+      </div>
+      <div class="admin-search-row">
+        <input type="text" id="adm-jig-search" placeholder="<svg class="inline-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg> ค้นหา JIG (ชื่อ/รหัส/Line)...">
+        <span id="adm-jig-count" class="admin-search-count"></span>
+      </div>
+      <div class="admin-list admin-list-scroll" id="adm-jig-list" style="max-height:340px"></div>
+      <button id="btn-export-master-list" class="btn-sec" style="width:100%; margin-top:8px;"><svg class="inline-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="18" rx="2"/><path d="M9 2h6v3H9z"/><path d="M8 11h8M8 15h8"/></svg> Export Master List (Run No. ทั้งหมด) เป็น Excel</button>
+    </div>
+
+    <!-- Manage Checkpoints -->
+    <div class="admin-section">
+      <div class="admin-section-title"><svg class="inline-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg> จัดการจุดตรวจสอบ (แยกตาม JIG)</div>
+      <div class="admin-input-row">
+        <select id="adm-cp-jig" class="adm-sel" style="flex:1"><option value="">เลือก JIG เพื่อแก้ไขจุดตรวจ...</option></select>
+      </div>
+      <div id="adm-cp-editor" class="hidden" style="margin-top:10px; background:var(--bg-input); padding:10px; border-radius:8px; border:1px solid var(--border-input);">
+
+        <!-- รูปพื้นหลังแผนผัง -->
+        <div class="cp-bg-row">
+          <label class="btn-camera cp-bg-upload">
+            <input type="file" accept="image/*" id="adm-cp-bg-input" class="file-input">
+            <svg class="inline-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg> อัปโหลด/เปลี่ยนรูปพื้นหลัง
+          </label>
+          <button id="btn-cp-bg-remove" class="btn-danger-sm hidden"><svg class="inline-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg> ลบรูปพื้นหลัง</button>
+        </div>
+        <div class="cp-bg-status" id="cp-bg-status"></div>
+
+        <!-- แผนผังลากจุดตรวจสอบ -->
+        <div class="cp-map-wrap">
+          <svg id="adm-cp-map" viewBox="0 0 600 340" preserveAspectRatio="xMidYMid meet">
+            <defs>
+              <clipPath id="map-clip-adm"><rect x="20" y="30" width="560" height="280" rx="12"/></clipPath>
+              <pattern id="adm-grid" width="20" height="20" patternUnits="userSpaceOnUse">
+                <path d="M 20 0 L 0 0 0 20" fill="none" stroke="var(--svg-border)" stroke-width="0.5"/>
+              </pattern>
+            </defs>
+            <rect x="20" y="30" width="560" height="280" rx="12" fill="var(--svg-base-bg)" stroke="var(--svg-border)" stroke-width="1.5"/>
+            <rect x="20" y="30" width="560" height="280" rx="12" fill="url(#adm-grid)"/>
+            <image id="adm-cp-bg-image" x="20" y="30" width="560" height="280" preserveAspectRatio="xMidYMid slice" clip-path="url(#map-clip-adm)" style="display:none" href=""/>
+            <g id="adm-cp-points-group"></g>
+          </svg>
+          <div class="cp-map-hint"><svg class="inline-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg> ลากจุดบนแผนผังเพื่อจัดตำแหน่ง</div>
+        </div>
+
+        <!-- เทมเพลตหัวข้อตรวจสอบ — ใช้ซ้ำข้ามหลาย JIG โดยไม่ต้องพิมพ์ใหม่ทุกครั้ง -->
+        <div class="cp-tpl-box">
+          <div style="font-size:11px; margin-bottom:6px; color:var(--text-muted)"><svg class="inline-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="18" rx="2"/><path d="M9 2h6v3H9z"/><path d="M8 11h8M8 15h8"/></svg> เทมเพลตหัวข้อตรวจสอบ (ใช้ซ้ำกับหลาย JIG ได้)</div>
+          <select id="adm-tpl-select" class="adm-sel" style="width:100%; margin-bottom:8px"><option value="">เลือกเทมเพลตที่จะนำเข้า...</option></select>
+
+          <div id="adm-tpl-preview" class="tpl-preview hidden">
+            <div class="tpl-preview-head">
+              <span id="tpl-preview-count">เลือก 0 หัวข้อ</span>
+              <span class="tpl-preview-toggle-all">
+                <button type="button" id="btn-tpl-select-all" class="tpl-mini-link">เลือกทั้งหมด</button> /
+                <button type="button" id="btn-tpl-select-none" class="tpl-mini-link">ไม่เลือกเลย</button>
+              </span>
+            </div>
+            <div id="adm-tpl-items" class="tpl-item-checklist"></div>
+            <button id="btn-tpl-apply" class="btn-adm-add" style="width:100%; margin-top:8px"><svg class="inline-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> นำเข้าหัวข้อที่เลือก</button>
+          </div>
+
+          <button id="btn-tpl-save" class="btn-sec" style="width:100%; margin-top:8px"><svg class="inline-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg> บันทึกหัวข้อของ JIG นี้เป็นเทมเพลตใหม่</button>
+          <div class="admin-list" id="adm-tpl-list" style="margin-top:8px"></div>
+        </div>
+
+        <div style="font-size:11px; margin:10px 0 8px; color:var(--text-muted)">เพิ่มจุดตรวจใหม่ (จะปรากฏกลางแผนผัง — ลากเพื่อจัดตำแหน่งภายหลัง)</div>
+        <div class="admin-input-row" style="margin-bottom:6px">
+          <input type="text" id="adm-cp-label" placeholder="ชื่อจุด (เช่น L-Pin)" style="flex:2">
+          <input type="text" id="adm-cp-sub" placeholder="เกณฑ์ (เช่น ไม่หลวม)" style="flex:2">
+        </div>
+        <div class="admin-input-row">
+          <input type="text" id="adm-cp-method" placeholder="วิธีตรวจ (สายตา/จับ)" style="flex:2">
+          <button class="btn-adm-add" id="btn-adm-cp">+ เพิ่มจุดตรวจ</button>
+        </div>
+        <div class="admin-list admin-list-scroll" id="adm-cp-list" style="margin-top:10px;"></div>
+      </div>
+    </div>
+
+    <!-- Export / Import backup -->
+    <div class="admin-section">
+      <div class="admin-section-title"><svg class="inline-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg> สำรองข้อมูล (Backup)</div>
+      <button id="btn-export-data" class="btn-sec" style="width:100%"><svg class="inline-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> Export ข้อมูล JIG ทั้งหมด (.json)</button>
+      <label class="btn-sec" style="width:100%; display:flex; align-items:center; justify-content:center; margin-top:8px; cursor:pointer; box-sizing:border-box;">
+        <svg class="inline-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg> Import ข้อมูล JIG ทั้งหมด (.json)
+        <input type="file" id="inp-import-data" accept=".json,application/json" class="file-input" style="display:none">
+      </label>
+      <div style="font-size:11px; color:var(--text-muted); margin-top:6px; line-height:1.5;">
+        Export เก็บทั้ง Catalog (แผนก/Line/JIG/จุดตรวจ) และประวัติการตรวจ — ใช้สำรองก่อนล้าง browser cache หรือย้ายเครื่อง
+      </div>
+      <button id="btn-export-excel" class="btn-sec" style="width:100%; margin-top:8px;"><svg class="inline-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg> Export ประวัติการตรวจเป็น Excel (.xlsx)</button>
+    </div>
+
+    <!-- 🆕 PDF Auto-Save Folder -->
+    <div class="admin-section">
+      <div class="admin-section-title"><svg class="inline-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg> บันทึก PDF อัตโนมัติลงโฟลเดอร์ในเครื่อง</div>
+      <div style="font-size:11px; color:var(--text-muted); margin-bottom:8px; line-height:1.5;">
+        เลือกโฟลเดอร์หลักในคอมพิวเตอร์ครั้งเดียว ระบบจะสร้าง subfolder ตามชื่อ Line ให้อัตโนมัติ (เช่น Line "Beam" → บันทึกลง <code>โฟลเดอร์ที่เลือก/Beam/</code>) แล้วเซฟไฟล์ PDF ลงไปทันทีที่กด Export โดยไม่มี dialog ถามซ้ำอีก<br>
+        <b>รองรับเฉพาะ Chrome / Edge บนคอมพิวเตอร์เท่านั้น</b> (มือถือ/Safari/Firefox จะดาวน์โหลดไฟล์แบบปกติ)
+      </div>
+      <div style="display:flex; align-items:center; gap:8px; font-size:12px; margin-bottom:8px;">
+        <span style="color:var(--text-muted)">โฟลเดอร์ปัจจุบัน:</span>
+        <strong id="autosave-folder-name">ยังไม่ได้ตั้งค่า</strong>
+      </div>
+      <div id="autosave-folder-status" style="font-size:11px; color:var(--text-muted); margin-bottom:8px;"></div>
+      <button id="btn-autosave-choose" class="btn-sec" style="width:100%;"><svg class="inline-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg> เลือกโฟลเดอร์บันทึก PDF อัตโนมัติ</button>
+      <button id="btn-autosave-confirm" class="btn-sec" style="width:100%; margin-top:8px; display:none;">🔓 ยืนยันสิทธิ์เขียนไฟล์อีกครั้ง</button>
+      <button id="btn-autosave-clear" class="btn-sec" style="width:100%; margin-top:8px; display:none;">🗑 ยกเลิกการบันทึกอัตโนมัติ</button>
+    </div>
+
+
+
+    <!-- Sticky Save-All confirmation bar -->
+    <div class="admin-save-bar">
+      <button id="btn-save-all" class="btn-save-all"><svg class="inline-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg> บันทึกข้อมูลทั้งหมด</button>
+      <span class="admin-save-note">ทุกครั้งที่กด "เพิ่ม" ระบบบันทึกให้อัตโนมัติแล้ว — ปุ่มนี้ไว้ยืนยันอีกครั้งก่อนปิดหน้าต่าง</span>
+    </div>
+  </div>
+
+  <!-- ─── HISTORY PANEL ─── -->
+  <div id="history-panel" class="side-panel">
+    <div class="panel-head">
+      <h2><svg class="inline-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="4" rx="1"/><path d="M5 8v11a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8"/><line x1="10" y1="12" x2="14" y2="12"/></svg> ประวัติการตรวจย้อนหลัง</h2>
+      <button id="btn-close-hist" class="btn-close-panel">✕</button>
+    </div>
+    <div class="hist-toolbar">
+      <div class="hf"><label>จาก</label><input type="date" id="hf-start"></div>
+      <div class="hf"><label>ถึง</label><input type="date" id="hf-end"></div>
+      <div class="hf">
+        <label>แผนก</label>
+        <select id="hf-dept"><option value="">ทั้งหมด</option></select>
+      </div>
+      <div class="hf">
+        <label>Line</label>
+        <select id="hf-line"><option value="">ทั้งหมด</option></select>
+      </div>
+      <div class="hf">
+        <label>กะ</label>
+        <select id="hf-shift"><option value="">ทั้งหมด</option><option>กะ 1</option><option>กะ 2</option></select>
+      </div>
+      <button id="btn-hf-apply" class="btn-filter"><svg class="inline-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg> กรอง</button>
+      <button id="btn-hf-clear" class="btn-clear-filter">ล้าง</button>
+      <button id="btn-hf-pdf" class="btn-export-pdf"><svg class="inline-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg> PDF</button>
+    </div>
+    <div class="hist-load-full-row hidden" id="hist-load-full-row">
+      <span class="hist-load-full-hint">โหลดแค่ ~90 วันล่าสุดตามปกติ (ประหยัด Egress) — กดปุ่มนี้ถ้าจะกรอง/ดูข้อมูลที่เก่ากว่านั้น</span>
+      <button id="btn-load-full-history" class="btn-sec">โหลดประวัติทั้งหมดจาก Supabase</button>
+    </div>
+    <div class="hist-summary" id="hist-summary"></div>
+    <div class="hist-select-row hidden" id="hist-select-row">
+      <label class="hist-select-all"><input type="checkbox" id="hf-select-all"> เลือกทั้งหมด</label>
+      <span id="hist-select-count" class="hist-select-count"></span>
+    </div>
+    <div id="hist-list"></div>
+
+    <!-- ─── Sticky bulk-action bar (แสดงเมื่อติ๊กเลือกอย่างน้อย 1 รายการ) — อยู่ใน panel นี้เอง ไม่ล้นออกไปนอกจอ ─── -->
+    <div id="hist-bulk-bar" class="hist-bulk-bar hidden">
+      <div class="hist-bulk-top">
+        <span id="hist-bulk-count" class="hist-bulk-count"></span>
+        <button id="btn-bulk-clear" class="hi-bulk-clear-btn" title="ยกเลิกการเลือกทั้งหมด">✕</button>
+      </div>
+      <div class="hist-bulk-actions">
+        <button id="btn-bulk-pdf" class="hi-bulk-btn"><svg class="inline-ico" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg> Export PDF</button>
+        <button id="btn-bulk-protect" class="hi-bulk-btn"><svg class="inline-ico" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg> เก็บไว้ (กันลบ)</button>
+        <button id="btn-bulk-unprotect" class="hi-bulk-btn"><svg class="inline-ico" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 9.9-2"/></svg> ยกเลิกกันลบ</button>
+        <button id="btn-bulk-del" class="hi-bulk-btn del"><svg class="inline-ico" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg> ลบที่เลือก</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ─── OVERLAY (backdrop for panels) ─── -->
+  <div id="panel-overlay" class="panel-overlay"></div>
+
+  <!-- ─── TOAST ─── -->
+  <div id="toast" class="toast"></div>
+
+  <div id="lightbox" class="lightbox">
+    <button class="lightbox-close">✕</button>
+    <img id="lightbox-img" src="" alt="">
+  </div>
+
+  <!-- ─── ADMIN LOGIN MODAL ─── -->
+  <div id="admin-login-modal" class="modal-overlay hidden">
+    <div class="modal-box admin-login-box">
+      <button id="btn-close-login" class="admin-login-close" title="ปิด">
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+
+      <div class="admin-login-icon">
+        <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+      </div>
+      <h3 class="admin-login-title">เข้าสู่ระบบ Admin</h3>
+      <p class="admin-login-subtitle">กรอกข้อมูลเพื่อเข้าใช้งานส่วนผู้ดูแลระบบ</p>
+
+      <div class="admin-login-field">
+        <label for="inp-admin-user">ชื่อผู้ใช้</label>
+        <div class="admin-login-input-wrap">
+          <svg class="admin-login-input-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+          <input type="text" id="inp-admin-user" placeholder="กรอกชื่อผู้ใช้" autocomplete="username">
+        </div>
+      </div>
+
+      <div class="admin-login-field">
+        <label for="inp-admin-pass">รหัสผ่าน</label>
+        <div class="admin-login-input-wrap">
+          <svg class="admin-login-input-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+          <input type="password" id="inp-admin-pass" placeholder="กรอกรหัสผ่าน" autocomplete="current-password">
+          <button type="button" id="btn-toggle-admin-pass" class="admin-login-eye" title="แสดง/ซ่อนรหัสผ่าน">
+            <svg class="eye-open" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+            <svg class="eye-closed" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:none"><path d="M17.94 17.94A10.94 10.94 0 0 1 12 20c-7 0-11-8-11-8a18.6 18.6 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+          </button>
+        </div>
+      </div>
+
+      <button id="btn-login-submit" class="admin-login-submit">
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/></svg>
+        เข้าสู่ระบบ
+      </button>
+    </div>
+  </div>
+
+</div>
+<!-- 🆕 ใส่เลขเวอร์ชันต่อท้าย ?v=... เพื่อบังคับให้เบราว์เซอร์ (โดยเฉพาะ Safari บน iPhone ซึ่งแคชไฟล์ .js
+     ค้างนานผิดปกติ) โหลด app.js ก้อนใหม่ทุกครั้งที่มีการอัปเดตโค้ด — ให้เปลี่ยนเลขนี้ทุกครั้งที่แก้ app.js
+     แล้ว push ขึ้นใหม่ ไม่งั้นเครื่องที่เคยเข้าเว็บมาก่อนจะยังใช้ไฟล์เก่าจากแคชอยู่ -->
+<script src="app.js?v=20260903"></script>
+<script>
+(function () {
+  var collapseBtn = document.getElementById('sidebar-collapse-toggle');
+  var openBtn     = document.getElementById('sidebar-open-toggle');
+  var overlay     = document.getElementById('sidebar-overlay');
+
+  function closeMobileDrawer() { document.body.classList.remove('sidebar-open'); }
+
+  if (collapseBtn) {
+    collapseBtn.addEventListener('click', function () {
+      document.body.classList.toggle('sidebar-collapsed');
+    });
+  }
+  if (openBtn) {
+    openBtn.addEventListener('click', function () {
+      document.body.classList.add('sidebar-open');
+    });
+  }
+  if (overlay) overlay.addEventListener('click', closeMobileDrawer);
+
+  // ปิดเมนู (มือถือ) หลังเลือกเมนูแล้ว
+  document.querySelectorAll('#app-sidebar .tab-btn, #app-sidebar .side-nav-item').forEach(function (el) {
+    el.addEventListener('click', closeMobileDrawer);
+  });
+
+  // ─── Admin Login Modal: แสดง/ซ่อนรหัสผ่าน + กด Enter เพื่อเข้าสู่ระบบ ───
+  var eyeBtn = document.getElementById('btn-toggle-admin-pass');
+  var passInp = document.getElementById('inp-admin-pass');
+  var userInp = document.getElementById('inp-admin-user');
+  var loginSubmitBtn = document.getElementById('btn-login-submit');
+
+  if (eyeBtn && passInp) {
+    eyeBtn.addEventListener('click', function () {
+      var showing = passInp.type === 'text';
+      passInp.type = showing ? 'password' : 'text';
+      eyeBtn.querySelector('.eye-open').style.display = showing ? '' : 'none';
+      eyeBtn.querySelector('.eye-closed').style.display = showing ? 'none' : '';
+    });
+  }
+  if (userInp) {
+    userInp.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter') { e.preventDefault(); passInp && passInp.focus(); }
+    });
+  }
+  if (passInp) {
+    passInp.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter') { e.preventDefault(); loginSubmitBtn && loginSubmitBtn.click(); }
+    });
+  }
+})();
+</script>
+
+<!-- ─── GPS ALERT MODAL ─── -->
+<div id="gps-alert-modal" class="modal-overlay hidden">
+  <div class="modal-box">
+    <div class="modal-head">
+      <h3><svg class="inline-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg> เปิด GPS เพื่อใช้งาน</h3>
+    </div>
+    <div style="padding: 16px; color: var(--text-main);">
+      <p style="margin-bottom: 12px;">แอป JIG Inspection ต้องการ GPS เพื่อบันทึกพิกัดการตรวจเช็ค</p>
+      
+      <h4 style="margin-top: 16px; margin-bottom: 8px;"><svg class="inline-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="2" width="14" height="20" rx="2"/><line x1="12" y1="18" x2="12.01" y2="18"/></svg> วิธีเปิด GPS:</h4>
+      <ul style="margin: 8px 0; padding-left: 20px; line-height: 1.6;">
+        <li><strong>Android:</strong> Settings → Location → ปิด → เปิด</li>
+        <li><strong>iOS:</strong> Settings → Privacy → Location → ปิด → เปิด</li>
+      </ul>
+      
+      <p style="margin-top: 16px; font-size: 12px; color: var(--text-muted);"><svg class="inline-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg> จำเป็นต้องเปิด GPS ก่อนใช้งาน</p>
+    </div>
+    
+    <button id="btn-gps-check" class="btn-adm-add" style="width: 100%; margin-top: 12px;">✓ เช็ค GPS ใหม่</button>
+  </div>
+</div>
+
+<!-- 🆕 RECHECK CONFIRM MODAL — ยืนยันก่อนตรวจซ้ำ JIG ที่ตรวจแล้ววันนี้ (แทนที่ confirm() ของเบราว์เซอร์) -->
+<div id="recheck-confirm-modal" class="modal-overlay hidden">
+  <div class="modal-box recheck-confirm-box">
+    <div class="recheck-confirm-icon">
+      <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 4v6h6"/><path d="M23 20v-6h-6"/><path d="M20.49 9A9 9 0 0 0 5.64 5.64L1 10m22 4-4.64 4.36A9 9 0 0 1 3.51 15"/></svg>
+    </div>
+    <h3 class="recheck-confirm-title">JIG นี้ตรวจแล้ววันนี้</h3>
+    <p class="recheck-confirm-jigname" id="recheck-confirm-jigname"></p>
+    <div class="recheck-confirm-meta">
+      <span class="jig-checked-badge" id="recheck-confirm-badge"></span>
+      <span class="recheck-confirm-time" id="recheck-confirm-time"></span>
+    </div>
+    <p class="recheck-confirm-question">ต้องการตรวจซ้ำหรือไม่?</p>
+    <div class="recheck-confirm-actions">
+      <button id="btn-recheck-cancel" class="btn-modal-cancel">ยกเลิก</button>
+      <button id="btn-recheck-confirm" class="btn-modal-confirm">ตรวจซ้ำ</button>
+    </div>
+  </div>
+</div>
+
+<!-- 🆕 GENERIC CONFIRM MODAL — แทนที่ confirm() ของเบราว์เซอร์ทุกจุดในแอป (Promise-based, ใช้ซ้ำได้ทุกที่ ผ่าน showConfirmModal())
+     ต่างจาก recheck-confirm-modal ด้านบน (เฉพาะกรณีตรวจซ้ำ JIG เท่านั้น) — อันนี้ทั่วไป ใช้ข้อความ/ปุ่ม/สีที่ปรับได้ตามแต่ละจุดที่เรียกใช้ -->
+<div id="generic-confirm-modal" class="modal-overlay hidden">
+  <div class="modal-box generic-confirm-box">
+    <div class="generic-confirm-icon" id="generic-confirm-icon">
+      <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+    </div>
+    <p class="generic-confirm-message" id="generic-confirm-message"></p>
+    <div class="generic-confirm-actions">
+      <button id="btn-generic-confirm-cancel" class="btn-modal-cancel">ยกเลิก</button>
+      <button id="btn-generic-confirm-ok" class="btn-modal-confirm">ยืนยัน</button>
+    </div>
+  </div>
+</div>
+
+<!-- ─── NG LIST MODAL (คลิกการ์ด "รายการ NG ทั้งหมด" บน Dashboard) ─── -->
+<div id="ng-list-modal" class="modal-overlay hidden">
+  <div class="modal-box" style="width:min(640px, 94vw); max-height:85vh; display:flex; flex-direction:column;">
+    <div class="modal-head">
+      <h3><svg class="inline-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg> รายการ NG ทั้งหมด <span id="ng-list-modal-count" style="color:var(--text-muted);font-weight:400;font-size:12px;"></span></h3>
+      <button id="btn-ng-list-modal-close" class="btn-close-panel">✕</button>
+    </div>
+    <div id="ng-list-modal-body" style="padding: 14px 16px; overflow-y: auto; flex: 1;"></div>
+  </div>
+</div>
+
+<!-- 🆕 TV MODE — ทำงานหลัง app.js โหลดเสร็จ: รอจน init() พร้อมจริง แล้วสลับไปแท็บ Dashboard +
+     ซ่อนเมนู/ปุ่มแก้ไขทั้งหมด เหลือแต่หน้าจอดูอย่างเดียว + ตั้งรีโหลดหน้าอัตโนมัติเป็นระยะกันค้าง -->
+<script>
+  (function () {
+    // รอจน boot-loading ถูกซ่อน (แปลว่า init() ของ app.js ไปถึง renderFilter() แล้ว ข้อมูลพร้อมแสดงจริง)
+    // มี fallback กันรอตลอดไป ถ้าเช็คเกิน 12 วิ (init() มี safety-timeout ของตัวเองอยู่แล้วที่ 8 วิ) ก็ลองต่อเลย
+    var attempts = 0;
+    var maxAttempts = 120; // 120 x 100ms = 12 วินาที
+    var poll = setInterval(function () {
+      attempts++;
+      var bootEl = document.getElementById('boot-loading');
+      var ready = bootEl && bootEl.classList.contains('hide');
+      if (ready || attempts >= maxAttempts) {
+        clearInterval(poll);
+        enterTvMode();
+      }
+    }, 100);
+
+    function enterTvMode() {
+      // สลับไปแท็บ Dashboard อัตโนมัติ (ใช้กลไกเดิมของแอปตรงๆ ไม่ต้องเขียน render ใหม่เอง)
+      var dashTabBtn = document.querySelector('.tab-btn[data-tab="dashboard"]');
+      if (dashTabBtn) dashTabBtn.click();
+
+      // ซ่อนเมนู/ปุ่มที่ไม่เกี่ยวกับการ "ดู" — TV ไม่มีคนคอยกดอะไรเลย
+      ['app-sidebar', 'sidebar-overlay', 'sidebar-open-toggle', 'btn-admin-toggle',
+       'btn-app-logout', 'app-user-badge', 'theme-toggle'].forEach(function (id) {
+        var el = document.getElementById(id);
+        if (el) el.classList.add('hidden');
+      });
+      // 🆕 ซ่อนการ์ด "AI วิเคราะห์ข้อมูล" ด้วย — ต้องกดปุ่ม/ใส่ API Key เอง ไม่เหมาะกับจอ TV ที่ไม่มีคนโต้ตอบ
+      var aiPanel = document.querySelector('.dash-block[data-block-id="ai-panel"]');
+      if (aiPanel) aiPanel.classList.add('hidden');
+
+      // ตั้งรีโหลดหน้าทั้งหมดทุก 10 นาที — วิธีที่ชัวร์ที่สุดกันจอ TV ที่เปิดค้างไว้หลายชั่วโมง/ข้ามวัน
+      // เจอปัญหาแปลกๆ สะสม (realtime หลุดเงียบๆ, หน่วยความจำโป่ง) เพราะไม่มีคนอยู่หน้าจอคอยกดรีเฟรชเอง
+      // ระหว่างนั้นข้อมูลยังอัปเดตสดผ่าน Supabase Realtime อยู่แล้ว (ดู subscribeRealtime() ใน app.js)
+      // อันนี้เป็นแค่ safety-net เสริมอีกชั้น
+      setTimeout(function () { location.reload(); }, 10 * 60 * 1000);
+    }
+  })();
+</script>
+
+</body>
+</html>
