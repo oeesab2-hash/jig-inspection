@@ -470,6 +470,16 @@
   <!-- ─── VIEW: DASHBOARD ─── -->
   <div id="view-dashboard" class="hidden">
 
+    <!-- 🆕 ย้ายนาฬิกา/วันที่มาไว้บนสุดของ Dashboard ตามที่ขอ — ย้ายตำแหน่งเฉยๆ ไม่ได้แก้ id/logic
+         ใดๆ เลย ($('dash-clock-date')/$('dash-clock-time') ใน app.js หาเจอเหมือนเดิมทุกอย่าง) -->
+    <div style="display:flex; justify-content:flex-end; margin-bottom:12px;">
+      <div class="dash-live-clock">
+        <span class="live-dot"></span>
+        <span id="dash-clock-date"></span>
+        <span id="dash-clock-time"></span>
+      </div>
+    </div>
+
     <!-- ─── สถานะ Line วันนี้ — read-only, จัดกลุ่มตามแผนก ─── -->
     <div class="glass-card" style="margin-bottom:16px;">
       <div class="card-header-flex">
@@ -522,11 +532,6 @@
           <select id="dash-line-filter">
             <option value="all">ทุก Line (All)</option>
           </select>
-        </div>
-        <div class="dash-live-clock">
-          <span class="live-dot"></span>
-          <span id="dash-clock-date"></span>
-          <span id="dash-clock-time"></span>
         </div>
         <!-- ปุ่มรีเซ็ตลำดับการ์ด Dashboard กลับเป็นค่าเริ่มต้น (เผื่อลากมั่วแล้วอยากกลับไปแบบเดิม) -->
         <button id="btn-dash-reset-order" class="btn-dash-reset-order" title="รีเซ็ตลำดับการ์ดกลับเป็นค่าเริ่มต้น">
