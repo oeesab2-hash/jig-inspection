@@ -113,6 +113,10 @@
      ดู supabase/functions/send-telegram/index.ts + คำแนะนำ deploy แนบมาด้วย
   ══════════════════════════════════════ */
   const TELEGRAM_FUNCTION_URL = `${SUPABASE_URL}/functions/v1/send-telegram`;
+  // 🆕 Edge Function เช็ค Line ขาดตรวจของ "วันนี้" แล้วยิง Telegram เตือนอัตโนมัติ
+  // ปกติถูกเรียกโดย pg_cron ทุกวันจันทร์-เสาร์ 14:00 น. (ดู schedule_check_missed_lines.sql)
+  // ปุ่ม "ทดสอบแจ้งเตือนตอนนี้" ใน Admin Panel ก็เรียก URL เดียวกันนี้ตรงๆ เพื่อทดสอบได้ทันที
+  const CHECK_MISSED_LINES_FUNCTION_URL = `${SUPABASE_URL}/functions/v1/check-missed-lines`;
 
   let _syncing = false; // กัน realtime event ที่มาจาก push ของตัวเองไม่ให้ re-render วนซ้ำ
   const _pushTimers = {};
@@ -2781,6 +2785,15 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
       toast('ลบรูปพื้นหลังแล้ว — กลับไปใช้แผนผังเริ่มต้น', 'ok');
     });
 
+    /* 🆕 Missed Line Report */
+    if ($('btn-missed-lines-refresh')) {
+      initMissedLinesDatePickers();
+      $('btn-missed-lines-refresh').addEventListener('click', loadAndRenderMissedLines);
+    }
+    if ($('btn-missed-lines-test-alert')) {
+      $('btn-missed-lines-test-alert').addEventListener('click', testMissedLinesAlertNow);
+    }
+
     /* Export / Import backup */
     $('btn-export-data').addEventListener('click', exportAllData);
     $('inp-import-data').addEventListener('change', e => {
@@ -5298,6 +5311,157 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
   function lineNameById(id) {
     const l = catalog.lines.find(x => x.id === id);
     return l ? (l.name || l.id) : id;
+  }
+
+  /* ══════════════════════════════════════
+     🆕 MISSED LINE REPORT — Line ที่ไม่มีการตรวจเลยในแต่ละวัน (ดูย้อนหลังได้)
+     คำนวณสดจาก history + jig_skips ผ่าน RPC 2 ตัว (ดู get_missed_lines_data.sql)
+     ไม่ดึงข้อมูลเต็มแถว/รูปภาพออกมาเลย จึงแทบไม่กระทบ Egress
+     กติกา: Line ที่ทุก JIG ถูกมาร์ค "ไม่ได้ผลิตวันนั้น" ครบ ถือว่า "ครบ" ไม่ใช่ Line ขาดตรวจ
+     (ตรงกับตรรกะเดียวกับ computeLineStatusToday() ที่ใช้ในหน้า Dashboard)
+  ══════════════════════════════════════ */
+
+  function initMissedLinesDatePickers() {
+    const toEl = $('missed-lines-to'), fromEl = $('missed-lines-from');
+    if (!toEl || !fromEl) return;
+    const today = new Date();
+    const from30 = new Date(today.getTime() - 29 * 86400000); // รวมวันนี้ = 30 วัน
+    toEl.value = localDateStr(today);
+    fromEl.value = localDateStr(from30);
+  }
+
+  // สร้าง array ของวันที่ "YYYY-MM-DD" จาก fromStr ถึง toStr แบบไล่ล่าสุดก่อน (descending)
+  function dateRangeDesc(fromStr, toStr) {
+    const out = [];
+    let d = new Date(fromStr + 'T00:00:00');
+    const end = new Date(toStr + 'T00:00:00');
+    if (isNaN(d.getTime()) || isNaN(end.getTime()) || d > end) return out;
+    while (d <= end) {
+      out.push(localDateStr(d));
+      d = new Date(d.getTime() + 86400000);
+    }
+    return out.reverse();
+  }
+
+  async function loadAndRenderMissedLines() {
+    const fromStr = $('missed-lines-from').value;
+    const toStr = $('missed-lines-to').value;
+    const summaryEl = $('missed-lines-summary');
+    const resultsEl = $('missed-lines-results');
+    if (!fromStr || !toStr || fromStr > toStr) {
+      toast('กรุณาเลือกช่วงวันที่ให้ถูกต้อง (วันเริ่มต้องไม่เกินวันสิ้นสุด)', 'ng');
+      return;
+    }
+    if (!sb) { toast('ยังไม่ได้เชื่อมต่อฐานข้อมูล ไม่สามารถโหลดรายงานได้', 'ng'); return; }
+
+    summaryEl.textContent = 'กำลังโหลด...';
+    resultsEl.innerHTML = '';
+
+    try {
+      const [inspRes, skipRes] = await Promise.all([
+        sb.rpc('get_line_inspected_days', { p_from: fromStr, p_to: toStr }),
+        sb.rpc('get_jig_skip_days', { p_from: fromStr, p_to: toStr }),
+      ]);
+      if (inspRes.error) throw inspRes.error;
+      if (skipRes.error) throw skipRes.error;
+
+      // inspectedByDate[date] = Set(lineId)
+      const inspectedByDate = {};
+      (inspRes.data || []).forEach(r => {
+        (inspectedByDate[r.insp_date] = inspectedByDate[r.insp_date] || new Set()).add(String(r.line_id));
+      });
+      // skippedByDateLine["date|lineId"] = Set(jigId)
+      const skippedByDateLine = {};
+      (skipRes.data || []).forEach(r => {
+        const key = `${r.skip_date}|${r.line_id}`;
+        (skippedByDateLine[key] = skippedByDateLine[key] || new Set()).add(String(r.jig_id));
+      });
+
+      const dates = dateRangeDesc(fromStr, toStr);
+      const jigsByLine = {}; // lineId -> [jig...] (แคชไว้ ไม่ filter ซ้ำทุกวัน)
+      catalog.lines.forEach(l => { jigsByLine[l.id] = catalog.jigs.filter(j => j.lineId === l.id); });
+
+      let daysWithIssue = 0;
+      let totalMissedLineDays = 0;
+      const dayBlocks = [];
+
+      dates.forEach(date => {
+        const inspectedSet = inspectedByDate[date] || new Set();
+        const missedLines = [];
+        catalog.lines.forEach(line => {
+          const lineJigs = jigsByLine[line.id] || [];
+          if (!lineJigs.length) return; // Line ที่ยังไม่มี JIG เลย ไม่นับว่าต้องตรวจ
+          const skippedSet = skippedByDateLine[`${date}|${line.id}`] || new Set();
+          const requiredCount = lineJigs.filter(j => !skippedSet.has(j.id)).length;
+          if (requiredCount <= 0) return; // ทุก JIG ถูกมาร์คไม่ได้ผลิตวันนั้น = ถือว่าครบ ไม่นับขาดตรวจ
+          if (!inspectedSet.has(line.id)) missedLines.push(line);
+        });
+        if (missedLines.length) {
+          daysWithIssue++;
+          totalMissedLineDays += missedLines.length;
+          dayBlocks.push({ date, missedLines });
+        }
+      });
+
+      summaryEl.textContent = `เช็ค ${dates.length} วัน — พบ ${daysWithIssue} วันที่มี Line ขาดตรวจ (รวม ${totalMissedLineDays} รายการ Line/วัน)`;
+
+      if (!dayBlocks.length) {
+        resultsEl.innerHTML = `<div class="missed-lines-empty-ok">✅ ตรวจครบทุก Line ทุกวันในช่วงที่เลือก</div>`;
+        return;
+      }
+
+      resultsEl.innerHTML = dayBlocks.map(block => {
+        const chips = block.missedLines.map(l => {
+          const dept = catalog.depts.find(d => d.id === l.deptId);
+          const deptName = dept ? dept.name : '';
+          return `<span class="missed-lines-chip">${escHtml(l.name || l.id)}${deptName ? `<span class="missed-lines-chip-dept">(${escHtml(deptName)})</span>` : ''}</span>`;
+        }).join('');
+        return `
+          <div class="missed-lines-day">
+            <div class="missed-lines-day-head">
+              <span>${formatDateDMY(block.date)}</span>
+              <span class="missed-lines-day-count">ขาดตรวจ ${block.missedLines.length} Line</span>
+            </div>
+            <div class="missed-lines-chip-row">${chips}</div>
+          </div>`;
+      }).join('');
+    } catch (e) {
+      console.error('loadAndRenderMissedLines error:', e);
+      summaryEl.textContent = '';
+      resultsEl.innerHTML = `<div class="missed-lines-empty-ok" style="background:var(--ng-bg); border-color:var(--ng-border);">โหลดรายงานไม่สำเร็จ — ตรวจสอบว่ารัน SQL migration get_missed_lines_data.sql แล้วหรือยัง (ดู Console เพิ่มเติม)</div>`;
+    }
+  }
+
+  // 🆕 กดทดสอบเรียก Edge Function check-missed-lines ตรงๆ (เช็คของ "วันนี้" แล้วส่ง Telegram
+  // จริงถ้าเจอ Line ขาดตรวจ) — ใช้ตอน setup ครั้งแรกเพื่อเช็คว่า deploy + cron ต่อกันถูกต้อง
+  // โดยไม่ต้องรอถึงเวลา cron จริง (14:00 น.)
+  async function testMissedLinesAlertNow() {
+    const btn = $('btn-missed-lines-test-alert');
+    const originalHtml = btn ? btn.innerHTML : '';
+    if (btn) { btn.disabled = true; btn.textContent = 'กำลังเช็ค...'; }
+    try {
+      const res = await fetch(CHECK_MISSED_LINES_FUNCTION_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` },
+        body: JSON.stringify({}),
+      });
+      const data = await res.json().catch(() => null);
+      if (!res.ok || !data || data.ok === false) {
+        console.error('testMissedLinesAlertNow failed:', res.status, data);
+        toast('ทดสอบไม่สำเร็จ — เช็คว่า deploy Edge Function "check-missed-lines" แล้วหรือยัง (ดู Console)', 'ng');
+        return;
+      }
+      if (data.missedCount > 0) {
+        toast(`📤 ส่ง Telegram แจ้งเตือนแล้ว — พบ Line ขาดตรวจวันนี้ ${data.missedCount} Line`, 'ok');
+      } else {
+        toast('✅ วันนี้ตรวจครบทุก Line แล้ว (ไม่มีอะไรต้องแจ้งเตือน จึงไม่ได้ส่ง Telegram)', 'ok');
+      }
+    } catch (e) {
+      console.error('testMissedLinesAlertNow error:', e);
+      toast('ทดสอบไม่สำเร็จ — ตรวจการเชื่อมต่อ/Console เพิ่มเติม', 'ng');
+    } finally {
+      if (btn) { btn.disabled = false; btn.innerHTML = originalHtml; }
+    }
   }
 
   function refreshDashboard() {
