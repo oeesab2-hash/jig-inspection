@@ -1133,6 +1133,61 @@ h1, h2, h3, h4, label, button, input, select, textarea, p, span, div {
   font-family: var(--font-thai); white-space: nowrap;
 }
 .btn-adm-add:hover { background: var(--accent-hover); }
+/* 🆕 Line ที่ขาดตรวจบ่อยสุด (Top offenders) — อยู่เหนือรายการแยกตามวัน */
+.adm-uncl-top { margin-bottom: 10px; }
+.adm-uncl-top-title {
+  font-size: 10.5px; font-weight: 700; color: var(--text-muted);
+  text-transform: uppercase; letter-spacing: .03em;
+  margin-bottom: 6px; display: flex; align-items: center; gap: 4px;
+}
+.uncl-top-item {
+  display: flex; align-items: center; gap: 8px;
+  padding: 6px 10px; border-radius: 8px;
+  background: var(--bg-input); border: 1px solid var(--border-input);
+  margin-bottom: 4px;
+}
+.uncl-top-item.rank-1 { border-color: var(--ng); background: var(--ng-bg); }
+.uncl-top-rank {
+  flex-shrink: 0; width: 20px; height: 20px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 10px; font-weight: 700; color: #fff;
+  background: var(--pending);
+}
+.uncl-top-item.rank-1 .uncl-top-rank { background: var(--ng); }
+.uncl-top-item.rank-2 .uncl-top-rank { background: var(--fixed); }
+.uncl-top-item.rank-3 .uncl-top-rank { background: var(--accent); }
+.uncl-top-name { flex: 1; font-size: 11.5px; color: var(--text-main); font-weight: 600; }
+.uncl-top-name .uncl-dept { color: var(--text-muted); font-weight: 400; }
+.uncl-top-count {
+  flex-shrink: 0; font-size: 10px; font-weight: 700; color: var(--ng);
+  background: var(--ng-bg); padding: 2px 8px; border-radius: 999px; white-space: nowrap;
+}
+
+/* 🆕 Line ที่ไม่มีการตรวจเช็คในแต่ละวัน (Admin Panel) */
+.adm-uncl-summary { font-size: 11px; color: var(--text-muted); margin-bottom: 6px; }
+.adm-uncl-item {
+  padding: 8px 10px; border-radius: 8px;
+  background: var(--bg-input); border: 1px solid var(--border-input);
+  margin-bottom: 4px;
+}
+.adm-uncl-item .uncl-date {
+  font-size: 11.5px; font-weight: 600; color: var(--text-main);
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  margin-bottom: 5px;
+}
+.adm-uncl-item .uncl-count {
+  font-size: 10px; font-weight: 600; color: var(--ng);
+  background: var(--ng-bg); padding: 1px 7px; border-radius: 999px;
+  white-space: nowrap;
+}
+.adm-uncl-item .uncl-lines { display: flex; flex-wrap: wrap; gap: 5px; }
+.uncl-line-chip {
+  font-size: 10.5px; color: var(--text-main);
+  background: var(--bg-card); border: 1px solid var(--border-input);
+  padding: 2px 8px; border-radius: 999px;
+}
+.uncl-line-chip .uncl-dept { color: var(--text-muted); font-weight: 400; }
+
 .admin-list { display: flex; flex-direction: column; gap: 4px; }
 .admin-list-scroll {
   max-height: 240px;
@@ -2681,30 +2736,3 @@ body.sidebar-collapsed .sidebar-nav a.side-nav-item { justify-content: center; p
   0%, 60%, 100% { transform: translateY(0); opacity: 0.4; }
   30% { transform: translateY(-7px); opacity: 1; }
 }
-
-/* 🆕 Missed Line Report (Admin Panel) — Line ที่ไม่มีการตรวจในแต่ละวัน */
-.missed-lines-empty-ok {
-  display: flex; align-items: center; gap: 8px;
-  padding: 12px; border-radius: 8px;
-  background: var(--ok-bg); border: 1px solid var(--ok-border);
-  color: var(--text-main); font-size: 12.5px;
-}
-.missed-lines-day {
-  border: 1px solid var(--ng-border); background: var(--ng-bg);
-  border-radius: 8px; padding: 8px 10px; margin-bottom: 8px;
-}
-.missed-lines-day-head {
-  display: flex; align-items: center; justify-content: space-between;
-  font-size: 12.5px; font-weight: 600; margin-bottom: 6px;
-}
-.missed-lines-day-count {
-  font-size: 11px; font-weight: 600; color: var(--ng);
-  background: hsla(0,75%,55%,0.15); border-radius: 999px; padding: 1px 8px;
-}
-.missed-lines-chip-row { display: flex; flex-wrap: wrap; gap: 6px; }
-.missed-lines-chip {
-  font-size: 11.5px; padding: 3px 9px; border-radius: 999px;
-  background: var(--bg-input); border: 1px solid var(--border-input);
-  color: var(--text-main);
-}
-.missed-lines-chip-dept { opacity: 0.6; font-size: 10.5px; margin-left: 3px; }

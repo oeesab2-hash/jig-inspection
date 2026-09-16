@@ -86,7 +86,7 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <!-- ⚠️ CACHE-BUST: เบราว์เซอร์/PWA มัก cache ไฟล์ .css ค้างไว้นานผิดปกติ (เหมือน app.js ด้านล่าง)
        เพิ่ม ?v= ให้บังคับโหลดไฟล์ใหม่ทุกครั้งที่แก้ style.css — ให้เปลี่ยนเลขนี้ทุกครั้งที่แก้ style.css -->
-  <link rel="stylesheet" href="style.css?v=20260903">
+  <link rel="stylesheet" href="style.css?v=20260916b">
 </head>
 <body>
 
@@ -470,16 +470,6 @@
   <!-- ─── VIEW: DASHBOARD ─── -->
   <div id="view-dashboard" class="hidden">
 
-    <!-- 🆕 ย้ายนาฬิกา/วันที่มาไว้บนสุดของ Dashboard ตามที่ขอ — ย้ายตำแหน่งเฉยๆ ไม่ได้แก้ id/logic
-         ใดๆ เลย ($('dash-clock-date')/$('dash-clock-time') ใน app.js หาเจอเหมือนเดิมทุกอย่าง) -->
-    <div style="display:flex; justify-content:flex-end; margin-bottom:12px;">
-      <div class="dash-live-clock">
-        <span class="live-dot"></span>
-        <span id="dash-clock-date"></span>
-        <span id="dash-clock-time"></span>
-      </div>
-    </div>
-
     <!-- ─── สถานะ Line วันนี้ — read-only, จัดกลุ่มตามแผนก ─── -->
     <div class="glass-card" style="margin-bottom:16px;">
       <div class="card-header-flex">
@@ -532,6 +522,11 @@
           <select id="dash-line-filter">
             <option value="all">ทุก Line (All)</option>
           </select>
+        </div>
+        <div class="dash-live-clock">
+          <span class="live-dot"></span>
+          <span id="dash-clock-date"></span>
+          <span id="dash-clock-time"></span>
         </div>
         <!-- ปุ่มรีเซ็ตลำดับการ์ด Dashboard กลับเป็นค่าเริ่มต้น (เผื่อลากมั่วแล้วอยากกลับไปแบบเดิม) -->
         <button id="btn-dash-reset-order" class="btn-dash-reset-order" title="รีเซ็ตลำดับการ์ดกลับเป็นค่าเริ่มต้น">
@@ -799,6 +794,23 @@
         <button class="btn-adm-add" id="btn-adm-line">เพิ่ม</button>
       </div>
       <div class="admin-list admin-list-scroll" id="adm-line-list"></div>
+    </div>
+
+    <!-- 🆕 Line ที่ไม่มีการตรวจเช็คในแต่ละวัน — ดึงผ่าน RPC get_unchecked_lines (คำนวณฝั่งเซิร์ฟเวอร์
+         ไม่ดาวน์โหลดรูปถ่าย/ข้อมูลเต็มแถวจาก history เหมือนวิธีเดิม, ดู add_unchecked_lines_report.sql) -->
+    <div class="admin-section">
+      <div class="admin-section-title"><svg class="inline-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg> Line ที่ไม่มีการตรวจเช็คในแต่ละวัน</div>
+      <div style="font-size:11px; color:var(--text-muted); margin-bottom:8px; line-height:1.5;">
+        แสดง Line ที่ <b>ไม่มีการตรวจเลยสักจุด</b> ในวันนั้นๆ (Line ที่มาร์ค "ไม่ได้ผลิต" ครบทุก JIG แล้ว จะไม่ถูกนับว่าขาดตรวจ) — เลือกช่วงวันที่แล้วกด "ค้นหา"
+      </div>
+      <div class="admin-input-row">
+        <input type="date" id="adm-uncl-from" title="จากวันที่">
+        <input type="date" id="adm-uncl-to" title="ถึงวันที่">
+        <button class="btn-adm-add" id="btn-adm-uncl-search">ค้นหา</button>
+      </div>
+      <div id="adm-uncl-summary" class="adm-uncl-summary"></div>
+      <div id="adm-uncl-top" class="adm-uncl-top"></div>
+      <div class="admin-list admin-list-scroll" id="adm-uncl-list"></div>
     </div>
 
     <!-- Document Settings (ค่ากลางทั้งระบบ ตาม ISO — Doc No. เดียวทั้งบริษัท) -->
@@ -1087,7 +1099,7 @@
 <!-- 🆕 ใส่เลขเวอร์ชันต่อท้าย ?v=... เพื่อบังคับให้เบราว์เซอร์ (โดยเฉพาะ Safari บน iPhone ซึ่งแคชไฟล์ .js
      ค้างนานผิดปกติ) โหลด app.js ก้อนใหม่ทุกครั้งที่มีการอัปเดตโค้ด — ให้เปลี่ยนเลขนี้ทุกครั้งที่แก้ app.js
      แล้ว push ขึ้นใหม่ ไม่งั้นเครื่องที่เคยเข้าเว็บมาก่อนจะยังใช้ไฟล์เก่าจากแคชอยู่ -->
-<script src="app.js?v=20260903"></script>
+<script src="app.js?v=20260916b"></script>
 <script>
 (function () {
   var collapseBtn = document.getElementById('sidebar-collapse-toggle');

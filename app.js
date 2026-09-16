@@ -69,8 +69,8 @@
      กลยุทธ์: "sync ทั้งก้อน" — เวลาบันทึก จะลบของเก่าทั้งหมดในตารางที่เกี่ยวข้อง
      แล้ว insert ชุดปัจจุบันใหม่ทั้งหมด (ง่าย ตรงไปตรงมา เหมาะกับทีมขนาดเล็ก)
   ══════════════════════════════════════ */
-  const SUPABASE_URL = 'https://otytpzimuyaqagvxvexf.supabase.co';
-  const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im90eXRwemltdXlhcWFndnh2ZXhmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ1MTMyMDEsImV4cCI6MjEwMDA4OTIwMX0.QQVIcDkIByAgyFTHrF7AmcZ-l-HfvLnbU8jh3Vnwyjw';
+  const SUPABASE_URL = 'https://xdavhgsjmtnxdubchdmc.supabase.co';
+  const SUPABASE_ANON_KEY = 'sb_publishable_JljawsAH_KHAAiGZggVUvA_wRVBn_7V';
   const sb = (window.supabase && window.supabase.createClient)
     ? window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
     : null;
@@ -113,10 +113,6 @@
      ดู supabase/functions/send-telegram/index.ts + คำแนะนำ deploy แนบมาด้วย
   ══════════════════════════════════════ */
   const TELEGRAM_FUNCTION_URL = `${SUPABASE_URL}/functions/v1/send-telegram`;
-  // 🆕 Edge Function เช็ค Line ขาดตรวจของ "วันนี้" แล้วยิง Telegram เตือนอัตโนมัติ
-  // ปกติถูกเรียกโดย pg_cron ทุกวันจันทร์-เสาร์ 14:00 น. (ดู schedule_check_missed_lines.sql)
-  // ปุ่ม "ทดสอบแจ้งเตือนตอนนี้" ใน Admin Panel ก็เรียก URL เดียวกันนี้ตรงๆ เพื่อทดสอบได้ทันที
-  const CHECK_MISSED_LINES_FUNCTION_URL = `${SUPABASE_URL}/functions/v1/check-missed-lines`;
 
   let _syncing = false; // กัน realtime event ที่มาจาก push ของตัวเองไม่ให้ re-render วนซ้ำ
   const _pushTimers = {};
@@ -1169,6 +1165,7 @@
     bindJigSearch();
     bindThemeToggle();
     bindAdminPanel();
+    bindUncheckedLinesPanel();   // 🆕 Line ที่ไม่มีการตรวจเช็คในแต่ละวัน (Admin Panel)
     bindActionButtons();
     bindLightbox();
     bindHistoryPanel();
@@ -1748,6 +1745,26 @@
     }
   }
 
+  // 🆕 [แก้ข้อ 1] แจ้งเตือน Telegram ทุกครั้งที่มีการลบประวัติการตรวจ — เพื่อความโปร่งใส/ตรวจสอบย้อนหลังได้
+  // ว่าใครลบ ลบรายการไหน เมื่อไหร่ (ไม่งั้นถ้ามีคนลบประวัติโดยไม่ตั้งใจหรือจงใจ จะไม่มีใครรู้เลย)
+  async function notifyHistoryDeleted(record) {
+    if (!record) return;
+    const adminUser = localStorage.getItem('jig_admin_user') || 'ไม่ทราบผู้ใช้';
+    const msg = `
+🗑 *แจ้งเตือน: มีการลบประวัติการตรวจสอบ*
+━━━━━━━━━━━━━━━━━━━━━━━━━
+*${escHtml(record.jigName || '-')}*
+${escHtml(record.jigId || '')}
+
+📅 วันที่ตรวจ (รายการที่ถูกลบ): ${record.date || '-'}
+👤 ผู้ตรวจเดิม: ${escHtml(record.inspector || '-')}
+🗑 ลบโดย (Admin): ${escHtml(adminUser)}
+🕐 เมื่อ: ${new Date().toLocaleString('th-TH')}
+━━━━━━━━━━━━━━━━━━━━━━━━━
+`;
+    await sendTelegramMessage(msg);
+  }
+
   async function submitReport() {
     if (_submitInProgress) return; // 🆕 กันกดซ้ำระหว่างที่ยังทำงานอยู่ (รอ GPS/บันทึก/ส่ง Telegram) — ต้นเหตุประวัติซ้ำ
     if (!selection.jigId) { toast('กรุณาเลือก JIG ก่อนบันทึก', 'ng'); return; }
@@ -1877,6 +1894,11 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
           const note = item.note ? ` - _${escHtml(item.note)}_` : '';
           telegramMsg += `${idx + 1}. ${escHtml(item.label)}${value}${note}\n`;
         });
+      }
+
+      // 🆕 [แก้ข้อ 3] เพิ่มหมายเหตุทั่วไปที่ผู้ตรวจกรอกไว้ท้ายฟอร์ม — เดิมบันทึกลง PDF อย่างเดียว ไม่เคยส่งเข้า Telegram เลย
+      if (record.notes && record.notes.trim()) {
+        telegramMsg += `\n📝 *หมายเหตุเพิ่มเติม:*\n_${escHtml(record.notes.trim())}_\n`;
       }
 
       telegramMsg += `
@@ -2467,6 +2489,7 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
       if (admLoggedIn) {
         openPanel('admin-panel');
         if (_adminSessionPass) { renderStaffAccountList(); renderLoginLogList(); }
+        renderUncheckedLinesReport();   // 🆕 Line ที่ไม่มีการตรวจเช็คในแต่ละวัน
       }
       else {
         $('admin-login-modal').classList.remove('hidden');
@@ -2495,6 +2518,7 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
           _adminSessionPass = pass; // เก็บไว้ใน memory ใช้แนบ RPC (โหมด local ไม่มี RPC จริงอยู่แล้ว แต่ตั้งไว้ให้ครบ flow)
           $('admin-login-modal').classList.add('hidden');
           openPanel('admin-panel');
+          renderUncheckedLinesReport();   // 🆕 Line ที่ไม่มีการตรวจเช็คในแต่ละวัน
           toast('เข้าสู่ระบบสำเร็จ (local mode)', 'ok');
         } else {
           toast('รหัสผ่านไม่ถูกต้อง', 'ng');
@@ -2527,6 +2551,7 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
           localStorage.setItem('jig_admin_user', username);
           $('admin-login-modal').classList.add('hidden');
           openPanel('admin-panel');
+          renderUncheckedLinesReport();   // 🆕 Line ที่ไม่มีการตรวจเช็คในแต่ละวัน
           toast(`เข้าสู่ระบบสำเร็จ (${username})`, 'ok');
         } else {
           toast('ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง', 'ng');
@@ -2784,15 +2809,6 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
       renderSvgMap();
       toast('ลบรูปพื้นหลังแล้ว — กลับไปใช้แผนผังเริ่มต้น', 'ok');
     });
-
-    /* 🆕 Missed Line Report */
-    if ($('btn-missed-lines-refresh')) {
-      initMissedLinesDatePickers();
-      $('btn-missed-lines-refresh').addEventListener('click', loadAndRenderMissedLines);
-    }
-    if ($('btn-missed-lines-test-alert')) {
-      $('btn-missed-lines-test-alert').addEventListener('click', testMissedLinesAlertNow);
-    }
 
     /* Export / Import backup */
     $('btn-export-data').addEventListener('click', exportAllData);
@@ -3711,7 +3727,9 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
     if (!(await showConfirmModal(`ลบ ${ids.length} รายการที่เลือกไว้? การลบนี้ย้อนกลับไม่ได้`, { confirmLabel: `ลบ ${ids.length} รายการ`, danger: true }))) return;
     let remaining = loadHistory();
     for (const id of ids) {
+      const deletedRecord = remaining.find(h => String(h.id) === id); // 🆕 เก็บไว้ก่อนลบ เพื่อเอาไปแจ้งเตือน
       await deleteHistoryFromSupabase(id);
+      notifyHistoryDeleted(deletedRecord); // 🆕 [แก้ข้อ 1] แจ้งเตือน Telegram ทีละรายการที่ถูกลบ
       remaining = remaining.filter(h => String(h.id) !== id);
       localStorage.setItem(SK.history, JSON.stringify(remaining));
     }
@@ -3860,9 +3878,12 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
     list.querySelectorAll('[data-del]').forEach(b => b.addEventListener('click', async () => {
       if (!(await showConfirmModal('ลบรายการนี้?', { confirmLabel: 'ลบ', danger: true }))) return;
       const delId = b.dataset.del;
-      const remaining = loadHistory().filter(h => String(h.id) !== delId);
+      const allHist = loadHistory();
+      const deletedRecord = allHist.find(h => String(h.id) === delId); // 🆕 เก็บไว้ก่อนลบ เพื่อเอาไปแจ้งเตือน
+      const remaining = allHist.filter(h => String(h.id) !== delId);
       localStorage.setItem(SK.history, JSON.stringify(remaining)); // อัปเดต local ทันที
       deleteHistoryFromSupabase(delId); // ลบเฉพาะแถวนี้จริงๆ บน Supabase (ไม่กระทบแถวอื่น)
+      notifyHistoryDeleted(deletedRecord); // 🆕 [แก้ข้อ 1] แจ้งเตือน Telegram ว่ามีการลบประวัติ
       populateHistoryPanel(); toast('ลบแล้ว', 'ok');
     }));
     list.querySelectorAll('.hi-photo').forEach(img => {
@@ -5122,6 +5143,99 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
   }
 
   /* ══════════════════════════════════════
+     LINE ที่ไม่มีการตรวจเช็คในแต่ละวัน (Admin Panel)
+     ดึงผ่าน RPC get_unchecked_lines(p_from, p_to) — คำนวณฝั่งเซิร์ฟเวอร์ทั้งหมด
+     (ดู add_unchecked_lines_report.sql) ไม่ดาวน์โหลด history เต็มแถว/รูปถ่ายมาไล่เช็คฝั่ง browser
+     เกณฑ์: Line ที่ "ไม่ตรวจเลยสักจุด" ในวันนั้น (ไม่นับ JIG ที่มาร์คไม่ได้ผลิตออก)
+  ══════════════════════════════════════ */
+  async function renderUncheckedLinesReport() {
+    const listEl = $('adm-uncl-list');
+    const summaryEl = $('adm-uncl-summary');
+    const topEl = $('adm-uncl-top');
+    if (!listEl) return;
+    if (!sb) { listEl.innerHTML = '<span class="chip-empty">ต้องเชื่อมต่อ Supabase ก่อน</span>'; if (topEl) topEl.innerHTML = ''; return; }
+
+    const from = $('adm-uncl-from')?.value;
+    const to = $('adm-uncl-to')?.value;
+    if (!from || !to) return;
+
+    listEl.innerHTML = '<span class="chip-empty">🔄 กำลังโหลด...</span>';
+    if (summaryEl) summaryEl.textContent = '';
+    if (topEl) topEl.innerHTML = '';
+
+    try {
+      const { data, error } = await sb.rpc('get_unchecked_lines', { p_from: from, p_to: to });
+      if (error) throw error;
+
+      const rows = data || [];
+      if (!rows.length) {
+        listEl.innerHTML = '<span class="chip-empty">✅ ไม่พบ Line ที่ขาดการตรวจในช่วงที่เลือก</span>';
+        return;
+      }
+
+      // ── Top offenders — นับจำนวนวันที่ขาดตรวจต่อ Line ในช่วงที่เลือก เรียงมากไปน้อย โชว์ 5 อันดับแรก ──
+      const countByLine = {};
+      rows.forEach(r => { countByLine[r.line_id] = (countByLine[r.line_id] || 0) + 1; });
+      const ranked = Object.entries(countByLine).sort((a, b) => b[1] - a[1]).slice(0, 5);
+      if (topEl && ranked.length) {
+        const items = ranked.map(([lid, count], i) => {
+          const line = catalog.lines.find(l => l.id === lid);
+          const dept = line ? catalog.depts.find(dp => dp.id === line.deptId) : null;
+          const label = line ? (line.name || line.id) : lid;
+          return `
+            <div class="uncl-top-item rank-${i + 1}">
+              <span class="uncl-top-rank">${i + 1}</span>
+              <span class="uncl-top-name">${escHtml(label)}${dept ? ` <span class="uncl-dept">(${escHtml(dept.name)})</span>` : ''}</span>
+              <span class="uncl-top-count">ขาด ${count} วัน</span>
+            </div>`;
+        }).join('');
+        topEl.innerHTML = `<div class="adm-uncl-top-title">⚠️ Line ที่ขาดตรวจบ่อยสุด</div>${items}`;
+      }
+
+      // จัดกลุ่มตามวันที่ (ใหม่สุดก่อน) — แต่ละวันแสดงว่า Line ไหนขาดตรวจบ้าง
+      const byDate = {};
+      rows.forEach(r => { (byDate[r.check_date] = byDate[r.check_date] || []).push(r.line_id); });
+      const dates = Object.keys(byDate).sort((a, b) => b.localeCompare(a));
+
+      if (summaryEl) summaryEl.textContent = `พบ Line ที่ขาดการตรวจรวม ${rows.length} ครั้ง ใน ${dates.length} วัน`;
+
+      listEl.innerHTML = dates.map(d => {
+        const dt = new Date(d + 'T00:00:00');
+        const dateLabel = dt.toLocaleDateString('th-TH', { day: '2-digit', month: 'short', year: 'numeric', weekday: 'short' });
+        const lineChips = byDate[d].map(lid => {
+          const line = catalog.lines.find(l => l.id === lid);
+          const dept = line ? catalog.depts.find(dp => dp.id === line.deptId) : null;
+          const label = line ? (line.name || line.id) : lid;
+          return `<span class="uncl-line-chip">${escHtml(label)}${dept ? ` <span class="uncl-dept">(${escHtml(dept.name)})</span>` : ''}</span>`;
+        }).join('');
+        return `
+          <div class="adm-uncl-item">
+            <div class="uncl-date">${escHtml(dateLabel)} <span class="uncl-count">${byDate[d].length} Line</span></div>
+            <div class="uncl-lines">${lineChips}</div>
+          </div>`;
+      }).join('');
+    } catch (e) {
+      console.error('get_unchecked_lines error (ตรวจสอบว่ารัน SQL migration add_unchecked_lines_report.sql แล้วหรือยัง):', e);
+      listEl.innerHTML = '<span class="chip-empty">โหลดไม่สำเร็จ — ตรวจสอบว่ารัน SQL migration (add_unchecked_lines_report.sql) แล้วหรือยัง</span>';
+    }
+  }
+
+  function bindUncheckedLinesPanel() {
+    const fromEl = $('adm-uncl-from');
+    const toEl = $('adm-uncl-to');
+    if (!fromEl || !toEl) return;
+
+    // ค่าเริ่มต้น: ย้อนหลัง 7 วันถึงวันนี้
+    const today = new Date();
+    const weekAgo = new Date();
+    weekAgo.setDate(today.getDate() - 6);
+    toEl.value = localDateStr(today);
+    fromEl.value = localDateStr(weekAgo);
+
+    $('btn-adm-uncl-search').addEventListener('click', renderUncheckedLinesReport);
+  }
+
+  /* ══════════════════════════════════════
      LINE STATUS — สถานะ Line วันนี้ (แบบรายการ จัดกลุ่มตามแผนก)
      สี: เทา = ยังไม่ตรวจวันนี้ | เหลือง = ตรวจบางส่วน | เขียว = ตรวจครบปกติ | แดง = พบ NG (คำนวณจากวันที่ "วันนี้" เท่านั้น รีเซ็ตทุกเช้า)
   ══════════════════════════════════════ */
@@ -5311,157 +5425,6 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
   function lineNameById(id) {
     const l = catalog.lines.find(x => x.id === id);
     return l ? (l.name || l.id) : id;
-  }
-
-  /* ══════════════════════════════════════
-     🆕 MISSED LINE REPORT — Line ที่ไม่มีการตรวจเลยในแต่ละวัน (ดูย้อนหลังได้)
-     คำนวณสดจาก history + jig_skips ผ่าน RPC 2 ตัว (ดู get_missed_lines_data.sql)
-     ไม่ดึงข้อมูลเต็มแถว/รูปภาพออกมาเลย จึงแทบไม่กระทบ Egress
-     กติกา: Line ที่ทุก JIG ถูกมาร์ค "ไม่ได้ผลิตวันนั้น" ครบ ถือว่า "ครบ" ไม่ใช่ Line ขาดตรวจ
-     (ตรงกับตรรกะเดียวกับ computeLineStatusToday() ที่ใช้ในหน้า Dashboard)
-  ══════════════════════════════════════ */
-
-  function initMissedLinesDatePickers() {
-    const toEl = $('missed-lines-to'), fromEl = $('missed-lines-from');
-    if (!toEl || !fromEl) return;
-    const today = new Date();
-    const from30 = new Date(today.getTime() - 29 * 86400000); // รวมวันนี้ = 30 วัน
-    toEl.value = localDateStr(today);
-    fromEl.value = localDateStr(from30);
-  }
-
-  // สร้าง array ของวันที่ "YYYY-MM-DD" จาก fromStr ถึง toStr แบบไล่ล่าสุดก่อน (descending)
-  function dateRangeDesc(fromStr, toStr) {
-    const out = [];
-    let d = new Date(fromStr + 'T00:00:00');
-    const end = new Date(toStr + 'T00:00:00');
-    if (isNaN(d.getTime()) || isNaN(end.getTime()) || d > end) return out;
-    while (d <= end) {
-      out.push(localDateStr(d));
-      d = new Date(d.getTime() + 86400000);
-    }
-    return out.reverse();
-  }
-
-  async function loadAndRenderMissedLines() {
-    const fromStr = $('missed-lines-from').value;
-    const toStr = $('missed-lines-to').value;
-    const summaryEl = $('missed-lines-summary');
-    const resultsEl = $('missed-lines-results');
-    if (!fromStr || !toStr || fromStr > toStr) {
-      toast('กรุณาเลือกช่วงวันที่ให้ถูกต้อง (วันเริ่มต้องไม่เกินวันสิ้นสุด)', 'ng');
-      return;
-    }
-    if (!sb) { toast('ยังไม่ได้เชื่อมต่อฐานข้อมูล ไม่สามารถโหลดรายงานได้', 'ng'); return; }
-
-    summaryEl.textContent = 'กำลังโหลด...';
-    resultsEl.innerHTML = '';
-
-    try {
-      const [inspRes, skipRes] = await Promise.all([
-        sb.rpc('get_line_inspected_days', { p_from: fromStr, p_to: toStr }),
-        sb.rpc('get_jig_skip_days', { p_from: fromStr, p_to: toStr }),
-      ]);
-      if (inspRes.error) throw inspRes.error;
-      if (skipRes.error) throw skipRes.error;
-
-      // inspectedByDate[date] = Set(lineId)
-      const inspectedByDate = {};
-      (inspRes.data || []).forEach(r => {
-        (inspectedByDate[r.insp_date] = inspectedByDate[r.insp_date] || new Set()).add(String(r.line_id));
-      });
-      // skippedByDateLine["date|lineId"] = Set(jigId)
-      const skippedByDateLine = {};
-      (skipRes.data || []).forEach(r => {
-        const key = `${r.skip_date}|${r.line_id}`;
-        (skippedByDateLine[key] = skippedByDateLine[key] || new Set()).add(String(r.jig_id));
-      });
-
-      const dates = dateRangeDesc(fromStr, toStr);
-      const jigsByLine = {}; // lineId -> [jig...] (แคชไว้ ไม่ filter ซ้ำทุกวัน)
-      catalog.lines.forEach(l => { jigsByLine[l.id] = catalog.jigs.filter(j => j.lineId === l.id); });
-
-      let daysWithIssue = 0;
-      let totalMissedLineDays = 0;
-      const dayBlocks = [];
-
-      dates.forEach(date => {
-        const inspectedSet = inspectedByDate[date] || new Set();
-        const missedLines = [];
-        catalog.lines.forEach(line => {
-          const lineJigs = jigsByLine[line.id] || [];
-          if (!lineJigs.length) return; // Line ที่ยังไม่มี JIG เลย ไม่นับว่าต้องตรวจ
-          const skippedSet = skippedByDateLine[`${date}|${line.id}`] || new Set();
-          const requiredCount = lineJigs.filter(j => !skippedSet.has(j.id)).length;
-          if (requiredCount <= 0) return; // ทุก JIG ถูกมาร์คไม่ได้ผลิตวันนั้น = ถือว่าครบ ไม่นับขาดตรวจ
-          if (!inspectedSet.has(line.id)) missedLines.push(line);
-        });
-        if (missedLines.length) {
-          daysWithIssue++;
-          totalMissedLineDays += missedLines.length;
-          dayBlocks.push({ date, missedLines });
-        }
-      });
-
-      summaryEl.textContent = `เช็ค ${dates.length} วัน — พบ ${daysWithIssue} วันที่มี Line ขาดตรวจ (รวม ${totalMissedLineDays} รายการ Line/วัน)`;
-
-      if (!dayBlocks.length) {
-        resultsEl.innerHTML = `<div class="missed-lines-empty-ok">✅ ตรวจครบทุก Line ทุกวันในช่วงที่เลือก</div>`;
-        return;
-      }
-
-      resultsEl.innerHTML = dayBlocks.map(block => {
-        const chips = block.missedLines.map(l => {
-          const dept = catalog.depts.find(d => d.id === l.deptId);
-          const deptName = dept ? dept.name : '';
-          return `<span class="missed-lines-chip">${escHtml(l.name || l.id)}${deptName ? `<span class="missed-lines-chip-dept">(${escHtml(deptName)})</span>` : ''}</span>`;
-        }).join('');
-        return `
-          <div class="missed-lines-day">
-            <div class="missed-lines-day-head">
-              <span>${formatDateDMY(block.date)}</span>
-              <span class="missed-lines-day-count">ขาดตรวจ ${block.missedLines.length} Line</span>
-            </div>
-            <div class="missed-lines-chip-row">${chips}</div>
-          </div>`;
-      }).join('');
-    } catch (e) {
-      console.error('loadAndRenderMissedLines error:', e);
-      summaryEl.textContent = '';
-      resultsEl.innerHTML = `<div class="missed-lines-empty-ok" style="background:var(--ng-bg); border-color:var(--ng-border);">โหลดรายงานไม่สำเร็จ — ตรวจสอบว่ารัน SQL migration get_missed_lines_data.sql แล้วหรือยัง (ดู Console เพิ่มเติม)</div>`;
-    }
-  }
-
-  // 🆕 กดทดสอบเรียก Edge Function check-missed-lines ตรงๆ (เช็คของ "วันนี้" แล้วส่ง Telegram
-  // จริงถ้าเจอ Line ขาดตรวจ) — ใช้ตอน setup ครั้งแรกเพื่อเช็คว่า deploy + cron ต่อกันถูกต้อง
-  // โดยไม่ต้องรอถึงเวลา cron จริง (14:00 น.)
-  async function testMissedLinesAlertNow() {
-    const btn = $('btn-missed-lines-test-alert');
-    const originalHtml = btn ? btn.innerHTML : '';
-    if (btn) { btn.disabled = true; btn.textContent = 'กำลังเช็ค...'; }
-    try {
-      const res = await fetch(CHECK_MISSED_LINES_FUNCTION_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` },
-        body: JSON.stringify({}),
-      });
-      const data = await res.json().catch(() => null);
-      if (!res.ok || !data || data.ok === false) {
-        console.error('testMissedLinesAlertNow failed:', res.status, data);
-        toast('ทดสอบไม่สำเร็จ — เช็คว่า deploy Edge Function "check-missed-lines" แล้วหรือยัง (ดู Console)', 'ng');
-        return;
-      }
-      if (data.missedCount > 0) {
-        toast(`📤 ส่ง Telegram แจ้งเตือนแล้ว — พบ Line ขาดตรวจวันนี้ ${data.missedCount} Line`, 'ok');
-      } else {
-        toast('✅ วันนี้ตรวจครบทุก Line แล้ว (ไม่มีอะไรต้องแจ้งเตือน จึงไม่ได้ส่ง Telegram)', 'ok');
-      }
-    } catch (e) {
-      console.error('testMissedLinesAlertNow error:', e);
-      toast('ทดสอบไม่สำเร็จ — ตรวจการเชื่อมต่อ/Console เพิ่มเติม', 'ng');
-    } finally {
-      if (btn) { btn.disabled = false; btn.innerHTML = originalHtml; }
-    }
   }
 
   function refreshDashboard() {
