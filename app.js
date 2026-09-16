@@ -69,7 +69,7 @@
      กลยุทธ์: "sync ทั้งก้อน" — เวลาบันทึก จะลบของเก่าทั้งหมดในตารางที่เกี่ยวข้อง
      แล้ว insert ชุดปัจจุบันใหม่ทั้งหมด (ง่าย ตรงไปตรงมา เหมาะกับทีมขนาดเล็ก)
   ══════════════════════════════════════ */
-  const SUPABASE_URL = 'https://xdavhgsjmtnxdubchdmc.supabase.co';
+  const SUPABASE_URL = 'https://otytpzimuyaqagvxvexf.supabase.co';
   const SUPABASE_ANON_KEY = 'sb_publishable_JljawsAH_KHAAiGZggVUvA_wRVBn_7V';
   const sb = (window.supabase && window.supabase.createClient)
     ? window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
