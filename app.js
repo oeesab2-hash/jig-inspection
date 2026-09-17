@@ -1166,6 +1166,7 @@
     bindThemeToggle();
     bindAdminPanel();
     bindUncheckedLinesPanel();   // 🆕 Line ที่ไม่มีการตรวจเช็คในแต่ละวัน (Admin Panel)
+    bindHolidayCalendarPanel();  // 🆕 ปฏิทินวันหยุด (Admin Panel)
     bindActionButtons();
     bindLightbox();
     bindHistoryPanel();
@@ -5233,6 +5234,99 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
     fromEl.value = localDateStr(weekAgo);
 
     $('btn-adm-uncl-search').addEventListener('click', renderUncheckedLinesReport);
+  }
+
+  /* ══════════════════════════════════════
+     ปฏิทินวันหยุด (Admin Panel)
+     วันที่ตั้งไว้ในนี้จะไม่ถูกนับว่า "ขาดตรวจ" ใน get_unchecked_lines/
+     get_today_missed_lines ฝั่ง Postgres (ดู add_holidays_calendar.sql)
+     ใช้ร่วมกันทุก Line ทั้งบริษัท ไม่ผูกกับ Line ใดไลน์หนึ่ง
+  ══════════════════════════════════════ */
+  let holidaysCache = [];
+
+  async function loadHolidays() {
+    if (!sb) return;
+    try {
+      const { data, error } = await sb.from('holidays').select('id, holiday_date, name').order('holiday_date', { ascending: false });
+      if (error) throw error; // ตาราง holidays ยังไม่มี (ยังไม่ได้รัน SQL migration add_holidays_calendar.sql)
+      holidaysCache = data || [];
+      renderHolidaysList();
+    } catch (e) {
+      console.error('loadHolidays error (ตรวจสอบว่ารัน SQL migration add_holidays_calendar.sql แล้วหรือยัง):', e);
+    }
+  }
+
+  function renderHolidaysList() {
+    const el = $('adm-holiday-list');
+    if (!el) return;
+    if (!holidaysCache.length) {
+      el.innerHTML = '<div class="adm-item" style="color:var(--text-muted);font-style:italic">ยังไม่มีวันหยุดที่ตั้งไว้</div>';
+      return;
+    }
+    el.innerHTML = holidaysCache.map(h => {
+      const dt = new Date(h.holiday_date + 'T00:00:00');
+      const dateLabel = dt.toLocaleDateString('th-TH', { day: '2-digit', month: 'short', year: 'numeric', weekday: 'short' });
+      return `
+        <div class="adm-item">
+          <div class="adm-item-info">
+            <div>${escHtml(dateLabel)}</div>
+            ${h.name ? `<div class="adm-item-code">${escHtml(h.name)}</div>` : ''}
+          </div>
+          <button class="adm-item-del" data-id="${escHtml(h.id)}" title="ลบวันหยุดนี้">${ico(ICO_TRASH_P)}</button>
+        </div>`;
+    }).join('');
+    el.querySelectorAll('.adm-item-del').forEach(btn => {
+      btn.addEventListener('click', () => deleteHoliday(btn.dataset.id));
+    });
+  }
+
+  async function addHoliday() {
+    const dateEl = $('adm-holiday-date');
+    const nameEl = $('adm-holiday-name');
+    const dateVal = dateEl?.value;
+    const name = nameEl?.value.trim();
+    if (!dateVal) { toast('กรุณาเลือกวันที่', 'ng'); return; }
+    if (!sb) { toast('ไม่ได้เชื่อมต่อ Supabase', 'ng'); return; }
+    try {
+      const { error } = await sb.from('holidays').upsert({
+        id: dateVal,
+        holiday_date: dateVal,
+        name: name || null,
+        marked_by: localStorage.getItem('jig_admin_user') || 'admin',
+      });
+      if (error) throw error;
+      dateEl.value = ''; nameEl.value = '';
+      toast('เพิ่มวันหยุดแล้ว', 'ok');
+      loadHolidays();
+    } catch (e) {
+      console.error('addHoliday error (ตรวจสอบว่ารัน SQL migration add_holidays_calendar.sql แล้วหรือยัง):', e);
+      toast('เพิ่มวันหยุดไม่สำเร็จ — ตรวจสอบว่ารัน SQL migration (add_holidays_calendar.sql) แล้วหรือยัง', 'ng');
+    }
+  }
+
+  async function deleteHoliday(id) {
+    const h = holidaysCache.find(x => x.id === id);
+    const label = h ? new Date(h.holiday_date + 'T00:00:00').toLocaleDateString('th-TH', { day: '2-digit', month: 'short', year: 'numeric' }) : id;
+    if (!(await showConfirmModal(`ลบวันหยุด "${label}" หรือไม่?`, { confirmLabel: 'ลบวันหยุด', danger: true }))) return;
+    try {
+      const { error } = await sb.from('holidays').delete().eq('id', id);
+      if (error) throw error;
+      toast('ลบวันหยุดแล้ว', 'ok');
+      loadHolidays();
+    } catch (e) {
+      console.error('deleteHoliday error:', e);
+      toast('ลบวันหยุดไม่สำเร็จ', 'ng');
+    }
+  }
+
+  function bindHolidayCalendarPanel() {
+    const btn = $('btn-adm-holiday-add');
+    if (!btn) return;
+    // ค่าเริ่มต้นของช่องวันที่ = วันนี้ (พี่บีเปลี่ยนเองได้ก่อนกด "เพิ่มวันหยุด")
+    const dateEl = $('adm-holiday-date');
+    if (dateEl && !dateEl.value) dateEl.value = localDateStr();
+    btn.addEventListener('click', addHoliday);
+    loadHolidays();
   }
 
   /* ══════════════════════════════════════

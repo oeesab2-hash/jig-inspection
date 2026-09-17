@@ -39,7 +39,7 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <!-- ⚠️ CACHE-BUST: เบราว์เซอร์/PWA มัก cache ไฟล์ .css ค้างไว้นานผิดปกติ (เหมือน app.js ด้านล่าง)
        เพิ่ม ?v= ให้บังคับโหลดไฟล์ใหม่ทุกครั้งที่แก้ style.css — ให้เปลี่ยนเลขนี้ทุกครั้งที่แก้ style.css -->
-  <link rel="stylesheet" href="style.css?v=20260916b">
+  <link rel="stylesheet" href="style.css?v=20260917a">
 </head>
 <body>
 
@@ -697,6 +697,21 @@
       <div class="admin-list admin-list-scroll" id="adm-uncl-list"></div>
     </div>
 
+    <!-- 🆕 ปฏิทินวันหยุด — วันที่ตั้งไว้ตรงนี้จะไม่ถูกนับว่า "ขาดตรวจ" ในรายงานด้านบน
+         (ใช้ร่วมกันทุก Line ทั้งบริษัท ดู add_holidays_calendar.sql) -->
+    <div class="admin-section">
+      <div class="admin-section-title"><svg class="inline-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg> ปฏิทินวันหยุด</div>
+      <div style="font-size:11px; color:var(--text-muted); margin-bottom:8px; line-height:1.5;">
+        วันที่ตั้งไว้ในนี้จะไม่ถูกนับว่า "ขาดตรวจ" ในรายงานด้านบน (ใช้ร่วมกันทุก Line ทั้งบริษัท) — เหมาะกับวันเสาร์-อาทิตย์ที่หยุดประจำ หรือวันหยุดนักขัตฤกษ์
+      </div>
+      <div class="admin-input-row">
+        <input type="date" id="adm-holiday-date" title="วันที่หยุด">
+        <input type="text" id="adm-holiday-name" placeholder="ชื่อวันหยุด (ไม่บังคับ)">
+        <button class="btn-adm-add" id="btn-adm-holiday-add">+ เพิ่มวันหยุด</button>
+      </div>
+      <div class="admin-list admin-list-scroll" id="adm-holiday-list"></div>
+    </div>
+
     <!-- Document Settings (ค่ากลางทั้งระบบ ตาม ISO — Doc No. เดียวทั้งบริษัท) -->
     <div class="admin-section">
       <div class="admin-section-title"><svg class="inline-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg> ควบคุมเอกสาร (Document Control)</div>
@@ -983,7 +998,7 @@
 <!-- 🆕 ใส่เลขเวอร์ชันต่อท้าย ?v=... เพื่อบังคับให้เบราว์เซอร์ (โดยเฉพาะ Safari บน iPhone ซึ่งแคชไฟล์ .js
      ค้างนานผิดปกติ) โหลด app.js ก้อนใหม่ทุกครั้งที่มีการอัปเดตโค้ด — ให้เปลี่ยนเลขนี้ทุกครั้งที่แก้ app.js
      แล้ว push ขึ้นใหม่ ไม่งั้นเครื่องที่เคยเข้าเว็บมาก่อนจะยังใช้ไฟล์เก่าจากแคชอยู่ -->
-<script src="app.js?v=20260916b"></script>
+<script src="app.js?v=20260917a"></script>
 <script>
 (function () {
   var collapseBtn = document.getElementById('sidebar-collapse-toggle');
