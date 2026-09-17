@@ -5319,6 +5319,59 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
     }
   }
 
+  // 🆕 นำเข้าหลายวันพร้อมกัน — วางรายการ 1 บรรทัดต่อ 1 วัน รองรับ 2 รูปแบบวันที่:
+  //    YYYY-MM-DD (แนะนำ) หรือ DD/MM/YYYY (ปี ค.ศ.) — ต่อท้ายด้วย ",ชื่อวันหยุด" ก็ได้ (ไม่บังคับ)
+  function parseHolidayBulkLine(line) {
+    const raw = line.trim();
+    if (!raw) return null;
+    // แยกวันที่ออกจากชื่อ ด้วย comma หรือ tab หรือช่องว่างตั้งแต่ 2 ตัวขึ้นไป
+    const parts = raw.split(/,|\t|\s{2,}/);
+    const datePart = (parts[0] || '').trim();
+    const namePart = parts.slice(1).join(' ').trim() || null;
+
+    let iso = null;
+    if (/^\d{4}-\d{1,2}-\d{1,2}$/.test(datePart)) {
+      const [y, m, d] = datePart.split('-').map(Number);
+      iso = `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+    } else if (/^\d{1,2}\/\d{1,2}\/\d{4}$/.test(datePart)) {
+      const [d, m, y] = datePart.split('/').map(Number);
+      iso = `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+    }
+    if (!iso) return { error: raw }; // แถวนี้อ่านวันที่ไม่ออก
+    return { id: iso, holiday_date: iso, name: namePart };
+  }
+
+  async function bulkAddHolidays() {
+    const ta = $('adm-holiday-bulk');
+    if (!ta) return;
+    const lines = ta.value.split('\n');
+    const rows = [];
+    const badLines = [];
+    lines.forEach(line => {
+      const parsed = parseHolidayBulkLine(line);
+      if (!parsed) return; // บรรทัดว่าง ข้ามไป
+      if (parsed.error) { badLines.push(parsed.error); return; }
+      rows.push({ ...parsed, marked_by: localStorage.getItem('jig_admin_user') || 'admin' });
+    });
+
+    if (!rows.length) {
+      toast(badLines.length ? `อ่านวันที่ไม่ออกทุกบรรทัด — ใช้รูปแบบ YYYY-MM-DD เช่น 2026-04-11` : 'กรุณาวางรายการวันที่ก่อน', 'ng');
+      return;
+    }
+    if (!sb) { toast('ไม่ได้เชื่อมต่อ Supabase', 'ng'); return; }
+
+    try {
+      const { error } = await sb.from('holidays').upsert(rows);
+      if (error) throw error;
+      ta.value = '';
+      toast(`นำเข้าวันหยุดสำเร็จ ${rows.length} วัน${badLines.length ? ` (ข้าม ${badLines.length} บรรทัดที่อ่านวันที่ไม่ออก)` : ''}`, 'ok');
+      loadHolidays();
+    } catch (e) {
+      console.error('bulkAddHolidays error (ตรวจสอบว่ารัน SQL migration add_holidays_calendar.sql แล้วหรือยัง):', e);
+      toast('นำเข้าวันหยุดไม่สำเร็จ', 'ng');
+    }
+  }
+
   function bindHolidayCalendarPanel() {
     const btn = $('btn-adm-holiday-add');
     if (!btn) return;
@@ -5326,6 +5379,7 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
     const dateEl = $('adm-holiday-date');
     if (dateEl && !dateEl.value) dateEl.value = localDateStr();
     btn.addEventListener('click', addHoliday);
+    $('btn-adm-holiday-bulk-add')?.addEventListener('click', bulkAddHolidays); // 🆕 นำเข้าหลายวันพร้อมกัน
     loadHolidays();
   }
 

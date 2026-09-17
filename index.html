@@ -39,7 +39,7 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <!-- ⚠️ CACHE-BUST: เบราว์เซอร์/PWA มัก cache ไฟล์ .css ค้างไว้นานผิดปกติ (เหมือน app.js ด้านล่าง)
        เพิ่ม ?v= ให้บังคับโหลดไฟล์ใหม่ทุกครั้งที่แก้ style.css — ให้เปลี่ยนเลขนี้ทุกครั้งที่แก้ style.css -->
-  <link rel="stylesheet" href="style.css?v=20260917a">
+  <link rel="stylesheet" href="style.css?v=20260917b">
 </head>
 <body>
 
@@ -709,6 +709,16 @@
         <input type="text" id="adm-holiday-name" placeholder="ชื่อวันหยุด (ไม่บังคับ)">
         <button class="btn-adm-add" id="btn-adm-holiday-add">+ เพิ่มวันหยุด</button>
       </div>
+
+      <!-- 🆕 นำเข้าหลายวันพร้อมกัน — วางรายการทีเดียว แทนการกดเพิ่มทีละวัน -->
+      <div style="font-size:11px; color:var(--text-muted); margin:10px 0 4px;">หรือนำเข้าหลายวันพร้อมกัน (1 บรรทัดต่อ 1 วัน):</div>
+      <div class="admin-input-row" style="align-items:flex-start;">
+        <textarea id="adm-holiday-bulk" rows="4" placeholder="2026-04-11,วันหยุดพิเศษ&#10;2026-11-28&#10;2026-12-07,วันหยุดพิเศษ" style="flex:1; resize:vertical; font-family:inherit; font-size:12px; padding:8px; border-radius:8px; border:1px solid var(--border-input); background:var(--bg-input); color:var(--text-main);"></textarea>
+      </div>
+      <div class="admin-input-row">
+        <button class="btn-adm-add" id="btn-adm-holiday-bulk-add" style="flex:1;">📥 นำเข้าหลายวันจากรายการด้านบน</button>
+      </div>
+
       <div class="admin-list admin-list-scroll" id="adm-holiday-list"></div>
     </div>
 
@@ -998,7 +1008,7 @@
 <!-- 🆕 ใส่เลขเวอร์ชันต่อท้าย ?v=... เพื่อบังคับให้เบราว์เซอร์ (โดยเฉพาะ Safari บน iPhone ซึ่งแคชไฟล์ .js
      ค้างนานผิดปกติ) โหลด app.js ก้อนใหม่ทุกครั้งที่มีการอัปเดตโค้ด — ให้เปลี่ยนเลขนี้ทุกครั้งที่แก้ app.js
      แล้ว push ขึ้นใหม่ ไม่งั้นเครื่องที่เคยเข้าเว็บมาก่อนจะยังใช้ไฟล์เก่าจากแคชอยู่ -->
-<script src="app.js?v=20260917a"></script>
+<script src="app.js?v=20260917b"></script>
 <script>
 (function () {
   var collapseBtn = document.getElementById('sidebar-collapse-toggle');
