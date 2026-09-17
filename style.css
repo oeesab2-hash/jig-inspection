@@ -2157,6 +2157,36 @@ h1, h2, h3, h4, label, button, input, select, textarea, p, span, div {
 }
 .storage-gauge-wrap { margin-bottom: 12px; }
 .storage-gauge-caption { text-align: center; color: var(--text-muted); font-size: 11px; }
+
+/* 🆕 ปฏิทินคลิกเลือกวันหยุด (Admin Panel) */
+.cal-picker { margin: 10px 0; padding: 10px; border: 1px solid var(--border-input); border-radius: 10px; background: var(--bg-input); }
+.cal-picker-nav { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+.cal-picker-label { font-size: 13px; font-weight: 600; color: var(--text-main); }
+.cal-nav-btn {
+  width: 28px; height: 28px; border-radius: 8px; border: 1px solid var(--border-input);
+  background: transparent; color: var(--text-main); font-size: 16px; line-height: 1; cursor: pointer;
+}
+.cal-nav-btn:hover { background: var(--accent-dim); border-color: var(--accent); }
+.cal-picker-weekdays {
+  display: grid; grid-template-columns: repeat(7, 1fr); text-align: center;
+  font-size: 10px; color: var(--text-muted); margin-bottom: 4px;
+}
+.cal-picker-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 3px; }
+.cal-day {
+  aspect-ratio: 1 / 1; display: flex; align-items: center; justify-content: center;
+  font-size: 12px; border-radius: 7px; border: 1px solid transparent; cursor: pointer;
+  color: var(--text-main); background: transparent; transition: background .12s, border-color .12s;
+}
+.cal-day:hover { background: var(--accent-dim); border-color: var(--accent); }
+.cal-day-empty { cursor: default; }
+.cal-day-empty:hover { background: transparent; border-color: transparent; }
+.cal-day-sunday { color: var(--ng); }
+.cal-day-today { border-color: var(--accent); font-weight: 700; }
+.cal-day-holiday { background: var(--brand-gold-dim); border-color: var(--brand-gold); color: var(--brand-gold); font-weight: 700; }
+.cal-day-holiday:hover { background: var(--brand-gold-dim); }
+.cal-legend-dot { display: inline-block; width: 9px; height: 9px; border-radius: 3px; margin-right: 3px; vertical-align: middle; }
+.cal-legend-dot-holiday { background: var(--brand-gold-dim); border: 1px solid var(--brand-gold); }
+.cal-legend-dot-today { background: transparent; border: 1px solid var(--accent); }
 .storage-low { color: var(--ng); }
 .storage-ok { color: var(--ok); }
 .storage-stat-box {

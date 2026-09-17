@@ -5251,6 +5251,7 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
       if (error) throw error; // ตาราง holidays ยังไม่มี (ยังไม่ได้รัน SQL migration add_holidays_calendar.sql)
       holidaysCache = data || [];
       renderHolidaysList();
+      renderHolidayCalendarPicker(); // 🆕 อัปเดตปฏิทินคลิกได้ให้ตรงกับข้อมูลล่าสุด
     } catch (e) {
       console.error('loadHolidays error (ตรวจสอบว่ารัน SQL migration add_holidays_calendar.sql แล้วหรือยัง):', e);
     }
@@ -5319,56 +5320,63 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
     }
   }
 
-  // 🆕 นำเข้าหลายวันพร้อมกัน — วางรายการ 1 บรรทัดต่อ 1 วัน รองรับ 2 รูปแบบวันที่:
-  //    YYYY-MM-DD (แนะนำ) หรือ DD/MM/YYYY (ปี ค.ศ.) — ต่อท้ายด้วย ",ชื่อวันหยุด" ก็ได้ (ไม่บังคับ)
-  function parseHolidayBulkLine(line) {
-    const raw = line.trim();
-    if (!raw) return null;
-    // แยกวันที่ออกจากชื่อ ด้วย comma หรือ tab หรือช่องว่างตั้งแต่ 2 ตัวขึ้นไป
-    const parts = raw.split(/,|\t|\s{2,}/);
-    const datePart = (parts[0] || '').trim();
-    const namePart = parts.slice(1).join(' ').trim() || null;
+  // 🆕 ปฏิทินคลิกเลือกวันหยุด — เดือนที่กำลังแสดงอยู่ (เริ่มที่เดือนปัจจุบัน)
+  let calPickerMonth = new Date(); calPickerMonth.setDate(1);
 
-    let iso = null;
-    if (/^\d{4}-\d{1,2}-\d{1,2}$/.test(datePart)) {
-      const [y, m, d] = datePart.split('-').map(Number);
-      iso = `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
-    } else if (/^\d{1,2}\/\d{1,2}\/\d{4}$/.test(datePart)) {
-      const [d, m, y] = datePart.split('/').map(Number);
-      iso = `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+  function renderHolidayCalendarPicker() {
+    const labelEl = $('cal-picker-label');
+    const gridEl = $('cal-picker-grid');
+    if (!labelEl || !gridEl) return;
+
+    const year = calPickerMonth.getFullYear();
+    const month = calPickerMonth.getMonth(); // 0-based
+    const monthNames = ['มกราคม','กุมภาพันธ์','มีนาคม','เมษายน','พฤษภาคม','มิถุนายน','กรกฎาคม','สิงหาคม','กันยายน','ตุลาคม','พฤศจิกายน','ธันวาคม'];
+    labelEl.textContent = `${monthNames[month]} ${year + 543}`;
+
+    const holidaySet = new Set(holidaysCache.map(h => h.holiday_date));
+    const todayIso = localDateStr();
+
+    const firstDow = new Date(year, month, 1).getDay(); // 0=อาทิตย์
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+
+    let html = '';
+    for (let i = 0; i < firstDow; i++) html += `<div class="cal-day cal-day-empty"></div>`;
+    for (let day = 1; day <= daysInMonth; day++) {
+      const iso = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+      const dow = new Date(year, month, day).getDay();
+      const isHoliday = holidaySet.has(iso);
+      const isToday = iso === todayIso;
+      const cls = ['cal-day'];
+      if (dow === 0) cls.push('cal-day-sunday');
+      if (isToday) cls.push('cal-day-today');
+      if (isHoliday) cls.push('cal-day-holiday');
+      html += `<div class="${cls.join(' ')}" data-date="${iso}" title="${isHoliday ? 'คลิกเพื่อยกเลิกวันหยุด' : 'คลิกเพื่อตั้งเป็นวันหยุด'}">${day}</div>`;
     }
-    if (!iso) return { error: raw }; // แถวนี้อ่านวันที่ไม่ออก
-    return { id: iso, holiday_date: iso, name: namePart };
+    gridEl.innerHTML = html;
+
+    gridEl.querySelectorAll('.cal-day:not(.cal-day-empty)').forEach(cell => {
+      cell.addEventListener('click', () => toggleHolidayFromCalendar(cell.dataset.date));
+    });
   }
 
-  async function bulkAddHolidays() {
-    const ta = $('adm-holiday-bulk');
-    if (!ta) return;
-    const lines = ta.value.split('\n');
-    const rows = [];
-    const badLines = [];
-    lines.forEach(line => {
-      const parsed = parseHolidayBulkLine(line);
-      if (!parsed) return; // บรรทัดว่าง ข้ามไป
-      if (parsed.error) { badLines.push(parsed.error); return; }
-      rows.push({ ...parsed, marked_by: localStorage.getItem('jig_admin_user') || 'admin' });
-    });
-
-    if (!rows.length) {
-      toast(badLines.length ? `อ่านวันที่ไม่ออกทุกบรรทัด — ใช้รูปแบบ YYYY-MM-DD เช่น 2026-04-11` : 'กรุณาวางรายการวันที่ก่อน', 'ng');
-      return;
-    }
+  async function toggleHolidayFromCalendar(iso) {
     if (!sb) { toast('ไม่ได้เชื่อมต่อ Supabase', 'ng'); return; }
-
+    const existing = holidaysCache.find(h => h.holiday_date === iso);
     try {
-      const { error } = await sb.from('holidays').upsert(rows);
-      if (error) throw error;
-      ta.value = '';
-      toast(`นำเข้าวันหยุดสำเร็จ ${rows.length} วัน${badLines.length ? ` (ข้าม ${badLines.length} บรรทัดที่อ่านวันที่ไม่ออก)` : ''}`, 'ok');
-      loadHolidays();
+      if (existing) {
+        const { error } = await sb.from('holidays').delete().eq('id', existing.id);
+        if (error) throw error;
+      } else {
+        const { error } = await sb.from('holidays').upsert({
+          id: iso, holiday_date: iso, name: null,
+          marked_by: localStorage.getItem('jig_admin_user') || 'admin',
+        });
+        if (error) throw error;
+      }
+      await loadHolidays(); // โหลดใหม่ + render ปฏิทิน + list ให้ตรงกัน
     } catch (e) {
-      console.error('bulkAddHolidays error (ตรวจสอบว่ารัน SQL migration add_holidays_calendar.sql แล้วหรือยัง):', e);
-      toast('นำเข้าวันหยุดไม่สำเร็จ', 'ng');
+      console.error('toggleHolidayFromCalendar error (ตรวจสอบว่ารัน SQL migration add_holidays_calendar.sql แล้วหรือยัง):', e);
+      toast('บันทึกวันหยุดไม่สำเร็จ', 'ng');
     }
   }
 
@@ -5379,7 +5387,16 @@ ${ngCount > 0 ? `❌ ไม่ผ่าน (NG): ${ngCount}` : ''}
     const dateEl = $('adm-holiday-date');
     if (dateEl && !dateEl.value) dateEl.value = localDateStr();
     btn.addEventListener('click', addHoliday);
-    $('btn-adm-holiday-bulk-add')?.addEventListener('click', bulkAddHolidays); // 🆕 นำเข้าหลายวันพร้อมกัน
+
+    $('cal-prev-month')?.addEventListener('click', () => {
+      calPickerMonth.setMonth(calPickerMonth.getMonth() - 1);
+      renderHolidayCalendarPicker();
+    });
+    $('cal-next-month')?.addEventListener('click', () => {
+      calPickerMonth.setMonth(calPickerMonth.getMonth() + 1);
+      renderHolidayCalendarPicker();
+    });
+
     loadHolidays();
   }
 
